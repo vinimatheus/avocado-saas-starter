@@ -1,0 +1,351 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id                    String                  @id
+  name                  String
+  slug                  String                  @unique
+  logo                  String?
+  metadata              String?
+  createdAt             DateTime                @default(now()) @map("created_at")
+  updatedAt             DateTime                @updatedAt @map("updated_at")
+  members               Member[]
+  invitations           Invitation[]
+  products              Product[]
+  activeSessions        Session[]               @relation("ActiveOrganizationSessions")
+  billingCheckoutSessions BillingCheckoutSession[]
+  monthlyUsages         OwnerMonthlyUsage[]
+
+  @@map("organization")
+}
+
+model User {
+  id                  String                  @id
+  name                String
+  email               String
+  emailVerified       Boolean                 @default(false)
+  twoFactorEnabled    Boolean                 @default(false)
+  image               String?
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+  sessions            Session[]
+  accounts            Account[]
+  twoFactor           TwoFactor?
+  members             Member[]
+  invitationsSent     Invitation[]            @relation("InvitationInviter")
+  ownerSubscription   OwnerSubscription?
+  billingCheckouts    BillingCheckoutSession[] @relation("OwnerCheckoutSessions")
+  billingInvoices     BillingInvoice[]        @relation("OwnerBillingInvoices")
+  featureOverrides    OwnerFeatureOverride[]
+  monthlyUsages       OwnerMonthlyUsage[]
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id                   String        @id
+  expiresAt            DateTime
+  token                String
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  ipAddress            String?
+  userAgent            String?
+  userId               String
+  activeOrganizationId String?       @map("active_organization_id")
+  user                 User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activeOrganization   Organization? @relation("ActiveOrganizationSessions", fields: [activeOrganizationId], references: [id], onDelete: SetNull)
+
+  @@unique([token])
+  @@index([userId])
+  @@index([activeOrganizationId], map: "session_active_organization_id_idx")
+  @@map("session")
+}
+
+model Account {
+  id                    String   @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+model TwoFactor {
+  id          String @id
+  secret      String
+  backupCodes String @map("backup_codes")
+  userId      String @unique @map("user_id")
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("two_factor")
+}
+
+model Member {
+  id             String       @id
+  organizationId String       @map("organization_id")
+  userId         String       @map("user_id")
+  role           String       @default("member")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId], map: "member_organization_id_user_id_key")
+  @@index([organizationId], map: "member_organization_id_idx")
+  @@index([userId], map: "member_user_id_idx")
+  @@map("member")
+}
+
+model Invitation {
+  id             String       @id
+  organizationId String       @map("organization_id")
+  email          String
+  role           String?
+  status         String       @default("pending")
+  expiresAt      DateTime     @map("expires_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  inviterId      String       @map("inviter_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  inviter        User         @relation("InvitationInviter", fields: [inviterId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId], map: "invitation_organization_id_idx")
+  @@index([email], map: "invitation_email_idx")
+  @@map("invitation")
+}
+
+model Product {
+  id             String       @id @default(cuid())
+  organizationId String       @map("organization_id")
+  name           String
+  sku            String
+  category       String
+  status         String       @default("draft")
+  price          Decimal      @db.Decimal(10, 2)
+  stock          Int          @default(0)
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, sku], map: "product_organization_id_sku_key")
+  @@index([organizationId], map: "product_organization_id_idx")
+  @@map("product")
+}
+
+enum BillingPlanCode {
+  FREE
+  STARTER_50
+  PRO_100
+  SCALE_400
+}
+
+enum SubscriptionStatus {
+  FREE
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+}
+
+enum CheckoutStatus {
+  PENDING
+  PAID
+  FAILED
+  EXPIRED
+  CANCELED
+  CHARGEBACK
+}
+
+enum WebhookProcessingStatus {
+  RECEIVED
+  PROCESSED
+  IGNORED
+  FAILED
+}
+
+model OwnerSubscription {
+  id                String             @id @default(cuid())
+  ownerUserId       String             @unique @map("owner_user_id")
+  planCode          BillingPlanCode    @default(FREE) @map("plan_code")
+  pendingPlanCode   BillingPlanCode?   @map("pending_plan_code")
+  status            SubscriptionStatus @default(FREE)
+  cancelAtPeriodEnd Boolean            @default(false) @map("cancel_at_period_end")
+  currentPeriodStart DateTime?         @map("current_period_start")
+  currentPeriodEnd  DateTime?          @map("current_period_end")
+  trialPlanCode     BillingPlanCode?   @map("trial_plan_code")
+  trialStartedAt    DateTime?          @map("trial_started_at")
+  trialEndsAt       DateTime?          @map("trial_ends_at")
+  trialUsedAt       DateTime?          @map("trial_used_at")
+  canceledAt        DateTime?          @map("canceled_at")
+  abacateCustomerId String?            @unique @map("abacate_customer_id")
+  billingName       String?            @map("billing_name")
+  billingCellphone  String?            @map("billing_cellphone")
+  billingTaxId      String?            @map("billing_tax_id")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+  owner             User               @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  checkoutSessions  BillingCheckoutSession[]
+  invoices          BillingInvoice[]
+
+  @@index([planCode], map: "owner_subscription_plan_code_idx")
+  @@index([status], map: "owner_subscription_status_idx")
+  @@map("owner_subscription")
+}
+
+model BillingCheckoutSession {
+  id                 String           @id @default(cuid())
+  ownerUserId        String           @map("owner_user_id")
+  subscriptionId     String           @map("subscription_id")
+  organizationId     String?          @map("organization_id")
+  targetPlanCode     BillingPlanCode  @map("target_plan_code")
+  amountCents        Int              @map("amount_cents")
+  currency           String           @default("BRL")
+  status             CheckoutStatus   @default(PENDING)
+  provider           String           @default("abacatepay")
+  abacateBillingId   String?          @unique @map("abacate_billing_id")
+  abacateBillingUrl  String?          @map("abacate_billing_url")
+  providerExternalId String           @unique @map("provider_external_id")
+  paidAt             DateTime?        @map("paid_at")
+  expiresAt          DateTime?        @map("expires_at")
+  metadata           Json?
+  createdAt          DateTime         @default(now()) @map("created_at")
+  updatedAt          DateTime         @updatedAt @map("updated_at")
+  owner              User             @relation("OwnerCheckoutSessions", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  subscription       OwnerSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  organization       Organization?    @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  invoices           BillingInvoice[]
+
+  @@index([ownerUserId], map: "billing_checkout_owner_user_id_idx")
+  @@index([subscriptionId], map: "billing_checkout_subscription_id_idx")
+  @@index([status], map: "billing_checkout_status_idx")
+  @@map("billing_checkout_session")
+}
+
+model BillingInvoice {
+  id                   String           @id @default(cuid())
+  ownerUserId          String           @map("owner_user_id")
+  subscriptionId       String           @map("subscription_id")
+  checkoutSessionId    String?          @map("checkout_session_id")
+  provider             String           @default("abacatepay")
+  providerBillingId    String?          @unique @map("provider_billing_id")
+  providerTransactionId String?         @unique @map("provider_transaction_id")
+  status               CheckoutStatus   @default(PENDING)
+  amountCents          Int              @map("amount_cents")
+  currency             String           @default("BRL")
+  receiptUrl           String?          @map("receipt_url")
+  billingUrl           String?          @map("billing_url")
+  dueAt                DateTime?        @map("due_at")
+  paidAt               DateTime?        @map("paid_at")
+  metadata             Json?
+  createdAt            DateTime         @default(now()) @map("created_at")
+  updatedAt            DateTime         @updatedAt @map("updated_at")
+  owner                User             @relation("OwnerBillingInvoices", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  subscription         OwnerSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  checkoutSession      BillingCheckoutSession? @relation(fields: [checkoutSessionId], references: [id], onDelete: SetNull)
+
+  @@index([ownerUserId], map: "billing_invoice_owner_user_id_idx")
+  @@index([subscriptionId], map: "billing_invoice_subscription_id_idx")
+  @@index([status], map: "billing_invoice_status_idx")
+  @@map("billing_invoice")
+}
+
+model BillingWebhookEvent {
+  id          String                  @id
+  provider    String                  @default("abacatepay")
+  eventType   String                  @map("event_type")
+  status      WebhookProcessingStatus @default(RECEIVED)
+  payload     Json
+  errorMessage String?                @map("error_message")
+  processedAt DateTime?               @map("processed_at")
+  createdAt   DateTime                @default(now()) @map("created_at")
+  updatedAt   DateTime                @updatedAt @map("updated_at")
+
+  @@unique([provider, id], map: "billing_webhook_provider_id_key")
+  @@index([eventType], map: "billing_webhook_event_type_idx")
+  @@index([status], map: "billing_webhook_status_idx")
+  @@map("billing_webhook_event")
+}
+
+model OwnerFeatureOverride {
+  id         String   @id @default(cuid())
+  ownerUserId String  @map("owner_user_id")
+  featureKey String   @map("feature_key")
+  enabled    Boolean
+  reason     String?
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  owner      User     @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerUserId, featureKey], map: "owner_feature_override_owner_feature_key")
+  @@index([featureKey], map: "owner_feature_override_feature_key_idx")
+  @@map("owner_feature_override")
+}
+
+model FeatureRollout {
+  id               String   @id @default(cuid())
+  featureKey       String   @unique @map("feature_key")
+  enabled          Boolean  @default(false)
+  rolloutPercentage Int     @default(0) @map("rollout_percentage")
+  seed             String   @default("default")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@index([enabled], map: "feature_rollout_enabled_idx")
+  @@map("feature_rollout")
+}
+
+model OwnerMonthlyUsage {
+  id             String       @id @default(cuid())
+  ownerUserId    String       @map("owner_user_id")
+  organizationId String       @map("organization_id")
+  metricKey      String       @map("metric_key")
+  periodStart    DateTime     @map("period_start")
+  value          Int          @default(0)
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  owner          User         @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([ownerUserId, organizationId, metricKey, periodStart], map: "owner_monthly_usage_owner_org_metric_period_key")
+  @@index([ownerUserId, metricKey], map: "owner_monthly_usage_owner_metric_idx")
+  @@map("owner_monthly_usage")
+}
+
+model Jwks {
+  id         String    @id
+  publicKey  String
+  privateKey String
+  createdAt  DateTime
+  expiresAt  DateTime?
+
+  @@map("jwks")
+}
