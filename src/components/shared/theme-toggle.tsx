@@ -86,6 +86,7 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
         disabled={!mounted}
         aria-label="Alternar entre modo claro e escuro"
         className="h-7 w-12 border border-border/60 bg-background/90 data-[state=checked]:bg-primary/35 data-[state=unchecked]:bg-muted/60"
+        thumbClassName="data-[state=checked]:translate-x-[1.875rem]"
       />
       <MoonStarIcon
         className={cn(

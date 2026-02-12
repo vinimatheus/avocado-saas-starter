@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { Building2Icon, ShieldCheckIcon } from "lucide-react";
 import Image from "next/image";
@@ -7,6 +8,7 @@ import { AppPageContainer } from "@/components/app/app-page-container";
 import { ProfileForm } from "@/components/auth/profile-form";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { auth } from "@/lib/auth/server";
 import type { OrganizationUserRole } from "@/lib/organization/helpers";
 import { getTenantContext } from "@/lib/organization/tenant-context";
 
@@ -46,6 +48,16 @@ export default async function ProfilePage() {
 
   const initialTwoFactorEnabled = Boolean((user as { twoFactorEnabled?: boolean }).twoFactorEnabled);
   const initialImage = ((user as { image?: string | null }).image ?? "").trim() || null;
+  const linkedAccounts = await auth.api
+    .listUserAccounts({
+      headers: await headers(),
+    })
+    .catch(() => []);
+  const hasCredentialAccount = linkedAccounts.some((account) => account.providerId === "credential");
+  const hasGoogleAccount = linkedAccounts.some((account) => account.providerId === "google");
+  const googleProviderEnabled = Boolean(
+    process.env.GOOGLE_CLIENT_ID?.trim() && process.env.GOOGLE_CLIENT_SECRET?.trim(),
+  );
 
   return (
     <AppPageContainer className="gap-6">
@@ -91,6 +103,9 @@ export default async function ProfilePage() {
           initialEmail={user.email}
           initialImage={initialImage}
           initialTwoFactorEnabled={initialTwoFactorEnabled}
+          initialHasCredentialAccount={hasCredentialAccount}
+          initialHasGoogleAccount={hasGoogleAccount}
+          googleProviderEnabled={googleProviderEnabled}
         />
 
         <Card className="h-fit lg:sticky lg:top-6">

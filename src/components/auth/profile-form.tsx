@@ -9,7 +9,7 @@ import {
   type FormEvent,
 } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CameraIcon, MailIcon, ShieldCheckIcon, UserRoundIcon } from "lucide-react";
+import { CameraIcon, Link2Icon, MailIcon, ShieldCheckIcon, UserRoundIcon } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
@@ -18,6 +18,7 @@ import { toast } from "sonner";
 
 import {
   changeProfileEmailAction,
+  setProfilePasswordAction,
   updateProfileAction,
   updateProfileImageAction,
 } from "@/actions/profile-actions";
@@ -51,9 +52,11 @@ import { authClient } from "@/lib/auth/client";
 import {
   profileChangeEmailSchema,
   profileChangePasswordSchema,
+  profileSetPasswordSchema,
   profileUpdateSchema,
   type ProfileChangeEmailValues,
   type ProfileChangePasswordValues,
+  type ProfileSetPasswordValues,
   type ProfileUpdateValues,
 } from "@/lib/auth/schemas";
 import { stripFieldRef } from "@/lib/forms/rhf";
@@ -64,6 +67,9 @@ type ProfileFormProps = {
   initialEmail: string;
   initialImage: string | null;
   initialTwoFactorEnabled: boolean;
+  initialHasCredentialAccount: boolean;
+  initialHasGoogleAccount: boolean;
+  googleProviderEnabled: boolean;
 };
 
 const defaultChangePasswordValues: ProfileChangePasswordValues = {
@@ -72,8 +78,21 @@ const defaultChangePasswordValues: ProfileChangePasswordValues = {
   confirmNewPassword: "",
 };
 
+const defaultSetPasswordValues: ProfileSetPasswordValues = {
+  newPassword: "",
+  confirmNewPassword: "",
+};
+
 function normalizeSecurityCode(value: string): string {
   return value.trim().replaceAll(" ", "");
+}
+
+function buildAbsoluteCallbackURL(callbackPath: string): string {
+  if (typeof window === "undefined") {
+    return callbackPath;
+  }
+
+  return new URL(callbackPath, window.location.origin).toString();
 }
 
 function initialsFromName(name: string): string {
@@ -88,18 +107,23 @@ export function ProfileForm({
   initialEmail,
   initialImage,
   initialTwoFactorEnabled,
+  initialHasCredentialAccount,
+  initialHasGoogleAccount,
+  googleProviderEnabled,
 }: ProfileFormProps) {
   const router = useRouter();
   const [isProfilePending, startProfileTransition] = useTransition();
   const [isProfileImagePending, startProfileImageTransition] = useTransition();
   const [isChangeEmailPending, startChangeEmailTransition] = useTransition();
   const [isChangePasswordPending, startChangePasswordTransition] = useTransition();
+  const [isLinkGooglePending, startLinkGoogleTransition] = useTransition();
   const [isTwoFactorPending, startTwoFactorTransition] = useTransition();
 
   const hasRefreshedAfterProfileSuccess = useRef(false);
   const hasRefreshedAfterProfileImageSuccess = useRef(false);
 
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(initialTwoFactorEnabled);
+  const [hasGoogleAccount, setHasGoogleAccount] = useState(initialHasGoogleAccount);
   const [enablePassword, setEnablePassword] = useState("");
   const [disablePassword, setDisablePassword] = useState("");
   const [totpURI, setTotpURI] = useState<string | null>(null);
@@ -122,7 +146,12 @@ export function ProfileForm({
     changeProfileEmailAction,
     initialProfileActionState,
   );
+  const [setPasswordState, setPasswordAction] = useActionState(
+    setProfilePasswordAction,
+    initialProfileActionState,
+  );
   const [changePasswordState, setChangePasswordState] = useState(initialProfileActionState);
+  const hasCredentialAccount = initialHasCredentialAccount || setPasswordState.status === "success";
 
   const form = useForm<ProfileUpdateValues>({
     resolver: zodResolver(profileUpdateSchema),
@@ -143,6 +172,11 @@ export function ProfileForm({
     defaultValues: defaultChangePasswordValues,
   });
 
+  const setPasswordForm = useForm<ProfileSetPasswordValues>({
+    resolver: zodResolver(profileSetPasswordSchema),
+    defaultValues: defaultSetPasswordValues,
+  });
+
   useEffect(() => {
     if (changePasswordState.status !== "success") {
       return;
@@ -150,6 +184,16 @@ export function ProfileForm({
 
     changePasswordForm.reset(defaultChangePasswordValues);
   }, [changePasswordForm, changePasswordState.status]);
+
+  useEffect(() => {
+    if (setPasswordState.status !== "success") {
+      return;
+    }
+
+    setPasswordForm.reset(defaultSetPasswordValues);
+    toast.success("Senha definida com sucesso.");
+    router.refresh();
+  }, [router, setPasswordForm, setPasswordState.status]);
 
   useEffect(() => {
     changeEmailForm.reset({
@@ -233,6 +277,54 @@ export function ProfileForm({
     },
   );
 
+  const onSetPasswordSubmit = setPasswordForm.handleSubmit(
+    (values) => {
+      const payload = new FormData();
+      payload.set("newPassword", values.newPassword.trim());
+      payload.set("confirmNewPassword", values.confirmNewPassword.trim());
+
+      startChangePasswordTransition(() => {
+        setPasswordAction(payload);
+      });
+    },
+    (errors) => {
+      const message = getFirstValidationErrorMessage(errors) ?? "Revise os campos informados.";
+      toast.error(message);
+    },
+  );
+
+  const onLinkGoogleAccount = () => {
+    if (!googleProviderEnabled) {
+      toast.error("Login com Google indisponivel neste ambiente.");
+      return;
+    }
+
+    startLinkGoogleTransition(() => {
+      void authClient
+        .linkSocial({
+          provider: "google",
+          callbackURL: buildAbsoluteCallbackURL("/profile"),
+          errorCallbackURL: buildAbsoluteCallbackURL("/profile"),
+        })
+        .then((result) => {
+          if (result.error) {
+            toast.error(result.error.message ?? "Nao foi possivel conectar com o Google.");
+            return;
+          }
+
+          const data = result.data as { redirect?: boolean; status?: boolean } | null | undefined;
+          if (data?.redirect === false || data?.status) {
+            setHasGoogleAccount(true);
+            toast.success("Conta Google conectada.");
+            router.refresh();
+          }
+        })
+        .catch(() => {
+          toast.error("Nao foi possivel iniciar a conexao com Google.");
+        });
+    });
+  };
+
   useEffect(() => {
     if (profileState.status !== "success") {
       hasRefreshedAfterProfileSuccess.current = false;
@@ -311,6 +403,11 @@ export function ProfileForm({
   };
 
   const startTwoFactorSetup = () => {
+    if (!hasCredentialAccount) {
+      toast.error("Defina uma senha antes de ativar o 2FA.");
+      return;
+    }
+
     const password = enablePassword.trim();
     if (!password) {
       toast.error("Informe sua senha atual para ativar o 2FA.");
@@ -429,6 +526,9 @@ export function ProfileForm({
   const activeTotpQrCodeFailed = Boolean(totpURI && totpQrCodeFailedUri === totpURI);
   const profileIdentityFormId = "profile-identity-form";
   const changePasswordFormId = "profile-password-form";
+  const setPasswordFormId = "profile-set-password-form";
+  const canManageTwoFactor = hasCredentialAccount || twoFactorEnabled;
+  const activePasswordFeedbackState = hasCredentialAccount ? changePasswordState : setPasswordState;
   const profileInitials = initialsFromName(initialName);
 
   return (
@@ -591,97 +691,196 @@ export function ProfileForm({
         <CardContent className="space-y-6">
           <div className="space-y-4 rounded-lg border p-4">
             <div className="space-y-1">
-              <p className="text-sm font-medium">Alterar senha</p>
+              <p className="text-sm font-medium">Login social</p>
               <p className="text-muted-foreground text-xs">
-                Troque a senha periodicamente para reduzir risco de acesso indevido.
+                Conecte sua conta Google para entrar com email/senha ou Google.
               </p>
             </div>
 
-            <Form {...changePasswordForm}>
-              <form id={changePasswordFormId} onSubmit={onChangePasswordSubmit} className="space-y-3">
-                <FormField
-                  control={changePasswordForm.control}
-                  name="currentPassword"
-                  render={({ field }) => {
-                    const fieldProps = stripFieldRef(field);
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant={hasGoogleAccount ? "secondary" : "outline"}>
+                {hasGoogleAccount ? "Google conectado" : "Google nao conectado"}
+              </Badge>
+            </div>
 
-                    return (
-                      <FormItem>
-                        <FormLabel>Senha atual</FormLabel>
-                        <FormControl>
-                          <Input
-                            {...fieldProps}
-                            type="password"
-                            autoComplete="current-password"
-                            placeholder="********"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    );
-                  }}
-                />
+            {googleProviderEnabled ? (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={onLinkGoogleAccount}
+                disabled={isLinkGooglePending || hasGoogleAccount}
+              >
+                <Link2Icon data-icon="inline-start" />
+                {hasGoogleAccount
+                  ? "Conta Google conectada"
+                  : isLinkGooglePending
+                    ? "Conectando..."
+                    : "Conectar com Google"}
+              </Button>
+            ) : (
+              <p className="text-muted-foreground text-xs">
+                Login com Google desabilitado neste ambiente.
+              </p>
+            )}
+          </div>
 
-                <FormField
-                  control={changePasswordForm.control}
-                  name="newPassword"
-                  render={({ field }) => {
-                    const fieldProps = stripFieldRef(field);
+          <div className="space-y-4 rounded-lg border p-4">
+            <div className="space-y-1">
+              <p className="text-sm font-medium">
+                {hasCredentialAccount ? "Alterar senha" : "Definir senha"}
+              </p>
+              <p className="text-muted-foreground text-xs">
+                {hasCredentialAccount
+                  ? "Troque a senha periodicamente para reduzir risco de acesso indevido."
+                  : "Crie uma senha para permitir login por email/senha."}
+              </p>
+            </div>
 
-                    return (
-                      <FormItem>
-                        <FormLabel>Nova senha</FormLabel>
-                        <FormControl>
-                          <Input
-                            {...fieldProps}
-                            type="password"
-                            autoComplete="new-password"
-                            placeholder="********"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    );
-                  }}
-                />
+            {hasCredentialAccount ? (
+              <Form {...changePasswordForm}>
+                <form
+                  id={changePasswordFormId}
+                  onSubmit={onChangePasswordSubmit}
+                  className="space-y-3"
+                >
+                  <FormField
+                    control={changePasswordForm.control}
+                    name="currentPassword"
+                    render={({ field }) => {
+                      const fieldProps = stripFieldRef(field);
 
-                <FormField
-                  control={changePasswordForm.control}
-                  name="confirmNewPassword"
-                  render={({ field }) => {
-                    const fieldProps = stripFieldRef(field);
+                      return (
+                        <FormItem>
+                          <FormLabel>Senha atual</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...fieldProps}
+                              type="password"
+                              autoComplete="current-password"
+                              placeholder="********"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      );
+                    }}
+                  />
 
-                    return (
-                      <FormItem>
-                        <FormLabel>Confirmar nova senha</FormLabel>
-                        <FormControl>
-                          <Input
-                            {...fieldProps}
-                            type="password"
-                            autoComplete="new-password"
-                            placeholder="********"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    );
-                  }}
-                />
-              </form>
-            </Form>
+                  <FormField
+                    control={changePasswordForm.control}
+                    name="newPassword"
+                    render={({ field }) => {
+                      const fieldProps = stripFieldRef(field);
+
+                      return (
+                        <FormItem>
+                          <FormLabel>Nova senha</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...fieldProps}
+                              type="password"
+                              autoComplete="new-password"
+                              placeholder="********"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      );
+                    }}
+                  />
+
+                  <FormField
+                    control={changePasswordForm.control}
+                    name="confirmNewPassword"
+                    render={({ field }) => {
+                      const fieldProps = stripFieldRef(field);
+
+                      return (
+                        <FormItem>
+                          <FormLabel>Confirmar nova senha</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...fieldProps}
+                              type="password"
+                              autoComplete="new-password"
+                              placeholder="********"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      );
+                    }}
+                  />
+                </form>
+              </Form>
+            ) : (
+              <Form {...setPasswordForm}>
+                <form id={setPasswordFormId} onSubmit={onSetPasswordSubmit} className="space-y-3">
+                  <FormField
+                    control={setPasswordForm.control}
+                    name="newPassword"
+                    render={({ field }) => {
+                      const fieldProps = stripFieldRef(field);
+
+                      return (
+                        <FormItem>
+                          <FormLabel>Nova senha</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...fieldProps}
+                              type="password"
+                              autoComplete="new-password"
+                              placeholder="********"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      );
+                    }}
+                  />
+
+                  <FormField
+                    control={setPasswordForm.control}
+                    name="confirmNewPassword"
+                    render={({ field }) => {
+                      const fieldProps = stripFieldRef(field);
+
+                      return (
+                        <FormItem>
+                          <FormLabel>Confirmar nova senha</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...fieldProps}
+                              type="password"
+                              autoComplete="new-password"
+                              placeholder="********"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      );
+                    }}
+                  />
+                </form>
+              </Form>
+            )}
 
             <div className="flex justify-end">
               <Button
                 type="submit"
-                form={changePasswordFormId}
+                form={hasCredentialAccount ? changePasswordFormId : setPasswordFormId}
                 variant="secondary"
                 disabled={isChangePasswordPending}
               >
-                {isChangePasswordPending ? "Salvando senha..." : "Salvar nova senha"}
+                {isChangePasswordPending
+                  ? "Salvando senha..."
+                  : hasCredentialAccount
+                    ? "Salvar nova senha"
+                    : "Definir senha"}
               </Button>
             </div>
 
-            <FormFeedback state={changePasswordState} showInline={false} />
+            <FormFeedback state={activePasswordFeedbackState} showInline={false} />
           </div>
 
           <Alert className="border-amber-500/40 bg-amber-500/5">
@@ -698,12 +897,14 @@ export function ProfileForm({
               </p>
 
               <p className="text-sm">
-              {twoFactorEnabled
-                ? "Seu login exige codigo de seguranca."
-                : "Ative para adicionar uma camada extra de protecao."}
+                {twoFactorEnabled
+                  ? "Seu login exige codigo de seguranca."
+                  : canManageTwoFactor
+                    ? "Ative para adicionar uma camada extra de protecao."
+                    : "Defina uma senha para poder ativar o 2FA."}
               </p>
 
-              {!twoFactorEnabled && !totpURI ? (
+              {!twoFactorEnabled && !totpURI && canManageTwoFactor ? (
                 <div className="space-y-3 rounded-md border bg-background p-4">
                   <p className="text-muted-foreground text-sm">
                     Confirme sua senha para gerar QR code e codigos de backup.

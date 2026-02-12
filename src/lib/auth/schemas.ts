@@ -78,11 +78,27 @@ export const profileChangePasswordSchema = z
     }
   });
 
+export const profileSetPasswordSchema = z
+  .object({
+    newPassword: passwordSchema,
+    confirmNewPassword: z.string().min(1, "Confirme a nova senha."),
+  })
+  .superRefine((values, ctx) => {
+    if (values.newPassword !== values.confirmNewPassword) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["confirmNewPassword"],
+        message: "As senhas nao conferem.",
+      });
+    }
+  });
+
 export type SignInValues = z.infer<typeof signInSchema>;
 export type SignUpValues = z.infer<typeof signUpSchema>;
 export type ProfileUpdateValues = z.infer<typeof profileUpdateSchema>;
 export type ProfileChangeEmailValues = z.infer<typeof profileChangeEmailSchema>;
 export type ProfileChangePasswordValues = z.infer<typeof profileChangePasswordSchema>;
+export type ProfileSetPasswordValues = z.infer<typeof profileSetPasswordSchema>;
 
 export const forgotPasswordSchema = z.object({
   email: emailSchema,

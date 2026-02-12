@@ -513,6 +513,11 @@ export const auth = betterAuth({
       });
     },
   },
+  account: {
+    accountLinking: {
+      trustedProviders: ["google"],
+    },
+  },
   socialProviders: (() => {
     const googleConfig = getGoogleSocialProviderConfig();
 

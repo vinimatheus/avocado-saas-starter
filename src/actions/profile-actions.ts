@@ -9,6 +9,7 @@ import { auth } from "@/lib/auth/server";
 import {
   profileChangeEmailSchema,
   profileChangePasswordSchema,
+  profileSetPasswordSchema,
   profileUpdateSchema,
 } from "@/lib/auth/schemas";
 import { getTenantContext } from "@/lib/organization/tenant-context";
@@ -229,6 +230,39 @@ export async function changeProfilePasswordAction(
     return successState("Senha alterada com sucesso.");
   } catch (error) {
     return errorState(parseActionError(error, "Falha ao alterar senha."));
+  }
+}
+
+export async function setProfilePasswordAction(
+  _previousState: ProfileActionState,
+  formData: FormData,
+): Promise<ProfileActionState> {
+  try {
+    const tenantContext = await getTenantContext();
+    if (!tenantContext.session?.user) {
+      return errorState("Sessao invalida. Faca login novamente.");
+    }
+
+    const parsed = profileSetPasswordSchema.safeParse({
+      newPassword: getFormValue(formData, "newPassword"),
+      confirmNewPassword: getFormValue(formData, "confirmNewPassword"),
+    });
+
+    if (!parsed.success) {
+      return errorState(parsed.error.issues[0]?.message ?? "Dados invalidos para definir senha.");
+    }
+
+    await auth.api.setPassword({
+      headers: await headers(),
+      body: {
+        newPassword: parsed.data.newPassword,
+      },
+    });
+
+    revalidateProfilePaths();
+    return successState("Senha definida com sucesso.");
+  } catch (error) {
+    return errorState(parseActionError(error, "Falha ao definir senha."));
   }
 }
 
