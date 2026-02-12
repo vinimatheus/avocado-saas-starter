@@ -1,6 +1,7 @@
 import { ShieldCheckIcon, SparklesIcon, WorkflowIcon } from "lucide-react";
 
 import { Logo } from "@/components/shared/logo";
+import { ThemeToggle } from "@/components/shared/theme-toggle";
 
 export default function AuthLayout({
   children,
@@ -9,6 +10,10 @@ export default function AuthLayout({
 }>) {
   return (
     <main className="relative min-h-screen overflow-hidden bg-background">
+      <div className="absolute right-6 top-6 z-40">
+        <ThemeToggle />
+      </div>
+
       {/* Dynamic Background Elements */}
       <div
         aria-hidden

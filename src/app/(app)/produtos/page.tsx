@@ -1,7 +1,6 @@
-import { PackageSearchIcon } from "lucide-react";
 import { Prisma } from "@prisma/client";
+import Image from "next/image";
 
-import { AppPageHero } from "@/components/app/app-page-hero";
 import { AppPageContainer } from "@/components/app/app-page-container";
 import { StatusBanner } from "@/components/app/status-banner";
 import { ProductsDataTable } from "@/components/templates/products-data-table";
@@ -81,20 +80,44 @@ export default async function ProductsPage() {
 
   return (
     <AppPageContainer className="gap-6">
-      <AppPageHero
-        icon={PackageSearchIcon}
-        eyebrow="Produtos"
-        title="Cadastros com dados reais e fluxo pronto para evolucao"
-        description="Tabela base para cadastros com dados reais via Prisma e formularios em Sheet."
-        tags={[
-          { label: "Template", variant: "secondary" },
-          { label: "Prisma", variant: "outline" },
-          { label: "TanStack Table", variant: "outline" },
-          { label: "Sheet + RHF", variant: "outline" },
-        ]}
-      />
+      <section className="space-y-1">
+        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Produtos</h1>
+        <p className="text-muted-foreground text-sm sm:text-base">
+          Tabela base para cadastros com dados reais via Prisma e formularios em Sheet.
+        </p>
+      </section>
 
       <StatusBanner message={productsResult.errorMessage} />
+
+      <Card className="overflow-hidden border-primary/30 bg-gradient-to-br from-background via-background to-primary/10">
+        <CardContent className="p-0">
+          <div className="grid items-center gap-4 md:grid-cols-[1.2fr_0.8fr]">
+            <div className="space-y-2 px-5 py-5 sm:px-6">
+              <p className="text-muted-foreground text-[11px] font-semibold uppercase tracking-[0.12em]">
+                Catalogo em foco
+              </p>
+              <h2 className="text-xl font-semibold tracking-tight">
+                Organize seu catalogo com clareza e ritmo de crescimento
+              </h2>
+              <p className="text-muted-foreground text-sm">
+                Gerencie seus produtos com uma base estruturada para cadastro, atualizacao e
+                evolucao do seu portfolio.
+              </p>
+            </div>
+
+            <div className="relative h-48 w-full md:h-full md:min-h-[220px]">
+              <Image
+                src="/img/produtos.png"
+                alt="Avocato organizando produtos no computador"
+                fill
+                priority
+                sizes="(max-width: 768px) 100vw, 34vw"
+                className="object-cover object-center md:object-[56%_center]"
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardContent className="pt-6">

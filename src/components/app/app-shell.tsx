@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 
 import { Logo } from "@/components/shared/logo";
+import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { AppBreadcrumb } from "@/components/app/app-breadcrumb";
 import {
   InvitationNotificationMenu,
@@ -96,28 +97,20 @@ function AppSidebar({
   const pathname = usePathname();
 
   return (
-    <Sidebar variant="inset" collapsible="icon">
+    <Sidebar collapsible="icon">
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
             <Link
               href="/dashboard"
-              className="group flex items-center gap-3 px-2 py-2 transition-all hover:bg-sidebar-accent/50 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
+              className="group flex items-center gap-3 px-2 py-2 transition-all hover:bg-sidebar-accent/50 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:px-0"
             >
-              <Logo
-                size="sm"
-                showText={false}
-                showGlow={false}
-                className="group-data-[collapsible=icon]:scale-110"
-              />
-              <div className="grid text-left leading-tight group-data-[collapsible=icon]:hidden">
-                <span className="text-muted-foreground text-[0.62rem] font-bold tracking-[0.1em] uppercase">
-                  Avocato
-                </span>
-                <span className="text-sidebar-foreground text-sm font-black italic tracking-tighter">
-                  SaaS
-                </span>
-              </div>
+              <span className="group-data-[collapsible=icon]:hidden">
+                <Logo size="sm" showText showGlow />
+              </span>
+              <span className="hidden group-data-[collapsible=icon]:inline-flex">
+                <Logo size="sm" showText={false} showGlow={false} className="scale-110" />
+              </span>
             </Link>
           </SidebarMenuItem>
           <SidebarMenuItem>
@@ -204,6 +197,7 @@ export function AppShell({
               <AppBreadcrumb />
             </div>
             <div className="ml-auto flex items-center gap-2">
+              <ThemeToggle />
               <InvitationNotificationMenu initialInvitations={pendingInvitations} />
             </div>
           </header>

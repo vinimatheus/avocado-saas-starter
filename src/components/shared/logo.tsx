@@ -29,8 +29,8 @@ export function Logo({
           <div className="bg-primary/20 absolute -inset-2 animate-pulse rounded-full blur-xl" />
         )}
         <Image
-          src="/img/avocato.png"
-          alt="Avocato SaaS"
+          src="/img/logo.png"
+          alt="avocado SaaS"
           width={img}
           height={img}
           className="relative object-contain"
@@ -40,7 +40,7 @@ export function Logo({
       {showText && (
         <div className="flex flex-col leading-tight">
           <span className={cn("text-muted-foreground font-bold tracking-[0.1em] uppercase", text)}>
-            Avocato
+            avocado
           </span>
           <span
             className={cn(

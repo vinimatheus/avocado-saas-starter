@@ -23,8 +23,6 @@ type AppUserMenuProps = {
   userImage?: string | null;
 };
 
-const DEFAULT_AVATAR_IMAGE = "/img/avatar.png";
-
 function roleLabel(role: OrganizationUserRole): string {
   if (role === "owner") {
     return "Owner";
@@ -51,9 +49,9 @@ function initialsFromUserName(userName: string | null | undefined, role: Organiz
   return role === "owner" ? "OW" : role === "admin" ? "AD" : "US";
 }
 
-function normalizeUserImage(userImage: string | null | undefined): string {
+function normalizeUserImage(userImage: string | null | undefined): string | null {
   const normalizedImage = userImage?.trim() ?? "";
-  return normalizedImage || DEFAULT_AVATAR_IMAGE;
+  return normalizedImage || null;
 }
 
 export function AppUserMenu({ role, userName = null, userImage = null }: AppUserMenuProps) {

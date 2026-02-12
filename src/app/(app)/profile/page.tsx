@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
-import { Building2Icon, ShieldCheckIcon, UserCogIcon } from "lucide-react";
+import { Building2Icon, ShieldCheckIcon } from "lucide-react";
+import Image from "next/image";
 
-import { AppPageHero } from "@/components/app/app-page-hero";
 import { AppPageContainer } from "@/components/app/app-page-container";
 import { ProfileForm } from "@/components/auth/profile-form";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +10,6 @@ import type { OrganizationUserRole } from "@/lib/organization/helpers";
 import { getTenantContext } from "@/lib/organization/tenant-context";
 
 export const dynamic = "force-dynamic";
-const DEFAULT_AVATAR_IMAGE = "/img/avatar.png";
 
 function roleLabel(role: OrganizationUserRole | null): string {
   if (role === "owner") {
@@ -37,16 +36,45 @@ export default async function ProfilePage() {
   }
 
   const initialTwoFactorEnabled = Boolean((user as { twoFactorEnabled?: boolean }).twoFactorEnabled);
-  const initialImage = (user as { image?: string | null }).image?.trim() || DEFAULT_AVATAR_IMAGE;
+  const initialImage = ((user as { image?: string | null }).image ?? "").trim() || null;
 
   return (
     <AppPageContainer className="gap-6">
-      <AppPageHero
-        icon={UserCogIcon}
-        eyebrow="Profile"
-        title="Central da sua conta"
-        description="Atualize identidade, credenciais e seguranca com fluxo claro por bloco."
-      />
+      <section className="space-y-1">
+        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Perfil</h1>
+        <p className="text-muted-foreground text-sm sm:text-base">
+          Atualize identidade, credenciais e seguranca com fluxo claro por bloco.
+        </p>
+      </section>
+
+      <Card className="overflow-hidden border-primary/30 bg-gradient-to-br from-background via-background to-primary/10">
+        <CardContent className="p-0">
+          <div className="grid items-center gap-4 md:grid-cols-[1.2fr_0.8fr]">
+            <div className="space-y-2 px-5 py-5 sm:px-6">
+              <p className="text-muted-foreground text-[11px] font-semibold uppercase tracking-[0.12em]">
+                Identidade em dia
+              </p>
+              <h2 className="text-xl font-semibold tracking-tight">
+                Seu perfil organizado para manter seguranca e confianca
+              </h2>
+              <p className="text-muted-foreground text-sm">
+                Atualize foto, credenciais e protecao da conta em um fluxo simples e consistente.
+              </p>
+            </div>
+
+            <div className="relative h-48 w-full md:h-full md:min-h-[220px]">
+              <Image
+                src="/img/profile.png"
+                alt="Avocado gerenciando perfil no computador"
+                fill
+                priority
+                sizes="(max-width: 768px) 100vw, 34vw"
+                className="object-cover object-center md:object-[56%_center]"
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,340px)]">
         <ProfileForm

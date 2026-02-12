@@ -1,4 +1,4 @@
-# Avocato SaaS Starter
+# avocado SaaS Starter
 
 Template SaaS com:
 

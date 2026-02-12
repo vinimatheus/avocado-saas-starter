@@ -15,7 +15,7 @@ import { prisma } from "@/lib/db/prisma";
 
 const INVITATION_ACCEPT_PATH = "/convites/aceitar";
 const DEFAULT_APP_BASE_URL = "http://localhost:3000";
-const DEFAULT_APP_NAME = "Avocato SaaS";
+const DEFAULT_APP_NAME = "avocado SaaS";
 const RESEND_TIMEOUT_MS = 10_000;
 
 type GoogleSocialProviderConfig = {

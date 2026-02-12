@@ -25,6 +25,7 @@ import {
 } from "@/actions/organization-user-actions"
 import { initialOrganizationUserActionState } from "@/actions/organization-user-action-state"
 import { FormFeedback } from "@/components/shared/form-feedback"
+import { Logo } from "@/components/shared/logo"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -46,6 +47,7 @@ import {
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -395,6 +397,11 @@ export function OrganizationManagementDialog({
           style={{ "--sidebar-width": "11rem" } as React.CSSProperties}
         >
           <Sidebar collapsible="none" className="hidden border-r md:flex">
+            <SidebarHeader>
+              <div className="px-2 py-1">
+                <Logo size="sm" showText showGlow={false} />
+              </div>
+            </SidebarHeader>
             <SidebarContent>
               <SidebarGroup>
                 <SidebarGroupContent>

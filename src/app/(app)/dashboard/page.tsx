@@ -1,17 +1,16 @@
 import {
   BoxesIcon,
   Clock3Icon,
-  LayoutDashboardIcon,
   MailPlusIcon,
   UserCheck2Icon,
   UsersIcon,
 } from "lucide-react";
+import Image from "next/image";
 
-import { AppPageHero } from "@/components/app/app-page-hero";
 import { AppPageContainer } from "@/components/app/app-page-container";
 import { DashboardAreaCharts } from "@/components/dashboard/dashboard-area-charts";
 import { StatusBanner } from "@/components/app/status-banner";
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getDashboardInsights } from "@/lib/dashboard/analytics";
 import { getTenantContext } from "@/lib/organization/tenant-context";
 
@@ -30,20 +29,44 @@ export default async function DashboardPage() {
 
   return (
     <AppPageContainer className="gap-6">
-      <AppPageHero
-        icon={LayoutDashboardIcon}
-        eyebrow="Dashboard"
-        title="Visao executiva do workspace"
-        description="Acompanhe tendencia mensal de usuarios, equipe e produtos em um unico painel."
-        tags={[
-          { label: "Analytics", variant: "secondary" },
-          { label: "Prisma", variant: "outline" },
-          { label: "Shadcn Charts", variant: "outline" },
-          { label: "Area + Tendencia", variant: "outline" },
-        ]}
-      />
+      <section className="space-y-1">
+        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Dashboard</h1>
+        <p className="text-muted-foreground text-sm sm:text-base">
+          Acompanhe tendencia mensal de usuarios, equipe e produtos em um unico painel.
+        </p>
+      </section>
 
       <StatusBanner message={insights.errorMessage} />
+
+      <Card className="overflow-hidden border-primary/30 bg-gradient-to-br from-background via-background to-primary/10">
+        <CardContent className="p-0">
+          <div className="grid items-center gap-4 md:grid-cols-[1.2fr_0.8fr]">
+            <div className="space-y-2 px-5 py-5 sm:px-6">
+              <p className="text-muted-foreground text-[11px] font-semibold uppercase tracking-[0.12em]">
+                avocado no controle
+              </p>
+              <h2 className="text-xl font-semibold tracking-tight">
+                Seu dashboard com visao clara para decidir mais rapido
+              </h2>
+              <p className="text-muted-foreground text-sm">
+                Acompanhe usuarios, time e produtos em um unico lugar e mantenha sua operacao
+                evoluindo com previsibilidade.
+              </p>
+            </div>
+
+            <div className="relative h-48 w-full md:h-full md:min-h-[220px]">
+              <Image
+                src="/img/dashboard.png"
+                alt="avocado mexendo no computador"
+                fill
+                priority
+                sizes="(max-width: 768px) 100vw, 34vw"
+                className="object-cover object-center md:object-[58%_center]"
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Card>

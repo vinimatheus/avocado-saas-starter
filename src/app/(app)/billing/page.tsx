@@ -1,8 +1,8 @@
-import { Building2Icon, SparklesIcon, UsersIcon } from "lucide-react";
+import { Building2Icon, CircleCheckIcon, ShieldCheckIcon, UsersIcon } from "lucide-react";
+import Image from "next/image";
 import { redirect } from "next/navigation";
 
 import { cancelSubscriptionAction } from "@/actions/billing-actions";
-import { AppPageHero } from "@/components/app/app-page-hero";
 import { AppPageContainer } from "@/components/app/app-page-container";
 import { BillingPlansSection } from "@/components/billing/billing-plans-section";
 import { BillingProfileDialog } from "@/components/billing/billing-profile-dialog";
@@ -162,17 +162,12 @@ export default async function BillingPage({
 
   return (
     <AppPageContainer className="gap-6">
-      <AppPageHero
-        icon={SparklesIcon}
-        eyebrow="Billing"
-        title="Desbloqueie o crescimento da sua operacao"
-        description="Escolha um plano e escale usuarios, organizacoes e resultados sem perder controle."
-        tags={[
-          { label: "Billing", variant: "secondary" },
-          { label: "Prisma", variant: "outline" },
-          { label: "Assinaturas", variant: "outline" },
-        ]}
-      />
+      <section className="space-y-1">
+        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Pagamentos</h1>
+        <p className="text-muted-foreground text-sm sm:text-base">
+          Escolha um plano e escale usuarios, organizacoes e resultados sem perder controle.
+        </p>
+      </section>
 
       {successMessage ? (
         <Card className="border-emerald-500/40 bg-emerald-500/10">
@@ -186,6 +181,35 @@ export default async function BillingPage({
         </Card>
       ) : null}
 
+      <Card className="overflow-hidden border-primary/30 bg-gradient-to-br from-background via-background to-primary/10">
+        <CardContent className="p-0">
+          <div className="grid items-center gap-4 md:grid-cols-[1.2fr_0.8fr]">
+            <div className="space-y-2 px-5 py-5 sm:px-6">
+              <p className="text-muted-foreground text-[11px] font-semibold uppercase tracking-[0.12em]">
+                Financeiro estrategico
+              </p>
+              <h2 className="text-xl font-semibold tracking-tight">
+                Controle financeiro com visao clara para crescer com seguranca
+              </h2>
+              <p className="text-muted-foreground text-sm">
+                Gerencie assinatura, recorrencia e status de cobranca em um fluxo unico e objetivo.
+              </p>
+            </div>
+
+            <div className="relative h-48 w-full md:h-full md:min-h-[220px]">
+              <Image
+                src="/img/financeiro.png"
+                alt="Avocato controlando pagamentos no computador"
+                fill
+                priority
+                sizes="(max-width: 768px) 100vw, 34vw"
+                className="object-cover object-center md:object-[58%_center]"
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card className="border-primary/30 bg-primary/5">
         <CardContent className="space-y-1 py-3 text-sm">
           <p className="font-medium">Ciclo de cobranca</p>
@@ -193,6 +217,51 @@ export default async function BillingPage({
             No checkout, o ciclo mensal usa recorrencia automatica no AbacatePay e o ciclo anual
             aplica cobranca unica com cobertura de 12 meses.
           </p>
+        </CardContent>
+      </Card>
+
+      <Card className="overflow-hidden border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 via-background to-background">
+        <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-2">
+            <Badge className="gap-1 border-emerald-500/40 bg-emerald-500/15 text-emerald-800 dark:text-emerald-300" variant="outline">
+              <ShieldCheckIcon className="size-3.5" />
+              Financeiro protegido
+            </Badge>
+            <div className="space-y-1">
+              <p className="text-base font-semibold">
+                Seu financeiro esta sendo controlado pela AbacatePay
+              </p>
+              <p className="text-muted-foreground text-sm">
+                Pagamentos, recorrencia e confirmacao da assinatura sao processados com seguranca
+                pela infraestrutura da AbacatePay.
+              </p>
+            </div>
+            <div className="text-muted-foreground flex flex-wrap items-center gap-3 text-xs">
+              <span className="inline-flex items-center gap-1.5">
+                <CircleCheckIcon className="text-emerald-600 size-3.5 dark:text-emerald-400" />
+                Checkout seguro
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <CircleCheckIcon className="text-emerald-600 size-3.5 dark:text-emerald-400" />
+                Cobranca automatica
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <CircleCheckIcon className="text-emerald-600 size-3.5 dark:text-emerald-400" />
+                Confirmacao em tempo real
+              </span>
+            </div>
+          </div>
+
+          <div className="relative flex h-16 min-w-40 items-center justify-center rounded-lg border border-emerald-500/25 bg-card/80 px-4 shadow-sm">
+            <Image
+              src="/img/abacate%20pay.png"
+              alt="AbacatePay"
+              width={156}
+              height={44}
+              className="h-auto max-h-9 w-auto object-contain"
+              priority
+            />
+          </div>
         </CardContent>
       </Card>
 

@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 
 import { Logo } from "@/components/shared/logo";
+import { ThemeToggle } from "@/components/shared/theme-toggle";
 
 type ShowcaseCard = {
   title: string;
@@ -329,11 +330,10 @@ function FeatureCard({
     <button
       type="button"
       onClick={onClick}
-      className={`relative min-h-[126px] flex-1 border px-5 py-4 text-left transition md:min-h-[136px] ${
-        isActive
+      className={`relative min-h-[126px] flex-1 border px-5 py-4 text-left transition md:min-h-[136px] ${isActive
           ? "border-primary/30 bg-card shadow-[0_0_0_0.7px_hsl(var(--primary)/0.25)_inset]"
           : "border-border bg-background/70 hover:bg-card"
-      }`}
+        }`}
     >
       {isActive ? (
         <span className="bg-primary/20 absolute inset-x-0 top-0 h-0.5">
@@ -414,6 +414,7 @@ export function MarketingLanding() {
           </div>
 
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             <Link
               href="/sign-in"
               className="border-border bg-card text-foreground rounded-full border px-4 py-2 text-xs font-semibold transition hover:bg-primary/5 sm:text-sm"
@@ -432,7 +433,7 @@ export function MarketingLanding() {
 
         <section className="relative border-b border-border pb-10 pt-16 sm:pt-24 lg:pt-32">
           <div className="mx-auto flex max-w-3xl flex-col items-center text-center animate-in fade-in slide-in-from-bottom-5 duration-700">
-            <Badge icon={<BadgeCheckIcon className="size-3.5" />} text="Avocato SaaS Starter" />
+            <Badge icon={<BadgeCheckIcon className="size-3.5" />} text="avocado SaaS Starter" />
             <h1 className="mt-5 text-balance text-4xl font-black leading-[1.04] tracking-tight sm:text-5xl lg:text-7xl">
               SaaS pronto para sair do zero ao dashboard em horas
             </h1>
@@ -512,9 +513,8 @@ export function MarketingLanding() {
                   return (
                     <div
                       key={item.label}
-                      className={`border-border text-foreground flex h-28 items-center justify-center gap-2 sm:h-32 ${
-                        index % 2 === 0 ? "border-r" : ""
-                      } ${index < stackBadges.length - 2 ? "border-b" : ""} sm:border-r sm:[&:nth-child(4n)]:border-r-0 sm:[&:nth-last-child(-n+4)]:border-b-0`}
+                      className={`border-border text-foreground flex h-28 items-center justify-center gap-2 sm:h-32 ${index % 2 === 0 ? "border-r" : ""
+                        } ${index < stackBadges.length - 2 ? "border-b" : ""} sm:border-r sm:[&:nth-child(4n)]:border-r-0 sm:[&:nth-last-child(-n+4)]:border-b-0`}
                     >
                       <span className="bg-primary/12 text-primary inline-flex size-8 items-center justify-center rounded-full border border-primary/20">
                         <Icon className="size-4" />
@@ -533,7 +533,7 @@ export function MarketingLanding() {
           <div className="mx-auto max-w-2xl text-center">
             <Badge icon={<LayersIcon className="size-3.5" />} text="Bento grid" />
             <h2 className="mt-4 text-2xl font-black tracking-tight sm:text-4xl">
-              Identidade Avocato aplicada em todo o fluxo
+              Identidade avocado aplicada em todo o fluxo
             </h2>
             <p className="text-muted-foreground mt-4 text-sm leading-7 sm:text-base">
               A mesma linguagem visual do app principal: foco em clareza, produtividade e operacao SaaS real.
@@ -641,11 +641,10 @@ export function MarketingLanding() {
             {plans.map((plan) => (
               <article
                 key={plan.name}
-                className={`rounded-2xl border p-6 ${
-                  plan.highlight
+                className={`rounded-2xl border p-6 ${plan.highlight
                     ? "border-primary/35 bg-primary/8 shadow-[0_8px_24px_rgba(76,175,80,0.22)]"
                     : "border-border bg-card"
-                }`}
+                  }`}
               >
                 {plan.highlight ? (
                   <span className="border-primary/30 bg-primary/12 text-primary inline-flex rounded-full border px-2.5 py-1 text-xs font-bold">
@@ -670,11 +669,10 @@ export function MarketingLanding() {
 
                 <Link
                   href="/sign-up"
-                  className={`mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition ${
-                    plan.highlight
+                  className={`mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition ${plan.highlight
                       ? "bg-primary text-primary-foreground hover:opacity-90"
                       : "border-border bg-background text-foreground border hover:bg-primary/5"
-                  }`}
+                    }`}
                 >
                   Escolher plano
                   <ArrowRightIcon className="size-4" />
@@ -705,7 +703,7 @@ export function MarketingLanding() {
         <section className="py-12 sm:py-16">
           <div className="from-background via-primary/10 to-accent/18 rounded-3xl border border-border bg-gradient-to-br p-8 text-center sm:p-12">
             <h2 className="mx-auto max-w-3xl text-balance text-3xl font-black tracking-tight sm:text-5xl">
-              Avocato SaaS Starter: base pronta, identidade consistente e foco no que importa
+              avocado SaaS Starter: base pronta, identidade consistente e foco no que importa
             </h2>
             <p className="text-muted-foreground mx-auto mt-4 max-w-2xl text-sm leading-7 sm:text-base">
               Clone, configure variaveis, rode `db:setup` e comece a evoluir seu proprio produto com auth,
@@ -732,7 +730,7 @@ export function MarketingLanding() {
           <footer className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-border pt-6 sm:flex-row">
             <div className="flex items-center gap-3">
               <Logo size="sm" showGlow={false} />
-              <p className="text-muted-foreground text-xs font-semibold">© {new Date().getFullYear()} Avocato SaaS</p>
+              <p className="text-muted-foreground text-xs font-semibold">© {new Date().getFullYear()} avocado SaaS</p>
             </div>
             <div className="text-muted-foreground flex items-center gap-4 text-xs font-semibold">
               <a href="#produto" className="transition hover:text-foreground">
