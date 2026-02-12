@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Building2Icon, CircleCheckIcon, ShieldCheckIcon, UsersIcon } from "lucide-react";
+import { Building2Icon, UsersIcon } from "lucide-react";
 import Image from "next/image";
 import { redirect } from "next/navigation";
 
@@ -193,7 +193,17 @@ export default async function BillingPage({
       <Card className="overflow-hidden border-primary/30 bg-gradient-to-br from-background via-background to-primary/10">
         <CardContent className="p-0">
           <div className="grid items-center gap-4 md:grid-cols-[1.2fr_0.8fr]">
-            <div className="space-y-4 px-5 py-5 sm:px-6">
+            <div className="space-y-2 px-5 py-5 sm:px-6">
+              <div className="mb-1 inline-flex items-center justify-center rounded-full border border-primary/20 bg-card/80 px-3 py-1.5 shadow-sm">
+                <Image
+                  src="/img/abacate%20pay.png"
+                  alt="AbacatePay"
+                  width={98}
+                  height={28}
+                  className="h-auto w-auto object-contain"
+                  priority
+                />
+              </div>
               <p className="text-muted-foreground text-[11px] font-semibold uppercase tracking-[0.12em]">
                 Financeiro estrategico
               </p>
@@ -203,50 +213,6 @@ export default async function BillingPage({
               <p className="text-muted-foreground text-sm">
                 Gerencie assinatura, recorrencia e status de cobranca em um fluxo unico e objetivo.
               </p>
-
-              <Badge
-                className="gap-1 border-emerald-500/40 bg-emerald-500/15 text-emerald-800 dark:text-emerald-300"
-                variant="outline"
-              >
-                <ShieldCheckIcon className="size-3.5" />
-                Financeiro protegido
-              </Badge>
-
-              <p className="text-muted-foreground text-sm">
-                Pagamentos, recorrencia e confirmacao da assinatura sao processados com seguranca
-                pela infraestrutura da AbacatePay.
-              </p>
-
-              <div className="text-muted-foreground flex flex-wrap items-center gap-3 text-xs">
-                <span className="inline-flex items-center gap-1.5">
-                  <CircleCheckIcon className="text-emerald-600 size-3.5 dark:text-emerald-400" />
-                  Checkout seguro
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <CircleCheckIcon className="text-emerald-600 size-3.5 dark:text-emerald-400" />
-                  Cobranca automatica
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <CircleCheckIcon className="text-emerald-600 size-3.5 dark:text-emerald-400" />
-                  Confirmacao em tempo real
-                </span>
-              </div>
-
-              <p className="text-muted-foreground text-xs">
-                No checkout, o ciclo mensal usa recorrencia automatica no AbacatePay e o ciclo anual
-                aplica cobranca unica com cobertura de 12 meses.
-              </p>
-
-              <div className="relative flex h-14 w-full max-w-44 items-center justify-center rounded-lg border border-emerald-500/25 bg-card/80 px-4 shadow-sm">
-                <Image
-                  src="/img/abacate%20pay.png"
-                  alt="AbacatePay"
-                  width={156}
-                  height={44}
-                  className="h-auto max-h-8 w-auto object-contain"
-                  priority
-                />
-              </div>
             </div>
 
             <div className="relative h-48 w-full md:h-full md:min-h-[220px]">
