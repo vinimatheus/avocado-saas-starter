@@ -31,6 +31,9 @@ npm install
 - `ABACATEPAY_WEBHOOK_SECRET`
 - `ABACATEPAY_WEBHOOK_SIGNATURE_KEY`
 - `ABACATEPAY_BASE_URL` (default: `https://api.abacatepay.com/v1`)
+- `ABACATEPAY_TIMEOUT_MS` (opcional, default: `10000`)
+- `ABACATEPAY_BILLING_LIST_TIMEOUT_MS` (opcional, default: `20000`)
+- `ABACATEPAY_BILLING_LIST_RETRIES` (opcional, default: `1`)
 - `ABACATEPAY_ALLOWED_CHECKOUT_HOSTS` (opcional, default: `abacatepay.com`)
 - `ABACATEPAY_WEBHOOK_ALLOWED_IPS` (opcional, lista de IPs separados por virgula)
 - `ABACATEPAY_WEBHOOK_RATE_LIMIT_MAX` (opcional, default: `120`)
@@ -74,6 +77,7 @@ Abra [http://localhost:3000](http://localhost:3000).
 - `TRUSTED_ORIGINS` (dominios permitidos, separados por virgula)
 - `RESEND_API_KEY`, `RESEND_FROM_EMAIL`
 - `ABACATEPAY_API_KEY`, `ABACATEPAY_WEBHOOK_SECRET`, `ABACATEPAY_WEBHOOK_SIGNATURE_KEY`
+- `ABACATEPAY_TIMEOUT_MS` (opcional), `ABACATEPAY_BILLING_LIST_TIMEOUT_MS` (opcional), `ABACATEPAY_BILLING_LIST_RETRIES` (opcional)
 - `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`
 3. O build ja esta preparado para Vercel:
 - `npm run build` executa `prisma generate` antes do `next build`.

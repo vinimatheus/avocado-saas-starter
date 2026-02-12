@@ -1,5 +1,7 @@
 const DEFAULT_ABACATEPAY_BASE_URL = "https://api.abacatepay.com/v1";
-const ABACATEPAY_TIMEOUT_MS = 10_000;
+const DEFAULT_ABACATEPAY_TIMEOUT_MS = 10_000;
+const DEFAULT_ABACATEPAY_BILLING_LIST_TIMEOUT_MS = 20_000;
+const DEFAULT_ABACATEPAY_BILLING_LIST_RETRIES = 1;
 const DEFAULT_ABACATEPAY_CHECKOUT_ALLOWED_HOSTS = ["abacatepay.com"] as const;
 
 function isProduction(): boolean {
@@ -64,6 +66,15 @@ type AbacateCreateBillingPayload = {
   externalId?: string;
   metadata?: Record<string, unknown>;
 };
+
+function parsePositiveIntEnv(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(value?.trim() ?? "", 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+
+  return parsed;
+}
 
 function getAbacateApiBaseUrl(): string {
   const configured = process.env.ABACATEPAY_BASE_URL?.trim() || DEFAULT_ABACATEPAY_BASE_URL;
@@ -140,9 +151,39 @@ export function isAbacatePayConfigured(): boolean {
   return Boolean(process.env.ABACATEPAY_API_KEY?.trim());
 }
 
+function getAbacateRequestTimeoutMs(): number {
+  return parsePositiveIntEnv(process.env.ABACATEPAY_TIMEOUT_MS, DEFAULT_ABACATEPAY_TIMEOUT_MS);
+}
+
+function getAbacateBillingListTimeoutMs(): number {
+  return parsePositiveIntEnv(
+    process.env.ABACATEPAY_BILLING_LIST_TIMEOUT_MS,
+    DEFAULT_ABACATEPAY_BILLING_LIST_TIMEOUT_MS,
+  );
+}
+
+function getAbacateBillingListRetryAttempts(): number {
+  return parsePositiveIntEnv(
+    process.env.ABACATEPAY_BILLING_LIST_RETRIES,
+    DEFAULT_ABACATEPAY_BILLING_LIST_RETRIES,
+  );
+}
+
+function isTimeoutError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    (error as { name?: unknown }).name === "TimeoutError"
+  );
+}
+
 async function requestAbacate<TResponse>(
   path: string,
   init: RequestInit,
+  options?: {
+    timeoutMs?: number;
+  },
 ): Promise<TResponse> {
   const response = await fetch(`${getAbacateApiBaseUrl()}${path}`, {
     ...init,
@@ -154,7 +195,7 @@ async function requestAbacate<TResponse>(
       ...init.headers,
     },
     cache: "no-store",
-    signal: AbortSignal.timeout(ABACATEPAY_TIMEOUT_MS),
+    signal: AbortSignal.timeout(options?.timeoutMs ?? getAbacateRequestTimeoutMs()),
   });
 
   const payload = (await response.json().catch(() => null)) as AbacateApiEnvelope<TResponse> | null;
@@ -200,7 +241,26 @@ export async function createAbacateBilling(
 }
 
 export async function listAbacateBillings(): Promise<AbacateBilling[]> {
-  return requestAbacate<AbacateBilling[]>("/billing/list", {
-    method: "GET",
-  });
+  const retries = getAbacateBillingListRetryAttempts();
+  const timeoutMs = getAbacateBillingListTimeoutMs();
+
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      return await requestAbacate<AbacateBilling[]>(
+        "/billing/list",
+        {
+          method: "GET",
+        },
+        {
+          timeoutMs,
+        },
+      );
+    } catch (error) {
+      if (attempt === retries || !isTimeoutError(error)) {
+        throw error;
+      }
+    }
+  }
+
+  return [];
 }

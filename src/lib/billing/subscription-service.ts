@@ -87,6 +87,15 @@ function addDays(date: Date, days: number): Date {
   return nextDate;
 }
 
+function isTimeoutError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    (error as { name?: unknown }).name === "TimeoutError"
+  );
+}
+
 function isPlanBillingCycle(value: unknown): value is PlanBillingCycle {
   return value === "MONTHLY" || value === "ANNUAL";
 }
@@ -1477,7 +1486,13 @@ export async function getBillingPageData(
         checkoutId,
       });
     } catch (error) {
-      console.error("Falha ao reconciliar checkout com AbacatePay.", error);
+      if (isTimeoutError(error)) {
+        console.warn(
+          "Reconciliação de checkout com AbacatePay excedeu o tempo limite; nova tentativa ocorrerá na próxima atualização.",
+        );
+      } else {
+        console.error("Falha ao reconciliar checkout com AbacatePay.", error);
+      }
     }
   } else {
     const latestPendingCheckout = await prisma.billingCheckoutSession.findFirst({
@@ -1499,7 +1514,13 @@ export async function getBillingPageData(
         ownerUserId,
         checkoutId: latestPendingCheckout.id,
       }).catch((error) => {
-        console.error("Falha ao reconciliar checkout pendente com AbacatePay.", error);
+        if (isTimeoutError(error)) {
+          console.warn(
+            "Reconciliação de checkout pendente com AbacatePay excedeu o tempo limite; será tentada novamente.",
+          );
+        } else {
+          console.error("Falha ao reconciliar checkout pendente com AbacatePay.", error);
+        }
       });
     }
   }
