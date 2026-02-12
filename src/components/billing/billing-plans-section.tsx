@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CheckIcon, InfoIcon, SparklesIcon } from "lucide-react";
+import { CheckIcon, InfoIcon } from "lucide-react";
 
 import { createPlanCheckoutAction } from "@/actions/billing-actions";
 import { BillingProfileForm } from "@/components/billing/billing-profile-form";
@@ -51,12 +51,6 @@ type BillingPlansSectionProps = {
   };
 };
 
-type ComparisonRow = {
-  label: string;
-  hint: string;
-  valueForPlan: (plan: BillingPlanCardViewModel) => string;
-};
-
 function formatBrlFromCents(valueCents: number): string {
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
@@ -81,22 +75,6 @@ function getPlanBadge(planCode: BillingPlanCode, isFeatured: boolean): string | 
   return null;
 }
 
-function getValueStory(planCode: BillingPlanCode): string {
-  if (planCode === "STARTER_50") {
-    return "Operacao enxuta";
-  }
-
-  if (planCode === "PRO_100") {
-    return "Times em crescimento";
-  }
-
-  if (planCode === "SCALE_400") {
-    return "Escala operacional";
-  }
-
-  return "Validacao inicial";
-}
-
 export function BillingPlansSection({
   plans,
   effectivePlanCode,
@@ -116,11 +94,6 @@ export function BillingPlansSection({
     return plans[0]?.code ?? null;
   }, [plans]);
 
-  const featuredPlan = useMemo(
-    () => plans.find((plan) => plan.code === featuredPlanCode) ?? null,
-    [featuredPlanCode, plans],
-  );
-
   const selectedPlan = useMemo(
     () => plans.find((plan) => plan.code === selectedPlanCode) ?? null,
     [plans, selectedPlanCode],
@@ -132,27 +105,6 @@ export function BillingPlansSection({
 
   const selectedPlanIsRenewAction = Boolean(
     selectedPlan && canRenewCurrentPlan && selectedPlan.code === effectivePlanCode,
-  );
-
-  const comparisonRows: ComparisonRow[] = useMemo(
-    () => [
-      {
-        label: "Organizacoes",
-        hint: "Contabiliza todas as organizacoes ativas no workspace.",
-        valueForPlan: (plan) => plan.organizationsLimitLabel,
-      },
-      {
-        label: "Usuarios",
-        hint: "Usuarios convidados tambem contam no limite.",
-        valueForPlan: (plan) => plan.usersLimitLabel,
-      },
-      {
-        label: "Perfil ideal",
-        hint: "Use esta referencia para escolher o plano com menor friccao operacional.",
-        valueForPlan: (plan) => getValueStory(plan.code),
-      },
-    ],
-    [],
   );
 
   const openBillingDialog = (planCode: BillingPlanCode) => {
@@ -297,62 +249,6 @@ export function BillingPlansSection({
           })}
         </div>
 
-        <Card className="rounded-xl border">
-          <CardHeader>
-            <CardTitle className="text-base">Comparacao rapida</CardTitle>
-            <CardDescription>Sem tabela complexa, apenas os fatores que mudam a operacao.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {comparisonRows.map((row, index) => (
-              <div key={row.label} className={cn("space-y-2", index > 0 && "border-t pt-3")}> 
-                <div className="flex items-center gap-1.5 text-sm font-medium">
-                  {row.label}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button type="button" className="text-muted-foreground inline-flex" aria-label={`Ajuda sobre ${row.label}`}>
-                        <InfoIcon className="size-3.5" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent sideOffset={6}>{row.hint}</TooltipContent>
-                  </Tooltip>
-                </div>
-                <div className="grid gap-2 sm:grid-cols-3">
-                  {plans.map((plan) => (
-                    <div
-                      key={`${row.label}_${plan.code}`}
-                      className={cn(
-                        "rounded-md border p-2",
-                        plan.code === featuredPlanCode && "border-primary/30 bg-primary/5",
-                      )}
-                    >
-                      <p className="text-muted-foreground text-[11px]">{plan.name}</p>
-                      <p className="text-sm font-medium">{row.valueForPlan(plan)}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        {featuredPlan ? (
-          <Card className="rounded-xl border-primary/30 bg-primary/5">
-            <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="inline-flex items-center gap-1 text-sm font-medium">
-                  <SparklesIcon className="size-4" />
-                  Recomendado para acelerar resultados
-                </p>
-                <p className="text-muted-foreground text-sm">
-                  {featuredPlan.name}: equilibrio entre capacidade e custo para crescer sem gargalos.
-                </p>
-              </div>
-              <Button type="button" size="lg" onClick={() => openBillingDialog(featuredPlan.code)}>
-                Desbloquear recursos
-              </Button>
-            </CardContent>
-          </Card>
-        ) : null}
       </section>
 
       <Dialog open={isBillingDialogOpen} onOpenChange={setIsBillingDialogOpen}>
