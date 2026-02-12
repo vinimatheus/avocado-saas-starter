@@ -255,6 +255,83 @@ async function sendTransactionalEmail(payload: TransactionalEmailPayload): Promi
   console.error("Failed to send transactional email with Resend.", response.status, responseText);
 }
 
+type BrandedEmailTemplatePayload = {
+  request?: Request;
+  subject: string;
+  title: string;
+  messageHtml: string;
+  ctaLabel: string;
+  ctaUrl: string;
+  footerHtml: string;
+};
+
+function getBrandedEmailAssetUrl(assetPath: string, request?: Request): string {
+  return new URL(assetPath, resolveAppBaseUrl(request)).toString();
+}
+
+function renderBrandedEmailHtml(payload: BrandedEmailTemplatePayload): string {
+  const appName = escapeHtml(process.env.NEXT_PUBLIC_APP_NAME?.trim() || DEFAULT_APP_NAME);
+  const escapedSubject = escapeHtml(payload.subject);
+  const escapedTitle = escapeHtml(payload.title);
+  const escapedCtaLabel = escapeHtml(payload.ctaLabel);
+  const escapedCtaUrl = escapeHtml(payload.ctaUrl);
+  const escapedLogoUrl = escapeHtml(getBrandedEmailAssetUrl("/img/logo.png", payload.request));
+  const escapedHeroUrl = escapeHtml(getBrandedEmailAssetUrl("/img/email.png", payload.request));
+
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapedSubject}</title>
+</head>
+<body style="margin: 0; padding: 0; background: #f7f7f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; -webkit-font-smoothing: antialiased;">
+  <span style="display: none; opacity: 0; visibility: hidden; mso-hide: all; overflow: hidden; font-size: 1px; line-height: 1px; max-height: 0; max-width: 0;">
+    ${escapedSubject}
+  </span>
+  <div style="padding: 32px 14px;">
+    <div style="max-width: 620px; margin: 0 auto; background: #ffffff; border: 1px solid #e3e3de; border-radius: 20px; overflow: hidden; box-shadow: 0 18px 45px -28px rgba(24, 47, 24, 0.35);">
+      <div style="padding: 24px 24px 0; background: linear-gradient(145deg, #4caf50 0%, #8dcf90 52%, #a5d6a7 100%);">
+        <img src="${escapedLogoUrl}" alt="${appName}" width="52" height="52" style="display: block; width: 52px; height: 52px; object-fit: contain; background: rgba(255, 255, 255, 0.94); border-radius: 12px; padding: 8px;">
+        <div style="margin-top: 18px;">
+          <img src="${escapedHeroUrl}" alt="Ilustração do avocado SaaS" width="572" style="display: block; width: 100%; max-width: 572px; height: auto; border-radius: 14px 14px 0 0; border: 1px solid rgba(255, 255, 255, 0.5); border-bottom: 0;">
+        </div>
+      </div>
+
+      <div style="padding: 34px 30px 24px;">
+        <h1 style="margin: 0 0 14px; color: #2f4430; font-size: 27px; line-height: 1.2; letter-spacing: -0.02em;">
+          ${escapedTitle}
+        </h1>
+        <p style="margin: 0; color: #3b2f2f; font-size: 16px; line-height: 1.65;">
+          ${payload.messageHtml}
+        </p>
+
+        <div style="text-align: center; margin: 30px 0 10px;">
+          <a href="${escapedCtaUrl}" style="display: inline-block; background: #4caf50; color: #f7f7f5; padding: 14px 34px; border-radius: 999px; font-weight: 700; font-size: 15px; text-decoration: none; box-shadow: 0 9px 25px -14px rgba(76, 175, 80, 0.85);">
+            ${escapedCtaLabel}
+          </a>
+        </div>
+
+        <p style="margin: 0; color: #6b6360; font-size: 13px; line-height: 1.6; text-align: center;">
+          Se o botão não funcionar, abra este link no navegador:<br>
+          <a href="${escapedCtaUrl}" style="color: #4caf50; text-decoration: underline; word-break: break-all;">${escapedCtaUrl}</a>
+        </p>
+      </div>
+
+      <div style="padding: 18px 30px 24px; border-top: 1px solid #e3e3de; background: #f1f7f1;">
+        <p style="margin: 0; color: #6b6360; font-size: 12px; line-height: 1.55;">
+          ${payload.footerHtml}
+        </p>
+        <p style="margin: 8px 0 0; color: #8a6f5d; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase;">
+          ${appName}
+        </p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
 async function sendOrganizationInvitationEmail(
   payload: OrganizationInvitationEmailPayload,
   request?: Request,
@@ -270,55 +347,18 @@ async function sendOrganizationInvitationEmail(
   const escapedOrgName = escapeHtml(payload.organization.name);
   const escapedInviterName = escapeHtml(inviterName);
   const escapedRoleLabel = escapeHtml(roleLabel);
-  const escapedInvitationUrl = escapeHtml(invitationUrl);
 
   const subject = `Convite para ${payload.organization.name}`;
   const text = `${inviterName} convidou você para fazer parte da equipe de ${payload.organization.name} com o cargo de ${roleLabel}.\n\nAceite o convite em: ${invitationUrl}\n\nSe você não esperava este convite, ignore este e-mail.`;
-  const html = `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Convite para ${escapedOrgName}</title>
-</head>
-<body style="background-color: #f9fafb; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; -webkit-font-smoothing: antialiased; margin: 0; padding: 0;">
-  <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
-    <div style="background: #ffffff; border-radius: 16px; box-shadow: 0 10px 40px -10px rgba(0,0,0,0.08); overflow: hidden; border: 1px solid #f3f4f6;">
-      <!-- Minimal Header -->
-      <div style="padding: 32px 32px 0; text-align: center;">
-        <div style="display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; background: #f3f4f6; color: #1f2937; border-radius: 12px; font-size: 24px; margin-bottom: 24px;">
-           ✉️
-        </div>
-      </div>
-
-      <div style="padding: 0 32px 40px; text-align: center;">
-        <h1 style="color: #111827; font-size: 24px; font-weight: 700; line-height: 32px; margin: 0 0 16px; letter-spacing: -0.025em;">
-          Convite para ${escapedOrgName}
-        </h1>
-        <p style="color: #4b5563; font-size: 16px; line-height: 26px; margin: 0 0 32px;">
-          Olá! <strong>${escapedInviterName}</strong> convidou você para fazer parte da equipe <strong>${escapedOrgName}</strong> com o cargo de <span style="color: #111827; font-weight: 600; background: #f3f4f6; padding: 2px 8px; border-radius: 6px;">${escapedRoleLabel}</span>.
-        </p>
-        
-        <a href="${escapedInvitationUrl}" style="display: inline-block; background: #000000; color: #ffffff; padding: 14px 32px; border-radius: 9999px; font-weight: 600; text-decoration: none; font-size: 15px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); transition: transform 0.1s ease;">
-          Aceitar Convite
-        </a>
-
-        <p style="margin-top: 32px; font-size: 13px; color: #9ca3af;">
-          ou cole este link no seu navegador: <br>
-          <a href="${escapedInvitationUrl}" style="color: #6b7280; text-decoration: underline; word-break: break-all;">${escapedInvitationUrl}</a>
-        </p>
-      </div>
-    
-      <div style="background: #fdfdfd; padding: 24px; text-align: center; border-top: 1px solid #f3f4f6;">
-         <p style="margin: 0; font-size: 12px; color: #9ca3af; line-height: 1.5;">
-           Se você não esperava por este convite, pode ignorar este e-mail tranquilamente.<br>
-           Enviado via sistema.
-         </p>
-      </div>
-    </div>
-  </div>
-</body>
-</html>`;
+  const html = renderBrandedEmailHtml({
+    request,
+    subject,
+    title: `Convite para ${payload.organization.name}`,
+    messageHtml: `Olá! <strong>${escapedInviterName}</strong> convidou você para fazer parte da equipe <strong>${escapedOrgName}</strong> como <strong>${escapedRoleLabel}</strong>.`,
+    ctaLabel: "Aceitar convite",
+    ctaUrl: invitationUrl,
+    footerHtml: "Se você não esperava por este convite, pode ignorar este e-mail com tranquilidade.",
+  });
 
   await sendTransactionalEmail({
     to: payload.email,
@@ -331,54 +371,17 @@ async function sendOrganizationInvitationEmail(
 async function sendAccountVerificationEmail(payload: VerificationEmailPayload): Promise<void> {
   const recipientName = payload.user.name?.trim() || payload.user.email;
   const escapedRecipientName = escapeHtml(recipientName);
-  const escapedVerificationUrl = escapeHtml(payload.url);
 
   const subject = "Confirme seu e-mail";
-  const text = `${recipientName}, confirme seu e-mail para liberar o acesso ao sistema.\n\nConfirme aqui: ${payload.url}\n\nSe voce nao criou essa conta, ignore este e-mail.`;
-  const html = `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Confirme seu e-mail</title>
-</head>
-<body style="background-color: #f9fafb; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; -webkit-font-smoothing: antialiased; margin: 0; padding: 0;">
-  <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
-    <div style="background: #ffffff; border-radius: 16px; box-shadow: 0 10px 40px -10px rgba(0,0,0,0.08); overflow: hidden; border: 1px solid #f3f4f6;">
-      <div style="padding: 32px 32px 0; text-align: center;">
-        <div style="display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; background: #f3f4f6; color: #1f2937; border-radius: 12px; font-size: 24px; margin-bottom: 24px;">
-           ✓
-        </div>
-      </div>
-
-      <div style="padding: 0 32px 40px; text-align: center;">
-        <h1 style="color: #111827; font-size: 24px; font-weight: 700; line-height: 32px; margin: 0 0 16px; letter-spacing: -0.025em;">
-          Confirme seu e-mail
-        </h1>
-        <p style="color: #4b5563; font-size: 16px; line-height: 26px; margin: 0 0 32px;">
-          Olá, <strong>${escapedRecipientName}</strong>. Para concluir seu cadastro e liberar o acesso, confirme seu e-mail.
-        </p>
-        
-        <a href="${escapedVerificationUrl}" style="display: inline-block; background: #000000; color: #ffffff; padding: 14px 32px; border-radius: 9999px; font-weight: 600; text-decoration: none; font-size: 15px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); transition: transform 0.1s ease;">
-          Verificar e-mail
-        </a>
-
-        <p style="margin-top: 32px; font-size: 13px; color: #9ca3af;">
-          ou cole este link no seu navegador: <br>
-          <a href="${escapedVerificationUrl}" style="color: #6b7280; text-decoration: underline; word-break: break-all;">${escapedVerificationUrl}</a>
-        </p>
-      </div>
-    
-      <div style="background: #fdfdfd; padding: 24px; text-align: center; border-top: 1px solid #f3f4f6;">
-         <p style="margin: 0; font-size: 12px; color: #9ca3af; line-height: 1.5;">
-           Se voce nao reconhece esta acao, pode ignorar este e-mail com seguranca.<br>
-           Enviado via sistema.
-         </p>
-      </div>
-    </div>
-  </div>
-</body>
-</html>`;
+  const text = `${recipientName}, confirme seu e-mail para liberar o acesso ao sistema.\n\nConfirme aqui: ${payload.url}\n\nSe você não criou essa conta, ignore este e-mail.`;
+  const html = renderBrandedEmailHtml({
+    subject,
+    title: "Confirme seu e-mail",
+    messageHtml: `Olá, <strong>${escapedRecipientName}</strong>. Para concluir seu cadastro e liberar o acesso, confirme seu e-mail.`,
+    ctaLabel: "Verificar e-mail",
+    ctaUrl: payload.url,
+    footerHtml: "Se você não reconhece esta ação, pode ignorar este e-mail com segurança.",
+  });
 
   await sendTransactionalEmail({
     to: payload.user.email,
@@ -391,54 +394,17 @@ async function sendAccountVerificationEmail(payload: VerificationEmailPayload): 
 async function sendResetPasswordEmail(payload: ResetPasswordEmailPayload): Promise<void> {
   const recipientName = payload.user.name?.trim() || payload.user.email;
   const escapedRecipientName = escapeHtml(recipientName);
-  const escapedResetUrl = escapeHtml(payload.url);
 
   const subject = "Redefinição de senha";
   const text = `${recipientName}, recebemos uma solicitação para redefinir sua senha.\n\nClique aqui para redefinir: ${payload.url}\n\nSe você não solicitou, ignore este e-mail.`;
-  const html = `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Redefinição de senha</title>
-</head>
-<body style="background-color: #f9fafb; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; -webkit-font-smoothing: antialiased; margin: 0; padding: 0;">
-  <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
-    <div style="background: #ffffff; border-radius: 16px; box-shadow: 0 10px 40px -10px rgba(0,0,0,0.08); overflow: hidden; border: 1px solid #f3f4f6;">
-      <div style="padding: 32px 32px 0; text-align: center;">
-        <div style="display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; background: #f3f4f6; color: #1f2937; border-radius: 12px; font-size: 24px; margin-bottom: 24px;">
-           🔒
-        </div>
-      </div>
-
-      <div style="padding: 0 32px 40px; text-align: center;">
-        <h1 style="color: #111827; font-size: 24px; font-weight: 700; line-height: 32px; margin: 0 0 16px; letter-spacing: -0.025em;">
-          Redefinição de senha
-        </h1>
-        <p style="color: #4b5563; font-size: 16px; line-height: 26px; margin: 0 0 32px;">
-          Olá, <strong>${escapedRecipientName}</strong>. Recebemos uma solicitação para redefinir a senha da sua conta.
-        </p>
-        
-        <a href="${escapedResetUrl}" style="display: inline-block; background: #000000; color: #ffffff; padding: 14px 32px; border-radius: 9999px; font-weight: 600; text-decoration: none; font-size: 15px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); transition: transform 0.1s ease;">
-          Redefinir Senha
-        </a>
-
-        <p style="margin-top: 32px; font-size: 13px; color: #9ca3af;">
-          ou cole este link no seu navegador: <br>
-          <a href="${escapedResetUrl}" style="color: #6b7280; text-decoration: underline; word-break: break-all;">${escapedResetUrl}</a>
-        </p>
-      </div>
-    
-      <div style="background: #fdfdfd; padding: 24px; text-align: center; border-top: 1px solid #f3f4f6;">
-         <p style="margin: 0; font-size: 12px; color: #9ca3af; line-height: 1.5;">
-           Se você não solicitou essa alteração, pode ignorar este e-mail com segurança.<br>
-           Enviado via sistema.
-         </p>
-      </div>
-    </div>
-  </div>
-</body>
-</html>`;
+  const html = renderBrandedEmailHtml({
+    subject,
+    title: "Redefinição de senha",
+    messageHtml: `Olá, <strong>${escapedRecipientName}</strong>. Recebemos uma solicitação para redefinir a senha da sua conta.`,
+    ctaLabel: "Redefinir senha",
+    ctaUrl: payload.url,
+    footerHtml: "Se você não solicitou essa alteração, ignore este e-mail e mantenha sua conta segura.",
+  });
 
   await sendTransactionalEmail({
     to: payload.user.email,
