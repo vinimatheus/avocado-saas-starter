@@ -12,9 +12,13 @@ import {
   ensureOwnerSubscription,
 } from "@/lib/billing/subscription-service";
 import { prisma } from "@/lib/db/prisma";
+import {
+  DEFAULT_APP_BASE_URL,
+  resolveExplicitAppBaseUrlFromEnv,
+  resolveVercelAppBaseUrlFromEnv,
+} from "@/lib/env/app-base-url";
 
 const INVITATION_ACCEPT_PATH = "/convites/aceitar";
-const DEFAULT_APP_BASE_URL = "http://localhost:3000";
 const DEFAULT_APP_NAME = "avocado SaaS";
 const RESEND_TIMEOUT_MS = 10_000;
 
@@ -28,23 +32,26 @@ function isProduction(): boolean {
 }
 
 function getPrimaryAppBaseUrl(): string {
-  const configuredBaseUrl =
-    process.env.BETTER_AUTH_URL?.trim() ||
-    process.env.NEXT_PUBLIC_BETTER_AUTH_URL?.trim() ||
-    process.env.BETTER_AUTH_BASE_URL?.trim();
+  const explicitBaseUrl = resolveExplicitAppBaseUrlFromEnv();
+  if (explicitBaseUrl.hasConfiguredValue) {
+    if (explicitBaseUrl.origin) {
+      return explicitBaseUrl.origin;
+    }
 
-  if (configuredBaseUrl) {
-    try {
-      return new URL(configuredBaseUrl).origin;
-    } catch {
-      if (isProduction()) {
-        throw new Error("BETTER_AUTH_URL inválida. Configure uma URL absoluta válida.");
-      }
+    if (isProduction()) {
+      throw new Error("BETTER_AUTH_URL inválida. Configure uma URL absoluta válida.");
     }
   }
 
+  const vercelBaseUrl = resolveVercelAppBaseUrlFromEnv();
+  if (vercelBaseUrl) {
+    return vercelBaseUrl;
+  }
+
   if (isProduction()) {
-    throw new Error("BETTER_AUTH_URL é obrigatória em produção.");
+    throw new Error(
+      "BETTER_AUTH_URL é obrigatória em produção fora da Vercel. Na Vercel, habilite as variáveis de ambiente do sistema.",
+    );
   }
 
   return DEFAULT_APP_BASE_URL;

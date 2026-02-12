@@ -29,6 +29,11 @@ import {
   isPaidPlan,
 } from "@/lib/billing/plans";
 import { prisma } from "@/lib/db/prisma";
+import {
+  DEFAULT_APP_BASE_URL,
+  resolveExplicitAppBaseUrlFromEnv,
+  resolveVercelAppBaseUrlFromEnv,
+} from "@/lib/env/app-base-url";
 
 export const DEFAULT_USAGE_METRIC_KEY = "workspace_events";
 export const DEFAULT_PAST_DUE_GRACE_DAYS = 28;
@@ -100,20 +105,17 @@ function startOfUtcMonth(referenceDate: Date = new Date()): Date {
 }
 
 function getAppBaseUrl(): string {
-  const configured =
-    process.env.BETTER_AUTH_URL?.trim() ||
-    process.env.NEXT_PUBLIC_BETTER_AUTH_URL?.trim() ||
-    process.env.BETTER_AUTH_BASE_URL?.trim();
-
-  if (!configured) {
-    return "http://localhost:3000";
+  const explicitBaseUrl = resolveExplicitAppBaseUrlFromEnv();
+  if (explicitBaseUrl.origin) {
+    return explicitBaseUrl.origin;
   }
 
-  try {
-    return new URL(configured).origin;
-  } catch {
-    return "http://localhost:3000";
+  const vercelBaseUrl = resolveVercelAppBaseUrlFromEnv();
+  if (vercelBaseUrl) {
+    return vercelBaseUrl;
   }
+
+  return DEFAULT_APP_BASE_URL;
 }
 
 function mapBillingStatus(status: string): CheckoutStatus {

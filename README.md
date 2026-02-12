@@ -62,6 +62,30 @@ npm run dev
 
 Abra [http://localhost:3000](http://localhost:3000).
 
+## Deploy na Vercel
+
+1. Importe o repositorio na Vercel e mantenha framework como `Next.js`.
+2. Configure variaveis em `Project Settings > Environment Variables`:
+- `DATABASE_URL` (recomendado: banco gerenciado com pool de conexoes)
+- `BETTER_AUTH_SECRET` (minimo de 32 caracteres)
+- `BETTER_AUTH_URL` e `NEXT_PUBLIC_BETTER_AUTH_URL` (ex.: `https://app.seudominio.com`)
+- `TRUSTED_ORIGINS` (dominios permitidos, separados por virgula)
+- `RESEND_API_KEY`, `RESEND_FROM_EMAIL`
+- `ABACATEPAY_API_KEY`, `ABACATEPAY_WEBHOOK_SECRET`, `ABACATEPAY_WEBHOOK_SIGNATURE_KEY`
+- `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`
+3. O build ja esta preparado para Vercel:
+- `npm run build` executa `prisma generate` antes do `next build`.
+- `postinstall` tambem executa `prisma generate` para evitar client Prisma desatualizado em cache de build.
+4. Para mudancas de schema em producao, prefira migracoes:
+
+```bash
+npm run prisma:migrate:deploy
+```
+
+5. Fallback de URL na Vercel:
+- Se `BETTER_AUTH_URL` nao estiver definida, o projeto tenta usar variaveis de sistema da Vercel (`VERCEL_URL` e relacionadas).
+- Em producao com dominio proprio, mantenha `BETTER_AUTH_URL` explicita para evitar callback incorreto em auth.
+
 ## Verificacao de e-mail
 
 - O projeto exige verificacao de e-mail para login.
