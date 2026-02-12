@@ -1494,27 +1494,20 @@ export async function getBillingPageData(
     });
 
     if (latestPendingCheckout) {
-      try {
-        await reconcileCheckoutFromAbacate({
-          ownerUserId,
-          checkoutId: latestPendingCheckout.id,
-        });
-      } catch (error) {
+      // Keep this reconciliation non-blocking so the billing page does not wait on provider I/O.
+      void reconcileCheckoutFromAbacate({
+        ownerUserId,
+        checkoutId: latestPendingCheckout.id,
+      }).catch((error) => {
         console.error("Falha ao reconciliar checkout pendente com AbacatePay.", error);
-      }
+      });
     }
   }
 
-  const [entitlements, invoices, features] = await Promise.all([
-    getOwnerEntitlements(ownerUserId),
-    listOwnerInvoices(ownerUserId),
-    listOwnerFeatureStatuses(ownerUserId),
-  ]);
+  const entitlements = await getOwnerEntitlements(ownerUserId);
 
   return {
     entitlements,
-    invoices,
-    features,
     plans: BILLING_PLAN_SEQUENCE.map((planCode) => getPlanDefinition(planCode)),
   };
 }

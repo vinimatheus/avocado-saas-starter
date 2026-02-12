@@ -17,6 +17,46 @@ export type TenantContext = {
   role: OrganizationUserRole | null;
 };
 
+const ROLE_NORMALIZATION_CACHE_TTL_MS = 5 * 60 * 1000;
+const ROLE_NORMALIZATION_CACHE_MAX = 500;
+const normalizedOrganizationRolesCache = new Map<string, number>();
+
+function hasRecentRoleNormalization(organizationId: string): boolean {
+  const normalizedAt = normalizedOrganizationRolesCache.get(organizationId);
+  if (!normalizedAt) {
+    return false;
+  }
+
+  if (Date.now() - normalizedAt > ROLE_NORMALIZATION_CACHE_TTL_MS) {
+    normalizedOrganizationRolesCache.delete(organizationId);
+    return false;
+  }
+
+  return true;
+}
+
+function cacheRoleNormalization(organizationId: string): void {
+  normalizedOrganizationRolesCache.set(organizationId, Date.now());
+
+  if (normalizedOrganizationRolesCache.size <= ROLE_NORMALIZATION_CACHE_MAX) {
+    return;
+  }
+
+  const oldestKey = normalizedOrganizationRolesCache.keys().next().value;
+  if (oldestKey) {
+    normalizedOrganizationRolesCache.delete(oldestKey);
+  }
+}
+
+async function ensureOrganizationRolesNormalized(organizationId: string): Promise<void> {
+  if (hasRecentRoleNormalization(organizationId)) {
+    return;
+  }
+
+  await normalizeOrganizationRoles(organizationId);
+  cacheRoleNormalization(organizationId);
+}
+
 async function normalizeOrganizationRoles(organizationId: string): Promise<void> {
   await prisma.member.updateMany({
     where: {
@@ -142,7 +182,7 @@ async function resolveTenantContext(): Promise<TenantContext> {
     }
   }
 
-  await normalizeOrganizationRoles(selectedOrganization.id);
+  await ensureOrganizationRolesNormalized(selectedOrganization.id);
 
   const membership = await prisma.member.findUnique({
     where: {

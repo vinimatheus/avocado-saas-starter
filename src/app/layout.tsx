@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Outfit } from "next/font/google";
 import NextTopLoader from "nextjs-toploader";
+import { Analytics } from "@vercel/analytics/next";
 
 import { Toaster } from "@/components/ui/sonner";
 import { resolveSiteOrigin } from "@/lib/seo/site-url";
@@ -127,6 +128,7 @@ export default function RootLayout({
         <NextTopLoader color="var(--primary)" showSpinner={false} />
         {children}
         <Toaster />
+        <Analytics />
       </body>
     </html>
   );
