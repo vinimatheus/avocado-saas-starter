@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -47,6 +48,27 @@ function roleLabel(role: string): string {
 
   return normalizedRole === "admin" ? "Administrador" : "Usuario";
 }
+
+export const metadata: Metadata = {
+  title: "Aceitar convite",
+  description: "Confirme o convite para entrar em uma organizacao no avocado SaaS Starter.",
+  alternates: {
+    canonical: "/convites/aceitar",
+  },
+  robots: {
+    index: false,
+    follow: false,
+    nocache: true,
+    googleBot: {
+      index: false,
+      follow: false,
+      noimageindex: true,
+      "max-image-preview": "none",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
+};
 
 export default async function AcceptInvitationPage({
   searchParams,

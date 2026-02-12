@@ -17,7 +17,6 @@ const SEGMENT_LABELS: Record<string, string> = {
   dashboard: "Dashboard",
   produtos: "Produtos",
   billing: "Billing",
-  team: "Equipe",
   profile: "Profile",
   onboarding: "Onboarding",
   company: "Empresa",

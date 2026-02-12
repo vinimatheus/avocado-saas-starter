@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { CompanyOnboardingForm } from "@/components/auth/company-onboarding-form";
@@ -14,6 +15,27 @@ function getSingleSearchParam(value: string | string[] | undefined): string {
 
   return value ?? "";
 }
+
+export const metadata: Metadata = {
+  title: "Onboarding da empresa",
+  description: "Conclua o onboarding da sua empresa para iniciar o uso do workspace.",
+  alternates: {
+    canonical: "/onboarding/company",
+  },
+  robots: {
+    index: false,
+    follow: false,
+    nocache: true,
+    googleBot: {
+      index: false,
+      follow: false,
+      noimageindex: true,
+      "max-image-preview": "none",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
+};
 
 export default async function CompanyOnboardingPage({
   searchParams,

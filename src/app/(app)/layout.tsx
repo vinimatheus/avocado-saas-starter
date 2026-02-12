@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -6,6 +7,27 @@ import { auth } from "@/lib/auth/server";
 import { getTenantContext } from "@/lib/organization/tenant-context";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = {
+  title: {
+    default: "Workspace",
+    template: "%s | Workspace | avocado SaaS Starter",
+  },
+  description:
+    "Area interna do SaaS para operacao do produto com dashboard, equipe, faturamento, perfil e catalogo.",
+  robots: {
+    index: false,
+    follow: false,
+    nocache: true,
+    googleBot: {
+      index: false,
+      follow: false,
+      noimageindex: true,
+      "max-image-preview": "none",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
+};
 
 export default async function AppLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const tenantContext = await getTenantContext();

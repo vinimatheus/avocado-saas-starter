@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { SignUpForm } from "@/components/auth/sign-up-form";
@@ -29,6 +30,28 @@ function resolveCallbackPath(value: string): string {
 
   return normalizedValue;
 }
+
+export const metadata: Metadata = {
+  title: "Criar conta",
+  description:
+    "Crie sua conta e inicie seu workspace no avocado SaaS Starter com autenticacao, billing e multi-tenant prontos.",
+  alternates: {
+    canonical: "/sign-up",
+  },
+  openGraph: {
+    title: "Criar conta no avocado SaaS Starter",
+    description:
+      "Comece seu SaaS mais rapido com onboarding, autenticacao e estrutura multi-tenant ja implementados.",
+    url: "/sign-up",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "Criar conta no avocado SaaS Starter",
+    description:
+      "Comece seu SaaS mais rapido com onboarding, autenticacao e estrutura multi-tenant ja implementados.",
+  },
+};
 
 export default async function SignUpPage({
   searchParams,

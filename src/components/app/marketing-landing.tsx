@@ -129,7 +129,7 @@ const docsItems = [
   {
     title: "Workspace com dashboard",
     description:
-      "`/dashboard`, `/team`, `/billing`, `/profile` e `/produtos` com shell compartilhado e contexto da organizacao.",
+      "`/dashboard`, `/billing`, `/profile` e `/produtos` com shell compartilhado e contexto da organizacao.",
     icon: LayersIcon,
   },
   {
@@ -435,7 +435,7 @@ export function MarketingLanding() {
           <div className="mx-auto flex max-w-3xl flex-col items-center text-center animate-in fade-in slide-in-from-bottom-5 duration-700">
             <Badge icon={<BadgeCheckIcon className="size-3.5" />} text="avocado SaaS Starter" />
             <h1 className="mt-5 text-balance text-4xl font-black leading-[1.04] tracking-tight sm:text-5xl lg:text-7xl">
-              SaaS pronto para sair do zero ao dashboard em horas
+              Next.js SaaS Starter pronto para sair do zero ao dashboard em horas
             </h1>
             <p className="text-muted-foreground mt-5 max-w-2xl text-balance text-sm font-medium leading-6 sm:text-lg sm:leading-8">
               Base completa com Next.js, Better Auth, multi-tenant por organizacao, billing AbacatePay,

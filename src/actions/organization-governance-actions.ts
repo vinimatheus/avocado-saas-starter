@@ -16,7 +16,6 @@ const ORGANIZATION_GOVERNANCE_PATHS = [
   "/",
   "/dashboard",
   "/profile",
-  "/team",
   "/onboarding/company",
 ] as const;
 

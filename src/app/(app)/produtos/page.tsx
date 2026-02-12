@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Prisma } from "@prisma/client";
 import Image from "next/image";
 
@@ -11,6 +12,14 @@ import { productStatusSchema } from "@/lib/products/schemas";
 import { getTenantContext } from "@/lib/organization/tenant-context";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = {
+  title: "Produtos",
+  description:
+    "Gestao interna de catalogo com tabela de produtos integrada ao banco e controles por organizacao.",
+  alternates: {
+    canonical: "/produtos",
+  },
+};
 
 type ProductsResult = {
   items: Array<{

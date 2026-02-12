@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Building2Icon, CircleCheckIcon, ShieldCheckIcon, UsersIcon } from "lucide-react";
 import Image from "next/image";
 import { redirect } from "next/navigation";
@@ -85,6 +86,14 @@ function formatLimitValue(value: number | null): string {
 }
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = {
+  title: "Pagamentos",
+  description:
+    "Gestao interna de assinatura, planos, renovacao e cobranca do workspace no avocado SaaS Starter.",
+  alternates: {
+    canonical: "/billing",
+  },
+};
 
 export default async function BillingPage({
   searchParams,

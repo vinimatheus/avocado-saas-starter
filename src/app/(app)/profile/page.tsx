@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Building2Icon, ShieldCheckIcon } from "lucide-react";
 import Image from "next/image";
@@ -10,6 +11,14 @@ import type { OrganizationUserRole } from "@/lib/organization/helpers";
 import { getTenantContext } from "@/lib/organization/tenant-context";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = {
+  title: "Perfil",
+  description:
+    "Atualize dados da conta, seguranca e identidade do usuario no workspace do avocado SaaS Starter.",
+  alternates: {
+    canonical: "/profile",
+  },
+};
 
 function roleLabel(role: OrganizationUserRole | null): string {
   if (role === "owner") {

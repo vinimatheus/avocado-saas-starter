@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { SignInForm } from "@/components/auth/sign-in-form";
@@ -34,6 +35,28 @@ function parseBooleanSearchParam(value: string): boolean {
   const normalizedValue = value.trim().toLowerCase();
   return normalizedValue === "1" || normalizedValue === "true" || normalizedValue === "yes";
 }
+
+export const metadata: Metadata = {
+  title: "Entrar",
+  description:
+    "Entre na sua conta para acessar dashboard, billing e gerenciamento do seu SaaS no avocado SaaS Starter.",
+  alternates: {
+    canonical: "/sign-in",
+  },
+  openGraph: {
+    title: "Entrar no avocado SaaS Starter",
+    description:
+      "Acesse sua conta para continuar a gestao do seu produto com autenticacao, organizacoes e billing.",
+    url: "/sign-in",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "Entrar no avocado SaaS Starter",
+    description:
+      "Acesse sua conta para continuar a gestao do seu produto com autenticacao, organizacoes e billing.",
+  },
+};
 
 export default async function SignInPage({
   searchParams,

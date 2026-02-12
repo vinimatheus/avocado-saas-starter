@@ -16,7 +16,7 @@ import {
 import { getTenantContext } from "@/lib/organization/tenant-context";
 import { organizationAssignableRoleSchema } from "@/lib/users/schemas";
 
-const USER_MANAGEMENT_PATHS = ["/team"] as const;
+const USER_MANAGEMENT_PATHS = ["/dashboard", "/profile"] as const;
 
 const inviteMemberSchema = z.object({
   email: z

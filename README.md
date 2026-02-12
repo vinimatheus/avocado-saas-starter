@@ -22,6 +22,7 @@ npm install
 - `BETTER_AUTH_BASE_URL` (ex.: `http://localhost:3000`)
 - `BETTER_AUTH_URL`
 - `NEXT_PUBLIC_BETTER_AUTH_URL`
+- `NEXT_PUBLIC_SITE_URL` (URL canonica do site para metadata/SEO, ex.: `https://seu-dominio.com`)
 - `GOOGLE_CLIENT_ID` (opcional, para login social)
 - `GOOGLE_CLIENT_SECRET` (opcional, para login social)
 - `RESEND_API_KEY`
@@ -69,6 +70,7 @@ Abra [http://localhost:3000](http://localhost:3000).
 - `DATABASE_URL` (recomendado: banco gerenciado com pool de conexoes)
 - `BETTER_AUTH_SECRET` (minimo de 32 caracteres)
 - `BETTER_AUTH_URL` e `NEXT_PUBLIC_BETTER_AUTH_URL` (ex.: `https://app.seudominio.com`)
+- `NEXT_PUBLIC_SITE_URL` (dominio canonico publico, ex.: `https://app.seudominio.com`)
 - `TRUSTED_ORIGINS` (dominios permitidos, separados por virgula)
 - `RESEND_API_KEY`, `RESEND_FROM_EMAIL`
 - `ABACATEPAY_API_KEY`, `ABACATEPAY_WEBHOOK_SECRET`, `ABACATEPAY_WEBHOOK_SIGNATURE_KEY`
@@ -130,7 +132,6 @@ e ajuste o `DATABASE_URL` para a mesma porta.
 - `/reset-password`
 - `/onboarding/company`
 - `/dashboard`
-- `/team` (somente admin)
 - `/billing`
 - `/profile`
 

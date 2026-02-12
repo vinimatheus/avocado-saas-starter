@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { ForgotPasswordForm } from "@/components/auth/forgot-password-form";
@@ -29,6 +30,28 @@ function resolveCallbackPath(value: string): string {
 
   return normalizedValue;
 }
+
+export const metadata: Metadata = {
+  title: "Recuperar senha",
+  description:
+    "Solicite o link de recuperacao de senha para voltar a acessar sua conta no avocado SaaS Starter.",
+  alternates: {
+    canonical: "/forgot-password",
+  },
+  openGraph: {
+    title: "Recuperar senha da conta",
+    description:
+      "Receba por e-mail um link seguro para redefinir sua senha e retornar ao seu workspace.",
+    url: "/forgot-password",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "Recuperar senha da conta",
+    description:
+      "Receba por e-mail um link seguro para redefinir sua senha e retornar ao seu workspace.",
+  },
+};
 
 export default async function ForgotPasswordPage({
   searchParams,

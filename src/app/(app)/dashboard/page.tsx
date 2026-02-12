@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import {
   BoxesIcon,
   Clock3Icon,
@@ -15,6 +16,13 @@ import { getDashboardInsights } from "@/lib/dashboard/analytics";
 import { getTenantContext } from "@/lib/organization/tenant-context";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = {
+  title: "Dashboard",
+  description: "Painel interno para acompanhar usuarios, equipe, produtos e sinais operacionais.",
+  alternates: {
+    canonical: "/dashboard",
+  },
+};
 
 function formatDate(value: Date): string {
   return new Intl.DateTimeFormat("pt-BR", {

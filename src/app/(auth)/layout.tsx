@@ -1,7 +1,29 @@
+import type { Metadata } from "next";
 import { ShieldCheckIcon, SparklesIcon, WorkflowIcon } from "lucide-react";
 
 import { Logo } from "@/components/shared/logo";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
+
+export const metadata: Metadata = {
+  title: {
+    default: "Autenticacao",
+    template: "%s | avocado SaaS Starter",
+  },
+  description: "Acesse sua conta e gerencie seu workspace no avocado SaaS Starter.",
+  robots: {
+    index: false,
+    follow: false,
+    nocache: true,
+    googleBot: {
+      index: false,
+      follow: false,
+      noimageindex: true,
+      "max-image-preview": "none",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
+};
 
 export default function AuthLayout({
   children,
