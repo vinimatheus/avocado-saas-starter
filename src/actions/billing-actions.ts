@@ -5,16 +5,23 @@ import { redirect } from "next/navigation";
 import { BillingPlanCode } from "@prisma/client";
 import { z } from "zod";
 
+import { auth } from "@/lib/auth/server";
 import {
   cancelOwnerSubscription,
   createPlanCheckoutSession,
+  ensureOwnerSubscription,
   getOwnerEntitlements,
   reactivateOwnerSubscription,
   startOwnerTrial,
   syncOwnerInvoicesFromAbacate,
   updateOwnerBillingProfile,
 } from "@/lib/billing/subscription-service";
+import {
+  type BillingCancellationReasonCode,
+  isBillingCancellationReasonCode,
+} from "@/lib/billing/cancellation";
 import { isTrustedAbacateCheckoutUrl } from "@/lib/billing/abacatepay";
+import { prisma } from "@/lib/db/prisma";
 import { isOrganizationOwnerRole } from "@/lib/organization/helpers";
 import { getTenantContext } from "@/lib/organization/tenant-context";
 
@@ -156,13 +163,37 @@ const trialSchema = z.object({
   trialPlanCode: z.nativeEnum(BillingPlanCode),
 });
 
-const immediateSchema = z.object({
+const cancelSubscriptionSchema = z
+  .object({
   immediate: z
     .string()
     .trim()
     .optional()
-    .transform((value) => value === "true"),
-});
+      .transform((value) => value === "true"),
+    cancellationReason: z
+      .string()
+      .trim()
+      .refine(isBillingCancellationReasonCode, "Selecione um motivo valido para cancelar.")
+      .transform((value) => value as BillingCancellationReasonCode),
+    cancellationReasonNote: z
+      .string()
+      .trim()
+      .max(500, "Informe no maximo 500 caracteres no detalhamento.")
+      .optional()
+      .transform((value) => value ?? ""),
+    currentPassword: z
+      .string()
+      .min(1, "Informe sua senha atual para confirmar o cancelamento."),
+  })
+  .superRefine((values, ctx) => {
+    if (values.cancellationReason === "OTHER" && values.cancellationReasonNote.length < 5) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["cancellationReasonNote"],
+        message: "Descreva o motivo em pelo menos 5 caracteres quando selecionar 'Outro motivo'.",
+      });
+    }
+  });
 
 async function getAuthenticatedUserId(): Promise<string> {
   const tenantContext = await getTenantContext();
@@ -345,22 +376,75 @@ export async function startTrialAction(formData: FormData): Promise<void> {
 export async function cancelSubscriptionAction(formData: FormData): Promise<void> {
   const userId = await getAuthenticatedUserId();
 
-  const parsed = immediateSchema.safeParse({
+  const parsed = cancelSubscriptionSchema.safeParse({
     immediate: String(formData.get("immediate") ?? ""),
+    cancellationReason: String(formData.get("cancellationReason") ?? ""),
+    cancellationReasonNote: String(formData.get("cancellationReasonNote") ?? ""),
+    currentPassword: String(formData.get("currentPassword") ?? ""),
   });
 
   if (!parsed.success) {
-    redirectWithMessage("error", "Dados inválidos para cancelamento.");
+    redirectWithMessage("error", parsed.error.issues[0]?.message ?? "Dados invalidos para cancelamento.");
+  }
+
+  const credentialAccount = await prisma.account.findFirst({
+    where: {
+      userId,
+      providerId: "credential",
+    },
+    select: {
+      password: true,
+    },
+  });
+
+  if (!credentialAccount?.password) {
+    redirectWithMessage(
+      "error",
+      "Sua conta nao possui senha ativa. Defina uma senha no Perfil para cancelar a assinatura.",
+    );
+  }
+
+  const authContext = await auth.$context;
+  const passwordMatches = await authContext.password.verify({
+    hash: credentialAccount.password,
+    password: parsed.data.currentPassword,
+  });
+
+  if (!passwordMatches) {
+    redirectWithMessage("error", "Senha atual incorreta. Cancelamento nao efetuado.");
   }
 
   try {
+    const subscription = await ensureOwnerSubscription(userId);
     await cancelOwnerSubscription(userId, parsed.data.immediate);
+    let feedbackSaved = true;
+
+    try {
+      await prisma.subscriptionCancellationFeedback.create({
+        data: {
+          ownerUserId: userId,
+          subscriptionId: subscription.id,
+          immediate: parsed.data.immediate,
+          reasonCode: parsed.data.cancellationReason,
+          reasonDetail:
+            parsed.data.cancellationReasonNote.length > 0 ? parsed.data.cancellationReasonNote : null,
+        },
+      });
+    } catch (feedbackError) {
+      feedbackSaved = false;
+      console.error("Falha ao registrar motivo de cancelamento.", feedbackError);
+    }
+
+    const successMessage = parsed.data.immediate
+      ? "Assinatura cancelada imediatamente."
+      : "Assinatura marcada para cancelamento no fim do período.";
+
     revalidatePath("/billing");
     redirectWithMessage(
       "success",
-      parsed.data.immediate
-        ? "Assinatura cancelada imediatamente."
-        : "Assinatura marcada para cancelamento no fim do período.",
+      feedbackSaved
+        ? successMessage
+        : `${successMessage} Motivo nao foi registrado por falha tecnica.`,
     );
   } catch (error) {
     if (isNextRedirectError(error)) {

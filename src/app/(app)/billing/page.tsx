@@ -17,6 +17,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   FEATURE_LABELS,
   formatBrlFromCents,
@@ -24,11 +26,13 @@ import {
   isPaidPlan,
   isUnlimitedLimit,
 } from "@/lib/billing/plans";
+import { BILLING_CANCELLATION_REASON_OPTIONS } from "@/lib/billing/cancellation";
 import { isTrustedAbacateCheckoutUrl } from "@/lib/billing/abacatepay";
 import { getBillingPageData, listOwnerInvoices } from "@/lib/billing/subscription-service";
 import { isOrganizationOwnerRole } from "@/lib/organization/helpers";
 import { getTenantContext } from "@/lib/organization/tenant-context";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
 
 type SearchParamsInput =
   | Record<string, string | string[] | undefined>
@@ -448,18 +452,59 @@ export default async function BillingPage({
 
           {currentIsPaidPlan && subscription.status !== "PAST_DUE" ? (
             <div className="space-y-2">
-              <form action={cancelSubscriptionAction}>
+              <form action={cancelSubscriptionAction} className="space-y-3">
                 <input type="hidden" name="immediate" value="false" />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label htmlFor="cancellationReason">Motivo do cancelamento</Label>
+                    <select
+                      id="cancellationReason"
+                      name="cancellationReason"
+                      required
+                      defaultValue=""
+                      className="bg-input/20 dark:bg-input/30 border-input focus-visible:border-ring focus-visible:ring-ring/30 h-7 w-full rounded-md border px-2 text-sm outline-none focus-visible:ring-2 md:text-xs/relaxed"
+                    >
+                      <option value="" disabled>
+                        Selecione um motivo
+                      </option>
+                      {BILLING_CANCELLATION_REASON_OPTIONS.map((option) => (
+                        <option key={option.code} value={option.code}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="currentPassword">Senha atual</Label>
+                    <Input
+                      id="currentPassword"
+                      name="currentPassword"
+                      type="password"
+                      autoComplete="current-password"
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="cancellationReasonNote">Detalhes (opcional)</Label>
+                  <Textarea
+                    id="cancellationReasonNote"
+                    name="cancellationReasonNote"
+                    maxLength={500}
+                    placeholder="Se quiser, detalhe rapidamente o motivo do cancelamento."
+                  />
+                </div>
                 <FormSubmitButton
                   variant="destructive"
                   disabled={isDowngradeScheduled}
                   pendingLabel="Processando cancelamento..."
                 >
-                  Cancelar assinatura
+                  Cancelar assinatura com confirmacao
                 </FormSubmitButton>
               </form>
               <p className="text-muted-foreground text-xs">
-                O cancelamento e aplicado no fim do periodo. Seu plano atual permanece ativo ate{" "}
+                O cancelamento e aplicado no fim do periodo. Pedimos motivo + senha para reduzir
+                cancelamentos acidentais. Seu plano atual permanece ativo ate{" "}
                 {formatDate(subscription.currentPeriodEnd)}.
               </p>
             </div>

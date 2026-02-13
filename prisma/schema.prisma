@@ -42,6 +42,7 @@ model User {
   ownerSubscription   OwnerSubscription?
   billingCheckouts    BillingCheckoutSession[] @relation("OwnerCheckoutSessions")
   billingInvoices     BillingInvoice[]        @relation("OwnerBillingInvoices")
+  subscriptionCancellationFeedbacks SubscriptionCancellationFeedback[]
   featureOverrides    OwnerFeatureOverride[]
   monthlyUsages       OwnerMonthlyUsage[]
 
@@ -215,6 +216,7 @@ model OwnerSubscription {
   owner             User               @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
   checkoutSessions  BillingCheckoutSession[]
   invoices          BillingInvoice[]
+  cancellationFeedbacks SubscriptionCancellationFeedback[]
 
   @@index([planCode], map: "owner_subscription_plan_code_idx")
   @@index([status], map: "owner_subscription_status_idx")
@@ -293,6 +295,22 @@ model BillingWebhookEvent {
   @@index([eventType], map: "billing_webhook_event_type_idx")
   @@index([status], map: "billing_webhook_status_idx")
   @@map("billing_webhook_event")
+}
+
+model SubscriptionCancellationFeedback {
+  id             String            @id @default(cuid())
+  ownerUserId    String            @map("owner_user_id")
+  subscriptionId String            @map("subscription_id")
+  immediate      Boolean           @default(false)
+  reasonCode     String            @map("reason_code")
+  reasonDetail   String?           @map("reason_detail")
+  createdAt      DateTime          @default(now()) @map("created_at")
+  owner          User              @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  subscription   OwnerSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([ownerUserId], map: "subscription_cancel_feedback_owner_user_id_idx")
+  @@index([subscriptionId], map: "subscription_cancel_feedback_subscription_id_idx")
+  @@map("subscription_cancellation_feedback")
 }
 
 model OwnerFeatureOverride {
