@@ -3,7 +3,7 @@ import { Building2Icon, UsersIcon } from "lucide-react";
 import Image from "next/image";
 import { redirect } from "next/navigation";
 
-import { cancelSubscriptionAction } from "@/actions/billing-actions";
+import { cancelSubscriptionAction, syncInvoicesAction } from "@/actions/billing-actions";
 import { AppPageContainer } from "@/components/app/app-page-container";
 import { BillingPlansSection } from "@/components/billing/billing-plans-section";
 import { BillingProfileDialog } from "@/components/billing/billing-profile-dialog";
@@ -24,9 +24,11 @@ import {
   isPaidPlan,
   isUnlimitedLimit,
 } from "@/lib/billing/plans";
-import { getBillingPageData } from "@/lib/billing/subscription-service";
+import { isTrustedAbacateCheckoutUrl } from "@/lib/billing/abacatepay";
+import { getBillingPageData, listOwnerInvoices } from "@/lib/billing/subscription-service";
 import { isOrganizationOwnerRole } from "@/lib/organization/helpers";
 import { getTenantContext } from "@/lib/organization/tenant-context";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 type SearchParamsInput =
   | Record<string, string | string[] | undefined>
@@ -85,6 +87,46 @@ function formatLimitValue(value: number | null): string {
   return String(value);
 }
 
+function formatInvoiceAmount(amountCents: number, currency: string): string {
+  const normalizedCurrency = currency.trim().toUpperCase();
+
+  if (normalizedCurrency === "BRL") {
+    return formatBrlFromCents(amountCents);
+  }
+
+  try {
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: normalizedCurrency,
+    }).format(amountCents / 100);
+  } catch {
+    return `${(amountCents / 100).toFixed(2)} ${normalizedCurrency}`;
+  }
+}
+
+function resolveInvoiceLink(input: {
+  receiptUrl: string | null;
+  billingUrl: string | null;
+}): { href: string; label: string } | null {
+  const receiptUrl = input.receiptUrl?.trim() ?? "";
+  if (receiptUrl && isTrustedAbacateCheckoutUrl(receiptUrl)) {
+    return {
+      href: receiptUrl,
+      label: "Ver comprovante",
+    };
+  }
+
+  const billingUrl = input.billingUrl?.trim() ?? "";
+  if (billingUrl && isTrustedAbacateCheckoutUrl(billingUrl)) {
+    return {
+      href: billingUrl,
+      label: "Abrir cobranca",
+    };
+  }
+
+  return null;
+}
+
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Pagamentos",
@@ -116,9 +158,20 @@ export default async function BillingPage({
     redirect("/dashboard");
   }
 
-  const billingData = await getBillingPageData(user.id, {
-    checkoutId: checkoutId || null,
-  });
+  const [billingData, invoices] = await Promise.all([
+    getBillingPageData(user.id, {
+      checkoutId: checkoutId || null,
+    }),
+    listOwnerInvoices(user.id),
+  ]);
+
+  const paidInvoices = invoices
+    .filter((invoice) => invoice.status === "PAID")
+    .sort((left, right) => {
+      const leftReference = left.paidAt ?? left.createdAt;
+      const rightReference = right.paidAt ?? right.createdAt;
+      return rightReference.getTime() - leftReference.getTime();
+    });
   const effectivePlanCode = billingData.entitlements.effectivePlanCode;
   const currentPlan = getPlanDefinition(effectivePlanCode);
   const checkoutState = billingData.checkoutState;
@@ -390,6 +443,73 @@ export default async function BillingPage({
               </p>
             </div>
           ) : null}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Recibos de pagamento</CardTitle>
+          <CardDescription>
+            Cada cobranca com status pago aparece aqui como recibo para consulta.
+          </CardDescription>
+          <CardAction>
+            <form action={syncInvoicesAction}>
+              <FormSubmitButton variant="outline" size="sm" pendingLabel="Sincronizando...">
+                Sincronizar recibos
+              </FormSubmitButton>
+            </form>
+          </CardAction>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {paidInvoices.length === 0 ? (
+            <p className="text-muted-foreground text-sm">
+              Nenhum pagamento confirmado ainda. Quando houver cobrancas pagas, os recibos aparecerao aqui.
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Data</TableHead>
+                  <TableHead>Valor</TableHead>
+                  <TableHead>Referencia</TableHead>
+                  <TableHead className="text-right">Comprovante</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paidInvoices.map((invoice) => {
+                  const invoiceLink = resolveInvoiceLink({
+                    receiptUrl: invoice.receiptUrl,
+                    billingUrl: invoice.billingUrl,
+                  });
+                  const reference = invoice.providerTransactionId ?? invoice.providerBillingId ?? invoice.id;
+
+                  return (
+                    <TableRow key={invoice.id}>
+                      <TableCell>{formatDate(invoice.paidAt ?? invoice.createdAt)}</TableCell>
+                      <TableCell>{formatInvoiceAmount(invoice.amountCents, invoice.currency)}</TableCell>
+                      <TableCell>
+                        <code className="text-xs">{reference}</code>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {invoiceLink ? (
+                          <a
+                            href={invoiceLink.href}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            className="text-primary text-sm font-medium hover:underline"
+                          >
+                            {invoiceLink.label}
+                          </a>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">Indisponivel</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </AppPageContainer>
