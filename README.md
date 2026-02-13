@@ -76,7 +76,7 @@ Abra [http://localhost:3000](http://localhost:3000).
 - `NEXT_PUBLIC_SITE_URL` (dominio canonico publico, ex.: `https://app.seudominio.com`)
 - `TRUSTED_ORIGINS` (dominios permitidos, separados por virgula)
 - `RESEND_API_KEY`, `RESEND_FROM_EMAIL`
-- `ABACATEPAY_API_KEY`, `ABACATEPAY_WEBHOOK_SECRET`, `ABACATEPAY_WEBHOOK_SIGNATURE_KEY` (ou `ABACATEPAY_PUBLIC_KEY`)
+- `ABACATEPAY_API_KEY`, `ABACATEPAY_WEBHOOK_SECRET` e opcionalmente `ABACATEPAY_WEBHOOK_SIGNATURE_KEY` (ou `ABACATEPAY_PUBLIC_KEY`)
 - `ABACATEPAY_TIMEOUT_MS` (opcional), `ABACATEPAY_BILLING_LIST_TIMEOUT_MS` (opcional), `ABACATEPAY_BILLING_LIST_RETRIES` (opcional)
 - `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`
 3. O build ja esta preparado para Vercel:
@@ -144,5 +144,6 @@ e ajuste o `DATABASE_URL` para a mesma porta.
 - O billing fica em `/billing` (planos, trial, upgrade/downgrade, cancelamento, reativacao, faturas).
 - Webhook AbacatePay: `POST /api/webhooks/abacatepay` com header `X-Webhook-Secret: SEU_SEGREDO`
 - O webhook valida `X-Webhook-Secret`, valida obrigatoriamente `X-Webhook-Signature` (HMAC SHA-256) e aplica idempotencia por `event.id`.
+- Se `ABACATEPAY_WEBHOOK_SIGNATURE_KEY`/`ABACATEPAY_PUBLIC_KEY` nao estiver configurada, o webhook valida apenas o secret (modo compatibilidade).
 - O webhook aplica rate limit por IP e pode restringir origem com allowlist (`ABACATEPAY_WEBHOOK_ALLOWED_IPS`).
 - O checkout so aceita redirecionamento para hosts confiaveis (default `*.abacatepay.com`), configuraveis por `ABACATEPAY_ALLOWED_CHECKOUT_HOSTS`.

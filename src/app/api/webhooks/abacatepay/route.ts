@@ -271,28 +271,22 @@ export async function POST(request: Request) {
   }
 
   const signatureKey = getAbacateWebhookSignatureKey();
-  if (!signatureKey) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "ABACATEPAY_WEBHOOK_SIGNATURE_KEY não configurada no servidor.",
-      },
-      {
-        status: 500,
-      },
+  if (signatureKey) {
+    if (!signatureHeader) {
+      return unauthorized("Assinatura do webhook ausente.");
+    }
+
+    const expectedSignature = createHmac("sha256", signatureKey)
+      .update(Buffer.from(rawBody))
+      .digest("base64");
+
+    if (!safeCompareSignature(expectedSignature, signatureHeader)) {
+      return unauthorized("Assinatura do webhook inválida.");
+    }
+  } else {
+    console.warn(
+      "ABACATEPAY_WEBHOOK_SIGNATURE_KEY/ABACATEPAY_PUBLIC_KEY ausente; validando webhook apenas por secret.",
     );
-  }
-
-  if (!signatureHeader) {
-    return unauthorized("Assinatura do webhook ausente.");
-  }
-
-  const expectedSignature = createHmac("sha256", signatureKey)
-    .update(Buffer.from(rawBody))
-    .digest("base64");
-
-  if (!safeCompareSignature(expectedSignature, signatureHeader)) {
-    return unauthorized("Assinatura do webhook inválida.");
   }
 
   let payload: unknown;
