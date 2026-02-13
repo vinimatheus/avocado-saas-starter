@@ -37,6 +37,7 @@ import {
 
 export const DEFAULT_USAGE_METRIC_KEY = "workspace_events";
 export const DEFAULT_PAST_DUE_GRACE_DAYS = 28;
+const DEFAULT_CHECKOUT_PENDING_TIMEOUT_MINUTES = 20;
 const PAST_DUE_REMINDER_DAYS = [7, 14, 21] as const;
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 
@@ -85,6 +86,56 @@ function addDays(date: Date, days: number): Date {
   const nextDate = new Date(date);
   nextDate.setDate(nextDate.getDate() + days);
   return nextDate;
+}
+
+function parsePositiveIntEnv(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(value?.trim() ?? "", 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+
+  return parsed;
+}
+
+function getCheckoutPendingTimeoutMs(): number {
+  const minutes = parsePositiveIntEnv(
+    process.env.CHECKOUT_PENDING_TIMEOUT_MINUTES,
+    DEFAULT_CHECKOUT_PENDING_TIMEOUT_MINUTES,
+  );
+  return minutes * 60 * 1000;
+}
+
+function isStalePendingCheckout(createdAt: Date): boolean {
+  return Date.now() - createdAt.getTime() >= getCheckoutPendingTimeoutMs();
+}
+
+async function failStaleCheckout(input: {
+  ownerUserId: string;
+  checkoutId: string;
+  subscriptionId: string;
+  targetPlanCode: BillingPlanCode;
+}): Promise<void> {
+  await prisma.$transaction([
+    prisma.billingCheckoutSession.updateMany({
+      where: {
+        id: input.checkoutId,
+        ownerUserId: input.ownerUserId,
+        status: CheckoutStatus.PENDING,
+      },
+      data: {
+        status: CheckoutStatus.FAILED,
+      },
+    }),
+    prisma.ownerSubscription.updateMany({
+      where: {
+        id: input.subscriptionId,
+        pendingPlanCode: input.targetPlanCode,
+      },
+      data: {
+        pendingPlanCode: null,
+      },
+    }),
+  ]);
 }
 
 function isTimeoutError(error: unknown): boolean {
@@ -1516,6 +1567,7 @@ export async function getBillingPageData(
     | {
         id: string;
         status: CheckoutStatus;
+        subscriptionId: string;
         targetPlanCode: BillingPlanCode;
         createdAt: Date;
       }
@@ -1548,10 +1600,25 @@ export async function getBillingPageData(
       select: {
         id: true,
         status: true,
+        subscriptionId: true,
         targetPlanCode: true,
         createdAt: true,
       },
     });
+
+    if (
+      latestPendingCheckout &&
+      latestPendingCheckout.status === CheckoutStatus.PENDING &&
+      isStalePendingCheckout(latestPendingCheckout.createdAt)
+    ) {
+      await failStaleCheckout({
+        ownerUserId,
+        checkoutId: latestPendingCheckout.id,
+        subscriptionId: latestPendingCheckout.subscriptionId,
+        targetPlanCode: latestPendingCheckout.targetPlanCode,
+      });
+      latestPendingCheckout = null;
+    }
 
     if (latestPendingCheckout) {
       // Keep this reconciliation non-blocking so the billing page does not wait on provider I/O.
@@ -1579,11 +1646,26 @@ export async function getBillingPageData(
         select: {
           id: true,
           status: true,
+          subscriptionId: true,
           targetPlanCode: true,
           createdAt: true,
         },
       })
     : latestPendingCheckout;
+
+  if (
+    selectedCheckout &&
+    selectedCheckout.status === CheckoutStatus.PENDING &&
+    isStalePendingCheckout(selectedCheckout.createdAt)
+  ) {
+    await failStaleCheckout({
+      ownerUserId,
+      checkoutId: selectedCheckout.id,
+      subscriptionId: selectedCheckout.subscriptionId,
+      targetPlanCode: selectedCheckout.targetPlanCode,
+    });
+    selectedCheckout.status = CheckoutStatus.FAILED;
+  }
 
   const entitlements = await getOwnerEntitlements(ownerUserId);
 

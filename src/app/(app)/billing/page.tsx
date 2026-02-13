@@ -135,6 +135,13 @@ export default async function BillingPage({
   const canRenewCurrentPlan = isPastDueInGrace && currentIsPaidPlan;
   const billingCycleLabel = isPastDueInGrace ? "Fim da carencia" : "Fim do ciclo atual";
   const isCheckoutProcessing = Boolean(checkoutState?.isProcessing);
+  const isCheckoutFailure = Boolean(
+    checkoutState &&
+      (checkoutState.status === "FAILED" ||
+        checkoutState.status === "EXPIRED" ||
+        checkoutState.status === "CANCELED" ||
+        checkoutState.status === "CHARGEBACK"),
+  );
   const restrictionHints = [
     restriction.exceededOrganizations > 0
       ? `${restriction.exceededOrganizations} organizacao(oes) acima do limite`
@@ -203,6 +210,22 @@ export default async function BillingPage({
             </p>
             <p className="text-xs">
               Assim que o webhook for processado, seu plano sera atualizado. Checkout:{" "}
+              <code>{checkoutState?.id}</code>.
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {isCheckoutFailure ? (
+        <Card className="border-destructive/40 bg-destructive/10">
+          <CardContent className="space-y-1 py-3 text-sm">
+            <p className="font-medium">Checkout não confirmado</p>
+            <p>
+              O checkout para <strong>{checkoutTargetPlan?.name ?? "plano selecionado"}</strong> terminou
+              com status <strong>{checkoutState?.status}</strong>. Voce pode iniciar um novo pagamento.
+            </p>
+            <p className="text-xs">
+              Ultima tentativa: {formatDate(checkoutState?.createdAt ?? null)}. Checkout:{" "}
               <code>{checkoutState?.id}</code>.
             </p>
           </CardContent>
