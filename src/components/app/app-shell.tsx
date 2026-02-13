@@ -191,7 +191,7 @@ export function AppShell({
           userImage={userImage}
         />
         <SidebarInset>
-          <header className="bg-background/95 supports-backdrop-filter:bg-background/60 sticky top-0 z-20 flex h-14 items-center gap-2 border-b px-4 backdrop-blur">
+          <header className="bg-background/95 supports-backdrop-filter:bg-background/60 sticky top-0 z-20 flex h-14 items-center gap-2 border-b px-5 sm:px-6 backdrop-blur">
             <SidebarTrigger />
             <div className="min-w-0 flex-1">
               <AppBreadcrumb />
