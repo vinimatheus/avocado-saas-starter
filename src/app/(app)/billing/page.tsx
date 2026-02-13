@@ -106,7 +106,7 @@ function formatInvoiceAmount(amountCents: number, currency: string): string {
 
 function resolveInvoiceLink(input: {
   receiptUrl: string | null;
-  billingUrl: string | null;
+  providerTransactionId: string | null;
 }): { href: string; label: string } | null {
   const receiptUrl = input.receiptUrl?.trim() ?? "";
   if (receiptUrl && isTrustedAbacateCheckoutUrl(receiptUrl)) {
@@ -116,11 +116,16 @@ function resolveInvoiceLink(input: {
     };
   }
 
-  const billingUrl = input.billingUrl?.trim() ?? "";
-  if (billingUrl && isTrustedAbacateCheckoutUrl(billingUrl)) {
+  const providerTransactionId = input.providerTransactionId?.trim() ?? "";
+  if (providerTransactionId.startsWith("tran_")) {
+    const inferredReceiptUrl = `https://app.abacatepay.com/receipt/${providerTransactionId}`;
+    if (!isTrustedAbacateCheckoutUrl(inferredReceiptUrl)) {
+      return null;
+    }
+
     return {
-      href: billingUrl,
-      label: "Abrir cobranca",
+      href: inferredReceiptUrl,
+      label: "Ver comprovante",
     };
   }
 
@@ -450,7 +455,7 @@ export default async function BillingPage({
         <CardHeader>
           <CardTitle>Recibos de pagamento</CardTitle>
           <CardDescription>
-            Cada cobranca com status pago aparece aqui como recibo para consulta.
+            Mostramos apenas comprovantes de transacao (links `receipt/tran_...`) para evitar novo checkout.
           </CardDescription>
           <CardAction>
             <form action={syncInvoicesAction}>
@@ -479,7 +484,7 @@ export default async function BillingPage({
                 {paidInvoices.map((invoice) => {
                   const invoiceLink = resolveInvoiceLink({
                     receiptUrl: invoice.receiptUrl,
-                    billingUrl: invoice.billingUrl,
+                    providerTransactionId: invoice.providerTransactionId,
                   });
                   const reference = invoice.providerTransactionId ?? invoice.providerBillingId ?? invoice.id;
 
