@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
+import { createAuthMiddleware } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
 import { jwt, organization, twoFactor } from "better-auth/plugins";
 import { APIError } from "better-call";
@@ -180,6 +181,77 @@ function toErrorMessage(error: unknown, fallbackMessage: string): string {
   }
 
   return fallbackMessage;
+}
+
+async function dedupeCredentialAccountsForEmail(rawEmail: unknown): Promise<void> {
+  if (typeof rawEmail !== "string") {
+    return;
+  }
+
+  const email = rawEmail.trim().toLowerCase();
+  if (!email) {
+    return;
+  }
+
+  const user = await prisma.user.findUnique({
+    where: {
+      email,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!user) {
+    return;
+  }
+
+  const credentialAccounts = await prisma.account.findMany({
+    where: {
+      userId: user.id,
+      providerId: "credential",
+    },
+    orderBy: [
+      {
+        updatedAt: "desc",
+      },
+      {
+        createdAt: "desc",
+      },
+    ],
+    select: {
+      id: true,
+      password: true,
+    },
+  });
+
+  if (credentialAccounts.length <= 1) {
+    return;
+  }
+
+  const accountWithPassword = credentialAccounts.find((account) => Boolean(account.password));
+  const primaryAccount = accountWithPassword ?? credentialAccounts[0];
+  if (!primaryAccount) {
+    return;
+  }
+
+  const staleAccountIds = credentialAccounts
+    .filter((account) => account.id !== primaryAccount.id)
+    .map((account) => account.id);
+
+  if (staleAccountIds.length === 0) {
+    return;
+  }
+
+  await prisma.account.deleteMany({
+    where: {
+      id: {
+        in: staleAccountIds,
+      },
+      userId: user.id,
+      providerId: "credential",
+    },
+  });
 }
 
 type OrganizationInvitationEmailPayload = {
@@ -499,6 +571,15 @@ export const auth = betterAuth({
     changeEmail: {
       enabled: true,
     },
+  },
+  hooks: {
+    before: createAuthMiddleware(async (ctx) => {
+      if (ctx.path !== "/sign-in/email") {
+        return;
+      }
+
+      await dedupeCredentialAccountsForEmail(ctx.body?.email);
+    }),
   },
   plugins: [
     organization({
