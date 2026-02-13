@@ -109,7 +109,11 @@ export function getAbacateWebhookSecret(): string {
 }
 
 export function getAbacateWebhookSignatureKey(): string | null {
-  return process.env.ABACATEPAY_WEBHOOK_SIGNATURE_KEY?.trim() || null;
+  return (
+    process.env.ABACATEPAY_WEBHOOK_SIGNATURE_KEY?.trim() ||
+    process.env.ABACATEPAY_PUBLIC_KEY?.trim() ||
+    null
+  );
 }
 
 function getAllowedCheckoutHosts(): string[] {

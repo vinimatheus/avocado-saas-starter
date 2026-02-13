@@ -181,6 +181,27 @@ function tooManyRequests(retryAfterSeconds: number) {
   );
 }
 
+function getReceivedWebhookSecret(request: Request): string {
+  const headerSecret = request.headers.get("x-webhook-secret")?.trim() || "";
+  if (headerSecret) {
+    return headerSecret;
+  }
+
+  let querySecret = "";
+
+  try {
+    const url = new URL(request.url);
+    querySecret =
+      url.searchParams.get("webhookSecret")?.trim() ||
+      url.searchParams.get("secret")?.trim() ||
+      "";
+  } catch {
+    querySecret = "";
+  }
+
+  return querySecret;
+}
+
 export async function POST(request: Request) {
   const clientIp = getClientIp(request);
   if (ALLOWED_WEBHOOK_IPS.size > 0 && (!clientIp || !ALLOWED_WEBHOOK_IPS.has(clientIp))) {
@@ -209,9 +230,11 @@ export async function POST(request: Request) {
     );
   }
 
-  const receivedSecret = request.headers.get("x-webhook-secret")?.trim() || "";
+  const receivedSecret = getReceivedWebhookSecret(request);
   if (!receivedSecret) {
-    return unauthorized("Webhook secret ausente no header x-webhook-secret.");
+    return unauthorized(
+      "Webhook secret ausente. Envie no header x-webhook-secret ou query string webhookSecret.",
+    );
   }
 
   if (!safeCompareSecret(webhookSecret, receivedSecret)) {
