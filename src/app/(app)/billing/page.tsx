@@ -121,6 +121,8 @@ export default async function BillingPage({
   });
   const effectivePlanCode = billingData.entitlements.effectivePlanCode;
   const currentPlan = getPlanDefinition(effectivePlanCode);
+  const checkoutState = billingData.checkoutState;
+  const checkoutTargetPlan = checkoutState ? getPlanDefinition(checkoutState.targetPlanCode) : null;
   const subscription = billingData.entitlements.subscription;
   const usage = billingData.entitlements.usage;
   const dunning = billingData.entitlements.dunning;
@@ -132,6 +134,7 @@ export default async function BillingPage({
   const currentPlanIndex = billingData.plans.findIndex((plan) => plan.code === effectivePlanCode);
   const canRenewCurrentPlan = isPastDueInGrace && currentIsPaidPlan;
   const billingCycleLabel = isPastDueInGrace ? "Fim da carencia" : "Fim do ciclo atual";
+  const isCheckoutProcessing = Boolean(checkoutState?.isProcessing);
   const restrictionHints = [
     restriction.exceededOrganizations > 0
       ? `${restriction.exceededOrganizations} organizacao(oes) acima do limite`
@@ -187,6 +190,22 @@ export default async function BillingPage({
       {errorMessage ? (
         <Card className="border-destructive/40 bg-destructive/10">
           <CardContent className="py-2 text-sm">{errorMessage}</CardContent>
+        </Card>
+      ) : null}
+
+      {isCheckoutProcessing ? (
+        <Card className="border-primary/40 bg-primary/10">
+          <CardContent className="space-y-1 py-3 text-sm">
+            <p className="font-medium">Pagamento em processamento</p>
+            <p>
+              Seu checkout para <strong>{checkoutTargetPlan?.name ?? "plano selecionado"}</strong> foi
+              recebido e estamos aguardando confirmacao do AbacatePay.
+            </p>
+            <p className="text-xs">
+              Assim que o webhook for processado, seu plano sera atualizado. Checkout:{" "}
+              <code>{checkoutState?.id}</code>.
+            </p>
+          </CardContent>
         </Card>
       ) : null}
 
@@ -270,6 +289,7 @@ export default async function BillingPage({
           effectivePlanCode={effectivePlanCode}
           currentIsPaidPlan={currentIsPaidPlan}
           canRenewCurrentPlan={canRenewCurrentPlan}
+          checkoutInProgress={isCheckoutProcessing}
           billingDefaults={billingDefaults}
         />
       ) : (

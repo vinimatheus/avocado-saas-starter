@@ -44,6 +44,7 @@ type BillingPlansSectionProps = {
   effectivePlanCode: BillingPlanCode;
   currentIsPaidPlan: boolean;
   canRenewCurrentPlan: boolean;
+  checkoutInProgress?: boolean;
   billingDefaults: {
     name: string;
     cellphone: string;
@@ -80,6 +81,7 @@ export function BillingPlansSection({
   effectivePlanCode,
   currentIsPaidPlan,
   canRenewCurrentPlan,
+  checkoutInProgress = false,
   billingDefaults,
 }: BillingPlansSectionProps) {
   const [annualBillingPreview, setAnnualBillingPreview] = useState(false);
@@ -108,11 +110,19 @@ export function BillingPlansSection({
   );
 
   const openBillingDialog = (planCode: BillingPlanCode) => {
+    if (checkoutInProgress) {
+      return;
+    }
+
     setSelectedPlanCode(planCode);
     setIsBillingDialogOpen(true);
   };
 
   const resolveButtonLabel = (planCode: BillingPlanCode): string => {
+    if (checkoutInProgress) {
+      return "Pagamento em processamento";
+    }
+
     if (canRenewCurrentPlan && planCode === effectivePlanCode) {
       return "Regularizar pagamento";
     }
@@ -137,6 +147,12 @@ export function BillingPlansSection({
             Um plano principal em destaque para facilitar decisao em segundos. O Free vira baseline,
             e voce evolui com clareza.
           </p>
+          {checkoutInProgress ? (
+            <p className="text-muted-foreground mx-auto max-w-2xl text-xs">
+              Um checkout recente ainda esta pendente de confirmacao. Aguarde a validacao para liberar
+              novos pedidos.
+            </p>
+          ) : null}
         </div>
 
         <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-3 text-sm">
@@ -240,6 +256,7 @@ export function BillingPlansSection({
                     className="w-full"
                     variant={isFeatured ? "default" : "outline"}
                     onClick={() => openBillingDialog(plan.code)}
+                    disabled={checkoutInProgress}
                   >
                     {resolveButtonLabel(plan.code)}
                   </Button>

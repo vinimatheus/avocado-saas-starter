@@ -972,6 +972,29 @@ async function ensureAbacateCustomerId(subscription: OwnerSubscription): Promise
     throw new Error("Usuário sem e-mail válido para criar cliente no AbacatePay.");
   }
 
+  // Reuse the provider customer when another owner already uses the same tax ID.
+  const sharedCustomerId = await prisma.ownerSubscription.findFirst({
+    where: {
+      ownerUserId: {
+        not: subscription.ownerUserId,
+      },
+      billingTaxId: subscription.billingTaxId,
+      abacateCustomerId: {
+        not: null,
+      },
+    },
+    orderBy: {
+      updatedAt: "desc",
+    },
+    select: {
+      abacateCustomerId: true,
+    },
+  });
+
+  if (sharedCustomerId?.abacateCustomerId) {
+    return sharedCustomerId.abacateCustomerId;
+  }
+
   const customer = await createAbacateCustomer({
     name: subscription.billingName,
     cellphone: subscription.billingCellphone,
@@ -979,14 +1002,25 @@ async function ensureAbacateCustomerId(subscription: OwnerSubscription): Promise
     taxId: subscription.billingTaxId,
   });
 
-  await prisma.ownerSubscription.update({
-    where: {
-      ownerUserId: subscription.ownerUserId,
-    },
-    data: {
-      abacateCustomerId: customer.id,
-    },
-  });
+  try {
+    await prisma.ownerSubscription.update({
+      where: {
+        ownerUserId: subscription.ownerUserId,
+      },
+      data: {
+        abacateCustomerId: customer.id,
+      },
+    });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return customer.id;
+    }
+
+    throw error;
+  }
 
   return customer.id;
 }
@@ -1478,6 +1512,14 @@ export async function getBillingPageData(
   },
 ) {
   const checkoutId = options?.checkoutId?.trim();
+  let latestPendingCheckout:
+    | {
+        id: string;
+        status: CheckoutStatus;
+        targetPlanCode: BillingPlanCode;
+        createdAt: Date;
+      }
+    | null = null;
 
   if (checkoutId) {
     try {
@@ -1495,7 +1537,7 @@ export async function getBillingPageData(
       }
     }
   } else {
-    const latestPendingCheckout = await prisma.billingCheckoutSession.findFirst({
+    latestPendingCheckout = await prisma.billingCheckoutSession.findFirst({
       where: {
         ownerUserId,
         status: CheckoutStatus.PENDING,
@@ -1505,6 +1547,9 @@ export async function getBillingPageData(
       },
       select: {
         id: true,
+        status: true,
+        targetPlanCode: true,
+        createdAt: true,
       },
     });
 
@@ -1525,11 +1570,35 @@ export async function getBillingPageData(
     }
   }
 
+  const selectedCheckout = checkoutId
+    ? await prisma.billingCheckoutSession.findFirst({
+        where: {
+          id: checkoutId,
+          ownerUserId,
+        },
+        select: {
+          id: true,
+          status: true,
+          targetPlanCode: true,
+          createdAt: true,
+        },
+      })
+    : latestPendingCheckout;
+
   const entitlements = await getOwnerEntitlements(ownerUserId);
 
   return {
     entitlements,
     plans: BILLING_PLAN_SEQUENCE.map((planCode) => getPlanDefinition(planCode)),
+    checkoutState: selectedCheckout
+      ? {
+          id: selectedCheckout.id,
+          status: selectedCheckout.status,
+          targetPlanCode: selectedCheckout.targetPlanCode,
+          createdAt: selectedCheckout.createdAt,
+          isProcessing: selectedCheckout.status === CheckoutStatus.PENDING,
+        }
+      : null,
   };
 }
 
