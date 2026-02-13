@@ -62,7 +62,7 @@ function statusLabel(status: string): string {
     return "Ativa";
   }
   if (status === "TRIALING") {
-    return "Trial";
+    return "Teste";
   }
   if (status === "CANCELED") {
     return "Cancelada";
@@ -74,7 +74,7 @@ function statusLabel(status: string): string {
     return "Em carencia";
   }
 
-  return "Free";
+  return "Gratuito";
 }
 
 function formatLimitValue(value: number | null): string {
@@ -89,7 +89,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Pagamentos",
   description:
-    "Gestao interna de assinatura, planos, renovacao e cobranca do workspace no avocado SaaS Starter.",
+    "Gestao interna de assinatura, planos, renovacao e cobranca da area no avocado SaaS Starter.",
   alternates: {
     canonical: "/billing",
   },
@@ -205,11 +205,11 @@ export default async function BillingPage({
           <CardContent className="space-y-1 py-3 text-sm">
             <p className="font-medium">Pagamento em processamento</p>
             <p>
-              Seu checkout para <strong>{checkoutTargetPlan?.name ?? "plano selecionado"}</strong> foi
+              Seu pagamento para <strong>{checkoutTargetPlan?.name ?? "plano selecionado"}</strong> foi
               recebido e estamos aguardando confirmacao do AbacatePay.
             </p>
             <p className="text-xs">
-              Assim que o webhook for processado, seu plano sera atualizado. Checkout:{" "}
+              Assim que o webhook for processado, seu plano sera atualizado. Pagamento:{" "}
               <code>{checkoutState?.id}</code>.
             </p>
           </CardContent>
@@ -219,13 +219,13 @@ export default async function BillingPage({
       {isCheckoutFailure ? (
         <Card className="border-destructive/40 bg-destructive/10">
           <CardContent className="space-y-1 py-3 text-sm">
-            <p className="font-medium">Checkout não confirmado</p>
+            <p className="font-medium">Pagamento nao confirmado</p>
             <p>
-              O checkout para <strong>{checkoutTargetPlan?.name ?? "plano selecionado"}</strong> terminou
+              O pagamento para <strong>{checkoutTargetPlan?.name ?? "plano selecionado"}</strong> terminou
               com status <strong>{checkoutState?.status}</strong>. Voce pode iniciar um novo pagamento.
             </p>
             <p className="text-xs">
-              Ultima tentativa: {formatDate(checkoutState?.createdAt ?? null)}. Checkout:{" "}
+              Ultima tentativa: {formatDate(checkoutState?.createdAt ?? null)}. Pagamento:{" "}
               <code>{checkoutState?.id}</code>.
             </p>
           </CardContent>
@@ -277,7 +277,7 @@ export default async function BillingPage({
             <p className="font-medium">Pagamento em atraso.</p>
             <p>
               Seu acesso atual continua ate <strong>{formatDate(dunning.graceEndsAt)}</strong>. Apos essa data,
-              o plano cai para Free automaticamente.
+              o plano cai para Gratuito automaticamente.
             </p>
             {dunning.daysUntilDowngrade !== null ? (
               <p className="text-xs">
@@ -344,7 +344,7 @@ export default async function BillingPage({
             <Badge variant="outline">Status: {statusLabel(subscription.status)}</Badge>
             {isPastDueInGrace ? <Badge variant="destructive">Carencia ativa</Badge> : null}
             {restriction.isRestricted ? <Badge variant="destructive">Modo restrito</Badge> : null}
-            {isDowngradeScheduled ? <Badge variant="destructive">Downgrade para Free agendado</Badge> : null}
+            {isDowngradeScheduled ? <Badge variant="destructive">Rebaixamento para Gratuito agendado</Badge> : null}
           </div>
 
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">

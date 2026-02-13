@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { authClient } from "@/lib/auth/client";
+import { localizeAuthErrorMessage } from "@/lib/auth/error-messages";
 
 export type UserInvitation = {
   id: string;
@@ -62,7 +63,7 @@ function normalizeInvitation(item: {
 
 function normalizeRole(role: string): string {
   if (role === "owner") {
-    return "Owner";
+    return "Proprietario";
   }
 
   if (role === "admin") {
@@ -85,7 +86,7 @@ export function InvitationNotificationMenu({ initialInvitations }: InvitationNot
 
     if (result.error) {
       setIsLoading(false);
-      toast.error(result.error.message ?? "Nao foi possivel carregar convites.");
+      toast.error(localizeAuthErrorMessage(result.error.message ?? "Nao foi possivel carregar convites."));
       return;
     }
 
@@ -134,7 +135,7 @@ export function InvitationNotificationMenu({ initialInvitations }: InvitationNot
       setProcessingInvitationId(null);
 
       if (result.error) {
-        toast.error(result.error.message ?? "Nao foi possivel aceitar o convite.");
+        toast.error(localizeAuthErrorMessage(result.error.message ?? "Nao foi possivel aceitar o convite."));
         return;
       }
 
@@ -154,7 +155,7 @@ export function InvitationNotificationMenu({ initialInvitations }: InvitationNot
       setProcessingInvitationId(null);
 
       if (result.error) {
-        toast.error(result.error.message ?? "Nao foi possivel recusar o convite.");
+        toast.error(localizeAuthErrorMessage(result.error.message ?? "Nao foi possivel recusar o convite."));
         return;
       }
 

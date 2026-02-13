@@ -61,7 +61,7 @@ type NavItem = {
 
 const NAV_ITEMS: NavItem[] = [
   {
-    label: "Dashboard",
+    label: "Painel",
     href: "/dashboard",
     icon: LayoutDashboardIcon,
     showWhen: () => true,
@@ -73,13 +73,13 @@ const NAV_ITEMS: NavItem[] = [
     showWhen: () => true,
   },
   {
-    label: "Billing",
+    label: "Cobranca",
     href: "/billing",
     icon: CreditCardIcon,
     showWhen: () => true,
   },
   {
-    label: "Profile",
+    label: "Perfil",
     href: "/profile",
     icon: UserRoundIcon,
     showWhen: () => true,

@@ -1668,6 +1668,11 @@ export async function getBillingPageData(
   }
 
   const entitlements = await getOwnerEntitlements(ownerUserId);
+  const hasPendingPlanChangeForSelectedCheckout = Boolean(
+    selectedCheckout &&
+      selectedCheckout.status === CheckoutStatus.PENDING &&
+      entitlements.subscription.pendingPlanCode === selectedCheckout.targetPlanCode,
+  );
 
   return {
     entitlements,
@@ -1678,7 +1683,7 @@ export async function getBillingPageData(
           status: selectedCheckout.status,
           targetPlanCode: selectedCheckout.targetPlanCode,
           createdAt: selectedCheckout.createdAt,
-          isProcessing: selectedCheckout.status === CheckoutStatus.PENDING,
+          isProcessing: hasPendingPlanChangeForSelectedCheckout,
         }
       : null,
   };

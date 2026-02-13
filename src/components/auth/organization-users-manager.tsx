@@ -168,7 +168,7 @@ function formatDate(value: string): string {
 
 function roleLabel(role: TeamAccessRole): string {
   if (role === "owner") {
-    return "Owner";
+    return "Proprietario";
   }
 
   return role === "admin" ? "Administrador" : "Usuario";
@@ -318,7 +318,7 @@ function TeamAccessRowActions({
         <DropdownMenuContent align="end" className="w-52">
           <DropdownMenuLabel>Acoes</DropdownMenuLabel>
           {isOwnerMember ? (
-            <DropdownMenuItem disabled>Use transferencia de ownership</DropdownMenuItem>
+            <DropdownMenuItem disabled>Use transferencia de propriedade</DropdownMenuItem>
           ) : (
             <DropdownMenuItem
               disabled={
@@ -334,7 +334,7 @@ function TeamAccessRowActions({
                 onUpdateRole(row.memberId, nextRole);
               }}
             >
-              {nextRole === "admin" ? "Tornar admin" : "Tornar usuario"}
+              {nextRole === "admin" ? "Tornar administrador" : "Tornar usuario"}
             </DropdownMenuItem>
           )}
 
@@ -821,7 +821,7 @@ export function OrganizationUsersManager({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos cargos</SelectItem>
-            <SelectItem value="owner">Owner</SelectItem>
+            <SelectItem value="owner">Proprietario</SelectItem>
             <SelectItem value="admin">Administrador</SelectItem>
             <SelectItem value="user">Usuario</SelectItem>
           </SelectContent>

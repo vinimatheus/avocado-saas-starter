@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Logo } from "@/components/shared/logo";
+import { localizeAuthErrorMessage } from "@/lib/auth/error-messages";
 import { signUpSchema, type SignUpValues } from "@/lib/auth/schemas";
 import { authClient, signUp } from "@/lib/auth/client";
 import { buildOrganizationSlug } from "@/lib/organization/helpers";
@@ -115,7 +116,7 @@ export function SignUpForm({
         });
 
         if (result.error) {
-          const message = result.error.message ?? "Nao foi possivel criar a conta.";
+          const message = localizeAuthErrorMessage(result.error.message ?? "Nao foi possivel criar a conta.");
           setServerMessage(message);
           toast.error(message);
           return;
@@ -144,7 +145,7 @@ export function SignUpForm({
         });
 
         if (organizationResult.error) {
-          toast.error("Conta criada, mas faltou vincular empresa. Complete no onboarding.");
+          toast.error("Conta criada, mas faltou vincular empresa. Complete na etapa inicial.");
           router.replace("/onboarding/company");
           router.refresh();
           return;

@@ -144,12 +144,12 @@ export function BillingPlansSection({
         <div className="space-y-2 text-center">
           <h2 className="text-lg font-semibold">Escolha o plano e acelere sua operacao</h2>
           <p className="text-muted-foreground mx-auto max-w-2xl text-sm">
-            Um plano principal em destaque para facilitar decisao em segundos. O Free vira baseline,
+            Um plano principal em destaque para facilitar decisao em segundos. O plano gratuito vira base,
             e voce evolui com clareza.
           </p>
           {checkoutInProgress ? (
             <p className="text-muted-foreground mx-auto max-w-2xl text-xs">
-              Um checkout recente ainda esta pendente de confirmacao. Aguarde a validacao para liberar
+              Um pagamento recente ainda esta pendente de confirmacao. Aguarde a validacao para liberar
               novos pedidos.
             </p>
           ) : null}
@@ -169,7 +169,7 @@ export function BillingPlansSection({
             </span>
           </div>
           <p className="text-muted-foreground text-center text-xs">
-            O ciclo anual aplica 20% de desconto e gera cobranca anual no checkout. No ciclo mensal,
+            O ciclo anual aplica 20% de desconto e gera cobranca anual no pagamento. No ciclo mensal,
             a cobranca permanece recorrente automatica no AbacatePay.
           </p>
         </div>
@@ -277,7 +277,7 @@ export function BillingPlansSection({
                 : "Finalizar escolha do plano"}
             </DialogTitle>
             <DialogDescription>
-              Confirme os dados de cobranca para concluir o ciclo escolhido no checkout seguro.
+              Confirme os dados de cobranca para concluir o ciclo escolhido no pagamento seguro.
             </DialogDescription>
           </DialogHeader>
 
@@ -297,16 +297,16 @@ export function BillingPlansSection({
             ) : null}
 
             <div className="space-y-3">
-              <p className="text-sm font-medium">Dados de cobranca e checkout</p>
+              <p className="text-sm font-medium">Dados de cobranca e pagamento</p>
               <p className="text-muted-foreground text-xs">
-                Preencha os campos abaixo e avance direto para o checkout em um unico passo.
+                Preencha os campos abaixo e avance direto para o pagamento em um unico passo.
               </p>
               <BillingProfileForm
                 action={createPlanCheckoutAction}
                 defaultName={billingDefaults.name}
                 defaultCellphone={billingDefaults.cellphone}
                 defaultTaxId={billingDefaults.taxId}
-                submitLabel={selectedPlanIsRenewAction ? "Regularizar pagamento" : "Salvar e ir para checkout"}
+                submitLabel={selectedPlanIsRenewAction ? "Regularizar pagamento" : "Salvar e ir para pagamento"}
                 pendingLabel="Redirecionando para pagamento..."
                 submitClassName="w-full"
                 submitDisabled={!selectedPlan}
@@ -326,8 +326,8 @@ export function BillingPlansSection({
             </div>
             <p className="text-muted-foreground text-xs">
               {annualBillingPreview
-                ? "O checkout mostra o valor anual com desconto e ativa cobertura por 12 meses."
-                : "O checkout mostra os valores finais e ativa cobranca recorrente automatica mensal."}
+                ? "O pagamento mostra o valor anual com desconto e ativa cobertura por 12 meses."
+                : "O pagamento mostra os valores finais e ativa cobranca recorrente automatica mensal."}
             </p>
           </div>
         </DialogContent>

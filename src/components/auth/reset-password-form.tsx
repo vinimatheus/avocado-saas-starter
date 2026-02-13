@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Logo } from "@/components/shared/logo";
 import { resetPasswordSchema, type ResetPasswordValues } from "@/lib/auth/schemas";
 import { authClient } from "@/lib/auth/client";
+import { localizeAuthErrorMessage } from "@/lib/auth/error-messages";
 import { stripFieldRef } from "@/lib/forms/rhf";
 import { getFirstValidationErrorMessage } from "@/lib/forms/validation-toast";
 
@@ -83,7 +84,7 @@ export function ResetPasswordForm({
         });
 
         if (result.error) {
-          toast.error(result.error.message ?? "Erro ao redefinir a senha.");
+          toast.error(localizeAuthErrorMessage(result.error.message ?? "Erro ao redefinir a senha."));
           return;
         }
 

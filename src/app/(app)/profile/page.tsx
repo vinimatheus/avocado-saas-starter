@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Perfil",
   description:
-    "Atualize dados da conta, seguranca e identidade do usuario no workspace do avocado SaaS Starter.",
+    "Atualize dados da conta, seguranca e identidade do usuario na area do avocado SaaS Starter.",
   alternates: {
     canonical: "/profile",
   },
@@ -24,7 +24,7 @@ export const metadata: Metadata = {
 
 function roleLabel(role: OrganizationUserRole | null): string {
   if (role === "owner") {
-    return "Owner";
+    return "Proprietario";
   }
 
   if (role === "admin") {
@@ -138,7 +138,7 @@ export default async function ProfilePage() {
             </div>
 
             <div className="space-y-1">
-              <p className="text-muted-foreground text-xs">Workspace</p>
+              <p className="text-muted-foreground text-xs">ID da empresa</p>
               <code className="bg-muted/50 inline-flex w-full items-center gap-2 rounded-md border px-2 py-1 text-[0.625rem] font-medium">
                 <Building2Icon className="size-3" />
                 {tenantContext.organizationId}

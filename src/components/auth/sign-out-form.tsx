@@ -7,6 +7,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { signOut } from "@/lib/auth/client";
+import { localizeAuthErrorMessage } from "@/lib/auth/error-messages";
 
 export function SignOutForm() {
   const router = useRouter();
@@ -16,7 +17,7 @@ export function SignOutForm() {
     startTransition(async () => {
       const result = await signOut();
       if (result.error) {
-        toast.error(result.error.message ?? "Nao foi possivel encerrar a sessao.");
+        toast.error(localizeAuthErrorMessage(result.error.message ?? "Nao foi possivel encerrar a sessao."));
         return;
       }
 

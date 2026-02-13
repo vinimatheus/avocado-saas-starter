@@ -20,6 +20,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Logo } from "@/components/shared/logo";
 import { authClient } from "@/lib/auth/client";
+import { localizeAuthErrorMessage } from "@/lib/auth/error-messages";
 import { forgotPasswordSchema, type ForgotPasswordValues } from "@/lib/auth/schemas";
 import { stripFieldRef } from "@/lib/forms/rhf";
 import { getFirstValidationErrorMessage } from "@/lib/forms/validation-toast";
@@ -81,7 +82,9 @@ export function ForgotPasswordForm({
         });
 
         if (result.error) {
-          const message = result.error.message ?? "Nao foi possivel enviar o e-mail de redefinicao.";
+          const message = localizeAuthErrorMessage(
+            result.error.message ?? "Nao foi possivel enviar o e-mail de redefinicao.",
+          );
           setServerMessage(message);
           toast.error(message);
           return;

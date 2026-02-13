@@ -17,8 +17,8 @@ function getSingleSearchParam(value: string | string[] | undefined): string {
 }
 
 export const metadata: Metadata = {
-  title: "Onboarding da empresa",
-  description: "Conclua o onboarding da sua empresa para iniciar o uso do workspace.",
+  title: "Primeiros passos da empresa",
+  description: "Conclua a etapa inicial da sua empresa para iniciar o uso da area.",
   alternates: {
     canonical: "/onboarding/company",
   },

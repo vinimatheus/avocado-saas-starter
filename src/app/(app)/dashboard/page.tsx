@@ -17,7 +17,7 @@ import { getTenantContext } from "@/lib/organization/tenant-context";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
-  title: "Dashboard",
+  title: "Painel",
   description: "Painel interno para acompanhar usuarios, equipe, produtos e sinais operacionais.",
   alternates: {
     canonical: "/dashboard",
@@ -38,7 +38,7 @@ export default async function DashboardPage() {
   return (
     <AppPageContainer className="gap-6">
       <section className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Dashboard</h1>
+        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Painel</h1>
         <p className="text-muted-foreground text-sm sm:text-base">
           Acompanhe tendencia mensal de usuarios, equipe e produtos em um unico painel.
         </p>
@@ -54,7 +54,7 @@ export default async function DashboardPage() {
                 avocado no controle
               </p>
               <h2 className="text-xl font-semibold tracking-tight">
-                Seu dashboard com visao clara para decidir mais rapido
+                Seu painel com visao clara para decidir mais rapido
               </h2>
               <p className="text-muted-foreground text-sm">
                 Acompanhe usuarios, time e produtos em um unico lugar e mantenha sua operacao

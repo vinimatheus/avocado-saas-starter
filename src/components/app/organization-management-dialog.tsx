@@ -92,7 +92,7 @@ function normalizeRoleLabel(role: string): string {
     .filter(Boolean)
 
   if (roleList.includes("owner")) {
-    return "Owner"
+    return "Proprietario"
   }
 
   if (roleList.includes("admin")) {
@@ -250,7 +250,7 @@ export function OrganizationManagementDialog({
           }
 
           const rank = (role: string) => {
-            if (role === "Owner") {
+            if (role === "Proprietario") {
               return 0
             }
 
@@ -389,7 +389,7 @@ export function OrganizationManagementDialog({
       <DialogContent className="overflow-hidden p-0 sm:max-h-[calc(100vh-2rem)] sm:max-w-[calc(100vw-2rem)] md:h-[72vh] md:max-h-[72vh] md:min-h-0 md:w-[920px] md:max-w-[920px]">
         <DialogTitle className="sr-only">Gerenciar organizacao</DialogTitle>
         <DialogDescription className="sr-only">
-          Configure dados da organizacao, convites, membros e ownership da organizacao ativa.
+          Configure dados da organizacao, convites, membros e propriedade da organizacao ativa.
         </DialogDescription>
 
         <SidebarProvider
@@ -448,7 +448,7 @@ export function OrganizationManagementDialog({
                 <p className="text-sm font-medium">{organizationName}</p>
                 <p className="text-muted-foreground text-xs">
                   {isOwner
-                    ? "Owner: gerencie organizacao, convites, membros e transferencia."
+                    ? "Proprietario: gerencie organizacao, convites, membros e transferencia."
                     : "Administrador: apenas convites de membros."}
                 </p>
               </div>
@@ -498,7 +498,7 @@ export function OrganizationManagementDialog({
                     </form>
                   ) : (
                     <div className="text-muted-foreground rounded-lg border p-3 text-xs">
-                      Apenas o owner pode alterar nome e slug da organizacao.
+                      Apenas o proprietario pode alterar nome e slug da organizacao.
                     </div>
                   )}
 
@@ -602,7 +602,7 @@ export function OrganizationManagementDialog({
                       </span>
                       {member.role === "owner" ? (
                         <span className="text-muted-foreground shrink-0 text-[11px]">
-                          Transferencia para alterar owner
+                          Transfira a propriedade para alterar o proprietario
                         </span>
                       ) : (
                         <div className="flex shrink-0 items-center gap-2">
@@ -645,11 +645,11 @@ export function OrganizationManagementDialog({
               {selectedSection === "ownership" ? (
                 <div className="space-y-3 rounded-lg border p-3">
                   <p className="text-xs font-medium">Transferencia de organizacao</p>
-                  <p className="text-muted-foreground text-xs">Selecione o novo owner da empresa.</p>
+                  <p className="text-muted-foreground text-xs">Selecione o novo proprietario da empresa.</p>
 
                   {transferCandidates.length === 0 ? (
                     <p className="text-muted-foreground text-xs">
-                      Convide ao menos mais um membro para transferir ownership.
+                      Convide ao menos mais um membro para transferir propriedade.
                     </p>
                   ) : (
                     <div className="flex flex-col gap-2 sm:flex-row">
@@ -674,7 +674,7 @@ export function OrganizationManagementDialog({
                         disabled={isTransferPending || !transferTargetMemberId}
                       >
                         <ShieldCheckIcon data-icon="inline-start" />
-                        {isTransferPending ? "Transferindo..." : "Transferir ownership"}
+                        {isTransferPending ? "Transferindo..." : "Transferir propriedade"}
                       </Button>
                     </div>
                   )}

@@ -49,6 +49,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { authClient } from "@/lib/auth/client";
+import { localizeAuthErrorMessage } from "@/lib/auth/error-messages";
 import {
   profileChangeEmailSchema,
   profileChangePasswordSchema,
@@ -253,7 +254,7 @@ export function ProfileForm({
             if (result.error) {
               setChangePasswordState({
                 status: "error",
-                message: result.error.message ?? "Falha ao alterar senha.",
+                message: localizeAuthErrorMessage(result.error.message ?? "Falha ao alterar senha."),
               });
               return;
             }
@@ -280,8 +281,8 @@ export function ProfileForm({
   const onSetPasswordSubmit = setPasswordForm.handleSubmit(
     (values) => {
       const payload = new FormData();
-      payload.set("newPassword", values.newPassword.trim());
-      payload.set("confirmNewPassword", values.confirmNewPassword.trim());
+      payload.set("newPassword", values.newPassword);
+      payload.set("confirmNewPassword", values.confirmNewPassword);
 
       startChangePasswordTransition(() => {
         setPasswordAction(payload);
@@ -308,7 +309,9 @@ export function ProfileForm({
         })
         .then((result) => {
           if (result.error) {
-            toast.error(result.error.message ?? "Nao foi possivel conectar com o Google.");
+            toast.error(
+              localizeAuthErrorMessage(result.error.message ?? "Nao foi possivel conectar com o Google."),
+            );
             return;
           }
 
@@ -408,8 +411,8 @@ export function ProfileForm({
       return;
     }
 
-    const password = enablePassword.trim();
-    if (!password) {
+    const password = enablePassword;
+    if (!password.trim()) {
       toast.error("Informe sua senha atual para ativar o 2FA.");
       return;
     }
@@ -420,7 +423,9 @@ export function ProfileForm({
       });
 
       if (result.error) {
-        toast.error(result.error.message ?? "Nao foi possivel iniciar a ativacao do 2FA.");
+        toast.error(
+          localizeAuthErrorMessage(result.error.message ?? "Nao foi possivel iniciar a ativacao do 2FA."),
+        );
         return;
       }
 
@@ -452,7 +457,7 @@ export function ProfileForm({
       });
 
       if (result.error) {
-        toast.error(result.error.message ?? "Nao foi possivel confirmar o 2FA.");
+        toast.error(localizeAuthErrorMessage(result.error.message ?? "Nao foi possivel confirmar o 2FA."));
         return;
       }
 
@@ -467,8 +472,8 @@ export function ProfileForm({
   };
 
   const regenerateBackupCodes = () => {
-    const password = disablePassword.trim();
-    if (!password) {
+    const password = disablePassword;
+    if (!password.trim()) {
       toast.error("Informe sua senha atual para gerar novos codigos.");
       return;
     }
@@ -479,7 +484,11 @@ export function ProfileForm({
       });
 
       if (result.error) {
-        toast.error(result.error.message ?? "Nao foi possivel gerar novos codigos de backup.");
+        toast.error(
+          localizeAuthErrorMessage(
+            result.error.message ?? "Nao foi possivel gerar novos codigos de backup.",
+          ),
+        );
         return;
       }
 
@@ -494,8 +503,8 @@ export function ProfileForm({
   };
 
   const disableTwoFactor = () => {
-    const password = disablePassword.trim();
-    if (!password) {
+    const password = disablePassword;
+    if (!password.trim()) {
       toast.error("Informe sua senha atual para desativar o 2FA.");
       return;
     }
@@ -506,7 +515,7 @@ export function ProfileForm({
       });
 
       if (result.error) {
-        toast.error(result.error.message ?? "Nao foi possivel desativar o 2FA.");
+        toast.error(localizeAuthErrorMessage(result.error.message ?? "Nao foi possivel desativar o 2FA."));
         return;
       }
 
@@ -693,7 +702,7 @@ export function ProfileForm({
             <div className="space-y-1">
               <p className="text-sm font-medium">Login social</p>
               <p className="text-muted-foreground text-xs">
-                Conecte sua conta Google para entrar com email/senha ou Google.
+                Conecte sua conta Google para entrar com e-mail/senha ou Google.
               </p>
             </div>
 
@@ -732,7 +741,7 @@ export function ProfileForm({
               <p className="text-muted-foreground text-xs">
                 {hasCredentialAccount
                   ? "Troque a senha periodicamente para reduzir risco de acesso indevido."
-                  : "Crie uma senha para permitir login por email/senha."}
+                  : "Crie uma senha para permitir login por e-mail/senha."}
               </p>
             </div>
 
@@ -1013,7 +1022,7 @@ export function ProfileForm({
                       onClick={regenerateBackupCodes}
                       disabled={isTwoFactorPending}
                     >
-                      {isTwoFactorPending ? "Gerando..." : "Gerar codigos backup"}
+                      {isTwoFactorPending ? "Gerando..." : "Gerar codigos de backup"}
                     </Button>
                     <Button
                       type="button"

@@ -34,14 +34,14 @@ function resolveCallbackPath(value: string): string {
 export const metadata: Metadata = {
   title: "Criar conta",
   description:
-    "Crie sua conta e inicie seu workspace no avocado SaaS Starter com autenticacao, billing e multi-tenant prontos.",
+    "Crie sua conta e inicie sua area no avocado SaaS Starter com autenticacao, cobranca e multi-tenant prontos.",
   alternates: {
     canonical: "/sign-up",
   },
   openGraph: {
     title: "Criar conta no avocado SaaS Starter",
     description:
-      "Comece seu SaaS mais rapido com onboarding, autenticacao e estrutura multi-tenant ja implementados.",
+      "Comece seu SaaS mais rapido com etapa inicial, autenticacao e estrutura multi-tenant ja implementados.",
     url: "/sign-up",
     type: "website",
   },
@@ -49,7 +49,7 @@ export const metadata: Metadata = {
     card: "summary",
     title: "Criar conta no avocado SaaS Starter",
     description:
-      "Comece seu SaaS mais rapido com onboarding, autenticacao e estrutura multi-tenant ja implementados.",
+      "Comece seu SaaS mais rapido com etapa inicial, autenticacao e estrutura multi-tenant ja implementados.",
   },
 };
 

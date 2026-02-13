@@ -14,11 +14,11 @@ import {
 } from "@/components/ui/breadcrumb";
 
 const SEGMENT_LABELS: Record<string, string> = {
-  dashboard: "Dashboard",
+  dashboard: "Painel",
   produtos: "Produtos",
-  billing: "Billing",
-  profile: "Profile",
-  onboarding: "Onboarding",
+  billing: "Cobranca",
+  profile: "Perfil",
+  onboarding: "Primeiros passos",
   company: "Empresa",
   sign: "Acesso",
 };

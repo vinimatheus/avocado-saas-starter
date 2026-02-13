@@ -36,7 +36,7 @@ export function BillingProfileDialog({
         <DialogHeader>
           <DialogTitle>Dados de cobranca</DialogTitle>
           <DialogDescription>
-            Atualize os dados usados para checkout e emissao de fatura.
+            Atualize os dados usados para pagamento e emissao de fatura.
           </DialogDescription>
         </DialogHeader>
         <div className="px-6 pb-6">

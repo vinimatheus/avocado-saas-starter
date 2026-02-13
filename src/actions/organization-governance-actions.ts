@@ -20,7 +20,7 @@ const ORGANIZATION_GOVERNANCE_PATHS = [
 ] as const;
 
 const transferOwnershipSchema = z.object({
-  targetMemberId: z.string().trim().min(1, "Selecione o novo owner da organizacao."),
+  targetMemberId: z.string().trim().min(1, "Selecione o novo proprietario da organizacao."),
 });
 
 const updateOrganizationSchema = z.object({
@@ -191,7 +191,7 @@ export async function updateOrganizationDetailsAction(
   try {
     const context = await getGovernanceContext();
     if (!context.currentIsOwner) {
-      return errorState("Somente o owner pode atualizar os dados da organizacao.");
+      return errorState("Somente o proprietario pode atualizar os dados da organizacao.");
     }
 
     const parsed = updateOrganizationSchema.safeParse({
@@ -227,7 +227,7 @@ export async function transferOrganizationOwnershipAction(
   try {
     const context = await getGovernanceContext();
     if (!context.canManageOwnership) {
-      return errorState("Somente o owner atual pode transferir ownership.");
+      return errorState("Somente o proprietario atual pode transferir propriedade.");
     }
 
     const parsed = transferOwnershipSchema.safeParse({
@@ -238,7 +238,7 @@ export async function transferOrganizationOwnershipAction(
     }
 
     if (parsed.data.targetMemberId === context.currentMember.id) {
-      return errorState("Selecione outro membro para transferir ownership.");
+      return errorState("Selecione outro membro para transferir propriedade.");
     }
 
     const targetMember = context.members.find((member) => member.id === parsed.data.targetMemberId);
@@ -269,9 +269,9 @@ export async function transferOrganizationOwnershipAction(
     const targetLabel =
       targetMember.user?.name?.trim() || targetMember.user?.email || "membro selecionado";
     revalidateOrganizationGovernancePaths();
-    return successState(`Ownership transferido para ${targetLabel}.`);
+    return successState(`Propriedade transferida para ${targetLabel}.`);
   } catch (error) {
-    return errorState(parseActionError(error, "Falha ao transferir ownership."));
+    return errorState(parseActionError(error, "Falha ao transferir propriedade."));
   }
 }
 
@@ -296,7 +296,7 @@ export async function leaveOrganizationSafelyAction(
       const ownerCount = context.members.filter((member) => hasOrganizationRole(member.role, "owner")).length;
       if (ownerCount <= 1) {
         return errorState(
-          "Transfira ownership para outro membro antes de sair da organizacao.",
+          "Transfira a propriedade para outro membro antes de sair da organizacao.",
         );
       }
     }
@@ -334,7 +334,7 @@ export async function deleteOrganizationSafelyAction(
     }
 
     if (!context.canManageOwnership) {
-      return errorState("Somente o owner atual pode excluir a organizacao.");
+      return errorState("Somente o proprietario atual pode excluir a organizacao.");
     }
 
     if (!context.currentIsOwner) {

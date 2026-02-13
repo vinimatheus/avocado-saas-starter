@@ -21,6 +21,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Logo } from "@/components/shared/logo";
 import { authClient } from "@/lib/auth/client";
+import { localizeAuthErrorMessage } from "@/lib/auth/error-messages";
 import { buildOrganizationSlug } from "@/lib/organization/helpers";
 import { stripFieldRef } from "@/lib/forms/rhf";
 import { getFirstValidationErrorMessage } from "@/lib/forms/validation-toast";
@@ -75,7 +76,9 @@ export function CompanyOnboardingForm({
         });
 
         if (organizationResult.error) {
-          const message = organizationResult.error.message ?? "Nao foi possivel criar a empresa.";
+          const message = localizeAuthErrorMessage(
+            organizationResult.error.message ?? "Nao foi possivel criar a empresa.",
+          );
           setServerMessage(message);
           toast.error(message);
           return;
@@ -83,7 +86,7 @@ export function CompanyOnboardingForm({
 
         toast.success(
           keepCurrentActiveOrganization
-            ? "Empresa criada. Use o seletor da sidebar para trocar de empresa."
+            ? "Empresa criada. Use o seletor do menu lateral para trocar de empresa."
             : "Empresa vinculada com sucesso.",
         );
         router.replace(redirectPath);

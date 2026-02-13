@@ -53,6 +53,10 @@ function getFormValue(formData: FormData, key: string): string {
   return String(formData.get(key) ?? "").trim();
 }
 
+function getRawFormValue(formData: FormData, key: string): string {
+  return String(formData.get(key) ?? "");
+}
+
 function revalidateProfilePaths() {
   for (const path of PROFILE_PATHS) {
     revalidatePath(path);
@@ -209,9 +213,9 @@ export async function changeProfilePasswordAction(
     }
 
     const parsed = profileChangePasswordSchema.safeParse({
-      currentPassword: getFormValue(formData, "currentPassword"),
-      newPassword: getFormValue(formData, "newPassword"),
-      confirmNewPassword: getFormValue(formData, "confirmNewPassword"),
+      currentPassword: getRawFormValue(formData, "currentPassword"),
+      newPassword: getRawFormValue(formData, "newPassword"),
+      confirmNewPassword: getRawFormValue(formData, "confirmNewPassword"),
     });
 
     if (!parsed.success) {
@@ -244,8 +248,8 @@ export async function setProfilePasswordAction(
     }
 
     const parsed = profileSetPasswordSchema.safeParse({
-      newPassword: getFormValue(formData, "newPassword"),
-      confirmNewPassword: getFormValue(formData, "confirmNewPassword"),
+      newPassword: getRawFormValue(formData, "newPassword"),
+      confirmNewPassword: getRawFormValue(formData, "confirmNewPassword"),
     });
 
     if (!parsed.success) {

@@ -9,11 +9,11 @@ import { getTenantContext } from "@/lib/organization/tenant-context";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: {
-    default: "Workspace",
-    template: "%s | Workspace | avocado SaaS Starter",
+    default: "Area interna",
+    template: "%s | Area interna | avocado SaaS Starter",
   },
   description:
-    "Area interna do SaaS para operacao do produto com dashboard, equipe, faturamento, perfil e catalogo.",
+    "Area interna do SaaS para operacao do produto com painel, equipe, faturamento, perfil e catalogo.",
   robots: {
     index: false,
     follow: false,

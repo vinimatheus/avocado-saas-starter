@@ -137,7 +137,7 @@ export async function inviteOrganizationUserAction(
     }
 
     if (parsed.data.role === "admin" && !isOrganizationOwnerRole(context.role)) {
-      return errorState("Somente o owner pode convidar novos administradores.");
+      return errorState("Somente o proprietario pode convidar novos administradores.");
     }
 
     const normalizedEmail = parsed.data.email.toLowerCase();
@@ -174,7 +174,7 @@ export async function resendOrganizationInvitationAction(
     }
 
     if (parsed.data.role === "admin" && !isOrganizationOwnerRole(context.role)) {
-      return errorState("Somente o owner pode convidar novos administradores.");
+      return errorState("Somente o proprietario pode convidar novos administradores.");
     }
 
     const normalizedEmail = parsed.data.email.toLowerCase();
@@ -239,7 +239,7 @@ export async function updateOrganizationMemberRoleAction(
     }
 
     if (parsed.data.role === "admin" && !isOrganizationOwnerRole(context.role)) {
-      return errorState("Somente o owner pode promover membros para administrador.");
+      return errorState("Somente o proprietario pode promover membros para administrador.");
     }
 
     const membersResult = await auth.api.listMembers({
@@ -256,7 +256,7 @@ export async function updateOrganizationMemberRoleAction(
     }
 
     if (hasOrganizationRole(targetMember.role, "owner")) {
-      return errorState("Use transferencia de ownership para alterar o owner.");
+      return errorState("Use transferencia de propriedade para alterar o proprietario.");
     }
 
     await auth.api.updateMemberRole({
@@ -307,7 +307,7 @@ export async function removeOrganizationMemberAction(
     }
 
     if (hasOrganizationRole(targetMember.role, "owner")) {
-      return errorState("Owner nao pode ser removido por esta operacao.");
+      return errorState("Proprietario nao pode ser removido por esta operacao.");
     }
 
     await auth.api.removeMember({

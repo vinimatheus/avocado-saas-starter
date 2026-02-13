@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { SidebarMenuButton } from "@/components/ui/sidebar";
 import { signOut } from "@/lib/auth/client";
+import { localizeAuthErrorMessage } from "@/lib/auth/error-messages";
 import type { OrganizationUserRole } from "@/lib/organization/helpers";
 
 type AppUserMenuProps = {
@@ -25,7 +26,7 @@ type AppUserMenuProps = {
 
 function roleLabel(role: OrganizationUserRole): string {
   if (role === "owner") {
-    return "Owner";
+    return "Proprietario";
   }
 
   return role === "admin" ? "Administrador" : "Usuario";
@@ -65,7 +66,7 @@ export function AppUserMenu({ role, userName = null, userImage = null }: AppUser
     startTransition(async () => {
       const result = await signOut();
       if (result.error) {
-        toast.error(result.error.message ?? "Nao foi possivel encerrar a sessao.");
+        toast.error(localizeAuthErrorMessage(result.error.message ?? "Nao foi possivel encerrar a sessao."));
         return;
       }
 

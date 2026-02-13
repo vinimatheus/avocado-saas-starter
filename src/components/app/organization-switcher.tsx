@@ -42,6 +42,7 @@ import {
   isOrganizationAdminRole,
   type OrganizationUserRole,
 } from "@/lib/organization/helpers";
+import { localizeAuthErrorMessage } from "@/lib/auth/error-messages";
 
 type OrganizationSwitcherItem = {
   id: string;
@@ -137,7 +138,7 @@ export function OrganizationSwitcher({
     organizations.find((organization) => organization.id === resolvedActiveOrganizationId)?.name ??
     activeOrganizationQuery.data?.name ??
     fallbackOrganizationName ??
-    "Workspace";
+    "Espaco de trabalho";
   const activeOrganizationSlug =
     organizations.find((organization) => organization.id === resolvedActiveOrganizationId)?.slug ??
     activeOrganizationQuery.data?.slug ??
@@ -194,7 +195,7 @@ export function OrganizationSwitcher({
       });
 
       if (result.error) {
-        toast.error(result.error.message ?? "Nao foi possivel trocar a empresa ativa.");
+        toast.error(localizeAuthErrorMessage(result.error.message ?? "Nao foi possivel trocar a empresa ativa."));
         return;
       }
 
@@ -316,8 +317,8 @@ export function OrganizationSwitcher({
           <AlertDialogHeader>
             <AlertDialogTitle>Sair da organizacao</AlertDialogTitle>
             <AlertDialogDescription>
-              Voce sera removido de <strong>{activeOrganizationName}</strong>. Se for o unico owner,
-              sera necessario transferir ownership antes de sair.
+              Voce sera removido de <strong>{activeOrganizationName}</strong>. Se for o unico
+              proprietario, sera necessario transferir a propriedade antes de sair.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

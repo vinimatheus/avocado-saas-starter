@@ -151,25 +151,25 @@ export function OrganizationGovernancePanel({
           Governanca da empresa
         </CardTitle>
         <CardDescription>
-          Operacoes sensiveis de ownership e ciclo de vida da organizacao.
+          Operacoes sensiveis de propriedade e ciclo de vida da organizacao.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
         <section className="space-y-3 rounded-md border p-3">
           <div className="space-y-1">
-            <p className="text-xs font-semibold">Transferir ownership</p>
+            <p className="text-xs font-semibold">Transferir propriedade</p>
             <p className="text-muted-foreground text-xs">
-              Move o papel de owner para outro membro e reduz seu acesso de owner.
+              Move o papel de proprietario para outro membro e reduz seu acesso atual.
             </p>
           </div>
 
           {!canManageOwnership ? (
             <p className="text-muted-foreground text-xs">
-              Somente o owner atual pode transferir ownership.
+              Somente o proprietario atual pode transferir propriedade.
             </p>
           ) : transferCandidates.length === 0 ? (
             <p className="text-muted-foreground text-xs">
-              Convide ao menos mais um membro para transferir ownership.
+              Convide ao menos mais um membro para transferir propriedade.
             </p>
           ) : (
             <div className="flex flex-col gap-2 sm:flex-row">
@@ -194,7 +194,7 @@ export function OrganizationGovernancePanel({
                 disabled={isTransferPending || !resolvedTransferTargetMemberId}
               >
                 <CrownIcon data-icon="inline-start" />
-                {isTransferPending ? "Transferindo..." : "Transferir ownership"}
+                {isTransferPending ? "Transferindo..." : "Transferir propriedade"}
               </Button>
             </div>
           )}
@@ -233,7 +233,7 @@ export function OrganizationGovernancePanel({
 
           {!canLeaveOrganization ? (
             <p className="text-destructive text-xs">
-              Voce e o unico owner. Transfira ownership antes de sair.
+              Voce e o unico proprietario. Transfira a propriedade antes de sair.
             </p>
           ) : null}
         </section>
@@ -271,7 +271,7 @@ export function OrganizationGovernancePanel({
 
           {!canManageOwnership ? (
             <p className="text-destructive text-xs">
-              Apenas o owner atual pode excluir a organizacao.
+              Apenas o proprietario atual pode excluir a organizacao.
             </p>
           ) : null}
         </section>

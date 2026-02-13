@@ -36,7 +36,7 @@ export const FEATURE_LABELS: Record<PlanFeatureKey, string> = {
 export const BILLING_PLANS: Record<BillingPlanCode, PlanDefinition> = {
   FREE: {
     code: "FREE",
-    name: "Free",
+    name: "Gratuito",
     description: "Ideal para uso individual e validação inicial.",
     monthlyPriceCents: 0,
     limits: {

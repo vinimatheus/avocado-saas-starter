@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 const siteOrigin = resolveSiteOrigin();
 const homeTitle = "Next.js SaaS Starter pronto para producao";
 const homeDescription =
-  "Lance seu SaaS mais rapido com starter em Next.js com autenticacao, multi-tenant, billing e dashboard prontos.";
+  "Lance seu SaaS mais rapido com starter em Next.js com autenticacao, multi-tenant, cobranca e painel prontos.";
 const homeSocialImage = `${siteOrigin}/img/social-card.png`;
 
 const homeStructuredData = {
@@ -46,7 +46,7 @@ const homeStructuredData = {
           name: "Esse starter ja exige verificacao de e-mail no login?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "Sim. O fluxo bloqueia login sem verificacao e permite reenviar o link na tela de sign-in.",
+            text: "Sim. O fluxo bloqueia login sem verificacao e permite reenviar o link na tela de login.",
           },
         },
         {
@@ -54,15 +54,15 @@ const homeStructuredData = {
           name: "Como funciona o multi-tenant por organizacao?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "Cada usuario opera em uma organizacao ativa com switcher, convites e papeis de acesso controlados no backend.",
+            text: "Cada usuario opera em uma organizacao ativa com alternador, convites e papeis de acesso controlados no servidor.",
           },
         },
         {
           "@type": "Question",
-          name: "Billing e webhook ja estao prontos?",
+          name: "Cobranca e webhook ja estao prontos?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "Sim. O modulo de billing contempla planos, trial, upgrade e webhook AbacatePay com assinatura HMAC.",
+            text: "Sim. O modulo de cobranca contempla planos, periodo de teste, upgrade e webhook AbacatePay com assinatura HMAC.",
           },
         },
       ],
@@ -76,7 +76,7 @@ export const metadata: Metadata = {
   keywords: [
     "nextjs saas starter",
     "next.js saas boilerplate",
-    "saas starter com billing",
+    "saas starter com cobranca",
     "template saas multi-tenant",
     "better auth nextjs",
   ],

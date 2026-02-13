@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     default: "Autenticacao",
     template: "%s | avocado SaaS Starter",
   },
-  description: "Acesse sua conta e gerencie seu workspace no avocado SaaS Starter.",
+  description: "Acesse sua conta e gerencie sua area no avocado SaaS Starter.",
   robots: {
     index: false,
     follow: false,
@@ -60,7 +60,7 @@ export default function AuthLayout({
               <span className="text-primary italic">com clareza absoluta.</span>
             </h1>
             <p className="text-muted-foreground mt-6 max-w-md text-lg leading-relaxed font-medium">
-              Um workspace premium pensado para quem busca eficiência sem abrir mão do design.
+              Uma area premium pensada para quem busca eficiência sem abrir mão do design.
               Faturamento, organização e gestão em um só lugar.
             </p>
 

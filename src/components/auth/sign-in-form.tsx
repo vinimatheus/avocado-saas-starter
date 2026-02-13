@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/shared/logo";
 import { signInSchema, type SignInValues } from "@/lib/auth/schemas";
+import { isEmailNotVerifiedErrorMessage, localizeAuthErrorMessage } from "@/lib/auth/error-messages";
 import { authClient, signIn } from "@/lib/auth/client";
 import { stripFieldRef } from "@/lib/forms/rhf";
 import { getFirstValidationErrorMessage } from "@/lib/forms/validation-toast";
@@ -108,11 +109,6 @@ function buildAbsoluteCallbackURL(callbackPath: string): string {
   return new URL(callbackPath, window.location.origin).toString();
 }
 
-function isEmailNotVerifiedError(message: string): boolean {
-  const normalized = message.trim().toLowerCase();
-  return normalized.includes("email not verified") || normalized.includes("e-mail nao verificado");
-}
-
 function hasTwoFactorRedirect(data: unknown): data is { twoFactorRedirect: true } {
   if (typeof data !== "object" || data === null) {
     return false;
@@ -174,7 +170,9 @@ export function SignInForm({
     setIsResendPending(false);
 
     if (result.error) {
-      const message = result.error.message ?? "Nao foi possivel reenviar o e-mail de verificacao.";
+      const message = localizeAuthErrorMessage(
+        result.error.message ?? "Nao foi possivel reenviar o e-mail de verificacao.",
+      );
       setServerMessage(message);
       toast.error(message);
       return;
@@ -196,8 +194,9 @@ export function SignInForm({
         });
 
         if (result.error) {
-          const message = result.error.message ?? "Nao foi possivel autenticar.";
-          setRequiresEmailVerification(isEmailNotVerifiedError(message));
+          const rawMessage = result.error.message ?? "Nao foi possivel autenticar.";
+          const message = localizeAuthErrorMessage(rawMessage);
+          setRequiresEmailVerification(isEmailNotVerifiedErrorMessage(rawMessage));
           setRequiresTwoFactor(false);
           setServerMessage(message);
           toast.error(message);
@@ -241,9 +240,10 @@ export function SignInForm({
       });
 
       if (result.error) {
-        const message =
+        const message = localizeAuthErrorMessage(
           result.error.message ??
-          "Nao foi possivel iniciar login com Google. Verifique as credenciais.";
+            "Nao foi possivel iniciar login com Google. Verifique as credenciais.",
+        );
         setServerMessage(message);
         toast.error(message);
       }
@@ -282,7 +282,9 @@ export function SignInForm({
           });
 
       if (result.error) {
-        const message = result.error.message ?? "Nao foi possivel validar o codigo de seguranca.";
+        const message = localizeAuthErrorMessage(
+          result.error.message ?? "Nao foi possivel validar o codigo de seguranca.",
+        );
         setServerMessage(message);
         toast.error(message);
         return;
@@ -305,7 +307,7 @@ export function SignInForm({
           <LogInIcon className="size-4" />
           Entrar
         </CardTitle>
-        <CardDescription>Acesse seu workspace com e-mail e senha.</CardDescription>
+        <CardDescription>Acesse sua area com e-mail e senha.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {requiresTwoFactor ? (

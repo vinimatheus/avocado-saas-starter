@@ -8,7 +8,7 @@ import { getTenantContext } from "@/lib/organization/tenant-context";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Nova empresa",
-  description: "Crie uma nova organizacao para operar multiplos workspaces dentro do seu SaaS.",
+  description: "Crie uma nova organizacao para operar multiplas areas dentro do seu SaaS.",
   alternates: {
     canonical: "/empresa/nova",
   },

@@ -43,7 +43,7 @@ function parseErrorMessage(error: unknown): string {
 function roleLabel(role: string): string {
   const normalizedRole = normalizeOrganizationRole(role);
   if (normalizedRole === "owner") {
-    return "Owner";
+    return "Proprietario";
   }
 
   return normalizedRole === "admin" ? "Administrador" : "Usuario";

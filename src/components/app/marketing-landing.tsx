@@ -37,43 +37,48 @@ type ShowcaseCard = {
 
 const showcaseCards: ShowcaseCard[] = [
   {
-    title: "Auth pronto para producao",
+    title: "Autenticacao pronta para producao",
     description:
       "Login por e-mail/senha, verificacao de e-mail, Google OAuth, reset de senha e suporte a 2FA sem montar do zero.",
     label: "Better Auth + UX completa",
     metrics: [
-      { name: "Fluxo", value: "6 telas", hint: "sign-in ate reset" },
-      { name: "Seguranca", value: "2FA", hint: "TOTP + backup code" },
-      { name: "Onboarding", value: "1 passo", hint: "empresa no primeiro acesso" },
+      { name: "Fluxo", value: "6 telas", hint: "login ate redefinicao" },
+      { name: "Seguranca", value: "2FA", hint: "TOTP + codigo de backup" },
+      { name: "Primeiro acesso", value: "1 passo", hint: "empresa no primeiro acesso" },
     ],
-    highlights: ["verify email", "social login", "2FA", "form validation"],
-    flow: ["Cadastro", "Verificacao", "Login", "Onboarding"],
+    highlights: ["verificacao de e-mail", "login social", "2FA", "validacao de formulario"],
+    flow: ["Cadastro", "Verificacao", "Login", "Primeiro acesso"],
   },
   {
     title: "Multi-tenant com organizacoes",
     description:
-      "Contexto por organizacao, switcher na sidebar, convites de equipe e roles para controlar quem acessa cada modulo.",
-    label: "Tenant context centralizado",
+      "Contexto por organizacao, alternador na sidebar, convites de equipe e papeis para controlar quem acessa cada modulo.",
+    label: "Contexto de empresa centralizado",
     metrics: [
-      { name: "Roles", value: "owner/admin/member", hint: "acesso por permissao" },
+      { name: "Papeis", value: "proprietario/admin/membro", hint: "acesso por permissao" },
       { name: "Convites", value: "status real", hint: "pendente, ativo, expirado" },
-      { name: "Workspace", value: "dinamico", hint: "troca de org imediata" },
+      { name: "Espaco", value: "dinamico", hint: "troca de empresa imediata" },
     ],
-    highlights: ["organization switcher", "team invites", "role guard", "active org sync"],
-    flow: ["Criar org", "Convidar", "Aceitar convite", "Operar em equipe"],
+    highlights: [
+      "alternador de empresa",
+      "convites de equipe",
+      "controle de papeis",
+      "sincronizacao da empresa ativa",
+    ],
+    flow: ["Criar empresa", "Convidar", "Aceitar convite", "Operar em equipe"],
   },
   {
-    title: "Billing integrado com AbacatePay",
+    title: "Cobranca integrada com AbacatePay",
     description:
-      "Planos Free/Starter/Pro/Scale, trial, upgrade/downgrade, dunning, webhook com assinatura HMAC e idempotencia.",
+      "Planos Gratuito/Starter/Pro/Scale, periodo de teste, upgrade/downgrade, dunning, webhook com assinatura HMAC e idempotencia.",
     label: "Assinaturas + governanca",
     metrics: [
       { name: "Planos", value: "4 niveis", hint: "R$0, R$50, R$100, R$400" },
-      { name: "Webhook", value: "HMAC", hint: "secret + signature" },
-      { name: "Cobranca", value: "mensal/anual", hint: "checkout com redirect seguro" },
+      { name: "Webhook", value: "HMAC", hint: "segredo + assinatura" },
+      { name: "Cobranca", value: "mensal/anual", hint: "pagamento com redirecionamento seguro" },
     ],
-    highlights: ["trials", "grace period", "entitlements", "usage limits"],
-    flow: ["Escolher plano", "Checkout", "Webhook", "Entitlement atualizado"],
+    highlights: ["periodo de teste", "periodo de graca", "direitos por plano", "limites de uso"],
+    flow: ["Escolher plano", "Pagamento", "Webhook", "Permissao atualizada"],
   },
 ];
 
@@ -92,7 +97,7 @@ const bentoFeatures = [
   {
     title: "Seguranca de elite",
     description:
-      "Fluxo de autenticacao completo com verificacao de e-mail, suporte social login e protecao 2FA para contas sensiveis.",
+      "Fluxo de autenticacao completo com verificacao de e-mail, suporte a login social e protecao 2FA para contas sensiveis.",
     icon: LockIcon,
     bars: [36, 58, 44],
   },
@@ -104,16 +109,16 @@ const bentoFeatures = [
     bars: [40, 64, 52],
   },
   {
-    title: "Billing escalavel",
+    title: "Cobranca escalavel",
     description:
-      "Entitlements por plano, controle de limites, dunning e restricoes operacionais em caso de excedente ou atraso.",
+      "Permissoes por plano, controle de limites, dunning e restricoes operacionais em caso de excedente ou atraso.",
     icon: CreditCardIcon,
     bars: [48, 72, 66],
   },
   {
     title: "Base pronta para evoluir",
     description:
-      "Prisma + PostgreSQL, comandos de setup e arquitetura clara para adicionar novos modulos sem quebrar o core.",
+      "Prisma + PostgreSQL, comandos de configuracao e arquitetura clara para adicionar novos modulos sem quebrar a base.",
     icon: DatabaseIcon,
     bars: [34, 49, 61],
   },
@@ -121,25 +126,25 @@ const bentoFeatures = [
 
 const docsItems = [
   {
-    title: "Rotas de auth prontas",
+    title: "Rotas de autenticacao prontas",
     description:
       "`/sign-in`, `/sign-up`, `/forgot-password` e `/reset-password` com validacao, mensagens e estados de erro.",
     icon: KeyRoundIcon,
   },
   {
-    title: "Workspace com dashboard",
+    title: "Espaco com painel",
     description:
-      "`/dashboard`, `/billing`, `/profile` e `/produtos` com shell compartilhado e contexto da organizacao.",
+      "`/dashboard`, `/billing`, `/profile` e `/produtos` com layout compartilhado e contexto da organizacao.",
     icon: LayersIcon,
   },
   {
     title: "Webhook protegido",
     description:
-      "`POST /api/webhooks/abacatepay` valida secret, assinatura HMAC, idempotencia e limite de requisicoes por IP.",
+      "`POST /api/webhooks/abacatepay` valida segredo, assinatura HMAC, idempotencia e limite de requisicoes por IP.",
     icon: ShieldCheckIcon,
   },
   {
-    title: "Dev setup rapido",
+    title: "Configuracao rapida do ambiente",
     description:
       "Scripts para subir PostgreSQL no Docker, gerar Prisma Client e sincronizar schema em poucos comandos.",
     icon: CloudIcon,
@@ -148,9 +153,9 @@ const docsItems = [
 
 const starterFit = [
   {
-    title: "Founders",
+    title: "Fundadores",
     description:
-      "Lance um SaaS com autenticacao, billing e multi-tenant sem gastar semanas montando infraestrutura basica.",
+      "Lance um SaaS com autenticacao, cobranca e multi-tenant sem gastar semanas montando infraestrutura basica.",
   },
   {
     title: "Times de produto",
@@ -166,7 +171,7 @@ const starterFit = [
 
 const plans = [
   {
-    name: "Free",
+    name: "Gratuito",
     price: "R$ 0",
     subtitle: "mensal",
     description: "Ideal para validacao inicial e uso individual.",
@@ -186,7 +191,7 @@ const plans = [
     price: "R$ 100",
     subtitle: "mensal",
     description: "Escala com analytics e API para integrar operacao.",
-    features: ["Ate 10 organizacoes", "Ate 100 usuarios", "Analytics + API access"],
+    features: ["Ate 10 organizacoes", "Ate 100 usuarios", "Analytics + acesso a API"],
     highlight: true,
   },
   {
@@ -203,22 +208,22 @@ const faq = [
   {
     question: "Esse starter ja exige verificacao de e-mail no login?",
     answer:
-      "Sim. O fluxo ja bloqueia login sem verificacao e permite reenviar o link direto da tela de sign-in.",
+      "Sim. O fluxo ja bloqueia login sem verificacao e permite reenviar o link direto da tela de login.",
   },
   {
     question: "Como funciona o multi-tenant por organizacao?",
     answer:
-      "Cada usuario opera em uma organizacao ativa, com switcher, convites e papeis de acesso controlados no backend.",
+      "Cada usuario opera em uma organizacao ativa, com alternador, convites e papeis de acesso controlados no servidor.",
   },
   {
-    question: "Billing e webhook ja estao prontos?",
+    question: "Cobranca e webhook ja estao prontos?",
     answer:
-      "Sim. O modulo de billing contempla planos, trial, upgrade/downgrade e webhook AbacatePay com assinatura HMAC.",
+      "Sim. O modulo de cobranca contempla planos, periodo de teste, upgrade/downgrade e webhook AbacatePay com assinatura HMAC.",
   },
   {
     question: "Posso usar esse starter como base para um SaaS real?",
     answer:
-      "Sim. A estrutura foi feita para producao e pode ser expandida com novos modulos mantendo o core de auth, tenant e billing.",
+      "Sim. A estrutura foi feita para producao e pode ser expandida com novos modulos mantendo a base de autenticacao, tenant e cobranca.",
   },
 ];
 
@@ -419,7 +424,7 @@ export function MarketingLanding() {
               href="/sign-in"
               className="border-border bg-card text-foreground rounded-full border px-4 py-2 text-xs font-semibold transition hover:bg-primary/5 sm:text-sm"
             >
-              Log in
+              Entrar
             </Link>
             <Link
               href="/sign-up"
@@ -435,10 +440,10 @@ export function MarketingLanding() {
           <div className="mx-auto flex max-w-3xl flex-col items-center text-center animate-in fade-in slide-in-from-bottom-5 duration-700">
             <Badge icon={<BadgeCheckIcon className="size-3.5" />} text="avocado SaaS Starter" />
             <h1 className="mt-5 text-balance text-4xl font-black leading-[1.04] tracking-tight sm:text-5xl lg:text-7xl">
-              Next.js SaaS Starter pronto para sair do zero ao dashboard em horas
+              Next.js SaaS Starter pronto para sair do zero ao painel em horas
             </h1>
             <p className="text-muted-foreground mt-5 max-w-2xl text-balance text-sm font-medium leading-6 sm:text-lg sm:leading-8">
-              Base completa com Next.js, Better Auth, multi-tenant por organizacao, billing AbacatePay,
+              Base completa com Next.js, Better Auth, multi-tenant por organizacao e cobranca AbacatePay,
               Prisma e PostgreSQL para voce focar no produto e nao na infra.
             </p>
 
@@ -497,7 +502,7 @@ export function MarketingLanding() {
           <div className="mx-auto max-w-2xl text-center">
             <Badge icon={<BlocksIcon className="size-3.5" />} text="Stack de producao" />
             <h2 className="mt-4 text-2xl font-black tracking-tight sm:text-4xl">
-              Tecnologias que ja estao plugadas no starter
+              Tecnologias que ja estao conectadas no projeto base
             </h2>
             <p className="text-muted-foreground mt-4 text-sm leading-7 sm:text-base">
               Estrutura moderna para autenticar, faturar e escalar com previsibilidade desde o primeiro deploy.
@@ -631,9 +636,9 @@ export function MarketingLanding() {
 
         <section id="precos" className="border-b border-border py-10 sm:py-14">
           <div className="mx-auto max-w-2xl text-center">
-            <Badge icon={<CircleDollarSignIcon className="size-3.5" />} text="Pricing do projeto" />
+            <Badge icon={<CircleDollarSignIcon className="size-3.5" />} text="Precos do projeto" />
             <h2 className="mt-4 text-2xl font-black tracking-tight sm:text-4xl">
-              Planos alinhados ao modulo de billing
+              Planos alinhados ao modulo de cobranca
             </h2>
           </div>
 
@@ -706,8 +711,8 @@ export function MarketingLanding() {
               avocado SaaS Starter: base pronta, identidade consistente e foco no que importa
             </h2>
             <p className="text-muted-foreground mx-auto mt-4 max-w-2xl text-sm leading-7 sm:text-base">
-              Clone, configure variaveis, rode `db:setup` e comece a evoluir seu proprio produto com auth,
-              multi-tenant e billing funcionando de ponta a ponta.
+              Clone, configure variaveis, rode `db:setup` e comece a evoluir seu proprio produto com autenticacao,
+              multi-tenant e cobranca funcionando de ponta a ponta.
             </p>
 
             <div className="mt-8 flex flex-wrap items-center justify-center gap-3">

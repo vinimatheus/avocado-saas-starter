@@ -155,7 +155,7 @@ function resolveAppBaseUrl(request?: Request): string {
 
 function toRoleLabel(role: string): string {
   if (role === "owner") {
-    return "Owner";
+    return "Proprietario";
   }
 
   if (role === "admin") {

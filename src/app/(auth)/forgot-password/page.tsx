@@ -41,7 +41,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Recuperar senha da conta",
     description:
-      "Receba por e-mail um link seguro para redefinir sua senha e retornar ao seu workspace.",
+      "Receba por e-mail um link seguro para redefinir sua senha e retornar a sua area.",
     url: "/forgot-password",
     type: "website",
   },
@@ -49,7 +49,7 @@ export const metadata: Metadata = {
     card: "summary",
     title: "Recuperar senha da conta",
     description:
-      "Receba por e-mail um link seguro para redefinir sua senha e retornar ao seu workspace.",
+      "Receba por e-mail um link seguro para redefinir sua senha e retornar a sua area.",
   },
 };
 
