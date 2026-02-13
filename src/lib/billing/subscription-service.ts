@@ -1275,22 +1275,45 @@ async function syncInvoiceFromBilling(
     return;
   }
 
-  await prisma.billingInvoice.upsert({
+  const incomingStatus = mapBillingStatus(billing.status);
+  const existingInvoice = await prisma.billingInvoice.findUnique({
     where: {
       providerBillingId: billing.id,
     },
-    create: {
-      ownerUserId,
-      subscriptionId,
-      checkoutSessionId: checkout.id,
-      providerBillingId: billing.id,
-      status: mapBillingStatus(billing.status),
-      amountCents: checkout.amountCents,
-      billingUrl: billing.url,
+    select: {
+      id: true,
+      status: true,
     },
-    update: {
+  });
+
+  const shouldPreserveExistingFinalStatus =
+    existingInvoice &&
+    isCheckoutFinalStatus(existingInvoice.status) &&
+    !(existingInvoice.status === CheckoutStatus.PAID && incomingStatus === CheckoutStatus.CHARGEBACK);
+  const nextStatus = shouldPreserveExistingFinalStatus ? existingInvoice.status : incomingStatus;
+
+  if (!existingInvoice) {
+    await prisma.billingInvoice.create({
+      data: {
+        ownerUserId,
+        subscriptionId,
+        checkoutSessionId: checkout.id,
+        providerBillingId: billing.id,
+        status: nextStatus,
+        amountCents: checkout.amountCents,
+        billingUrl: billing.url,
+      },
+    });
+    return;
+  }
+
+  await prisma.billingInvoice.update({
+    where: {
+      id: existingInvoice.id,
+    },
+    data: {
       checkoutSessionId: checkout.id,
-      status: mapBillingStatus(billing.status),
+      status: nextStatus,
       billingUrl: billing.url,
     },
   });
@@ -1327,6 +1350,7 @@ export async function syncOwnerInvoicesFromAbacate(ownerUserId: string): Promise
 
 type CheckoutReconcileTarget = {
   id: string;
+  status: CheckoutStatus;
   ownerUserId: string;
   subscriptionId: string;
   targetPlanCode: BillingPlanCode;
@@ -1371,6 +1395,7 @@ export async function reconcileCheckoutFromAbacate(input: {
     },
     select: {
       id: true,
+      status: true,
       ownerUserId: true,
       subscriptionId: true,
       targetPlanCode: true,
@@ -1398,6 +1423,12 @@ export async function reconcileCheckoutFromAbacate(input: {
   }
 
   if (!outcome) {
+    // Para cobranca recorrente, o billing pode seguir como ACTIVE mesmo apos um pagamento.
+    // Nunca rebaixamos checkout finalizado para PENDING durante reconciliacao.
+    if (isCheckoutFinalStatus(checkout.status)) {
+      return false;
+    }
+
     await prisma.billingCheckoutSession.update({
       where: {
         id: checkout.id,
@@ -1652,6 +1683,35 @@ export async function getBillingPageData(
         },
       })
     : latestPendingCheckout;
+
+  if (selectedCheckout && selectedCheckout.status === CheckoutStatus.PENDING) {
+    const paidInvoice = await prisma.billingInvoice.findFirst({
+      where: {
+        checkoutSessionId: selectedCheckout.id,
+        status: CheckoutStatus.PAID,
+      },
+      select: {
+        paidAt: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    if (paidInvoice) {
+      const paidAt = paidInvoice.paidAt ?? selectedCheckout.createdAt;
+      await prisma.billingCheckoutSession.update({
+        where: {
+          id: selectedCheckout.id,
+        },
+        data: {
+          status: CheckoutStatus.PAID,
+          paidAt,
+        },
+      });
+      selectedCheckout.status = CheckoutStatus.PAID;
+    }
+  }
 
   if (
     selectedCheckout &&

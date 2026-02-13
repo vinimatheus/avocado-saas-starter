@@ -33,6 +33,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 type SearchParamsInput =
   | Record<string, string | string[] | undefined>
   | Promise<Record<string, string | string[] | undefined>>;
+const BILLING_TIME_ZONE = "America/Sao_Paulo";
 
 function getSingleSearchParam(value: string | string[] | undefined): string {
   if (Array.isArray(value)) {
@@ -56,6 +57,7 @@ function formatDate(value: Date | string | null): string {
   return new Intl.DateTimeFormat("pt-BR", {
     dateStyle: "short",
     timeStyle: "short",
+    timeZone: BILLING_TIME_ZONE,
   }).format(date);
 }
 
@@ -107,6 +109,7 @@ function formatInvoiceAmount(amountCents: number, currency: string): string {
 function resolveInvoiceLink(input: {
   receiptUrl: string | null;
   providerTransactionId: string | null;
+  providerBillingId: string | null;
 }): { href: string; label: string } | null {
   const receiptUrl = input.receiptUrl?.trim() ?? "";
   if (receiptUrl && isTrustedAbacateCheckoutUrl(receiptUrl)) {
@@ -119,6 +122,19 @@ function resolveInvoiceLink(input: {
   const providerTransactionId = input.providerTransactionId?.trim() ?? "";
   if (providerTransactionId.startsWith("tran_")) {
     const inferredReceiptUrl = `https://app.abacatepay.com/receipt/${providerTransactionId}`;
+    if (!isTrustedAbacateCheckoutUrl(inferredReceiptUrl)) {
+      return null;
+    }
+
+    return {
+      href: inferredReceiptUrl,
+      label: "Ver comprovante",
+    };
+  }
+
+  const providerBillingId = input.providerBillingId?.trim() ?? "";
+  if (providerBillingId.startsWith("bill_")) {
+    const inferredReceiptUrl = `https://app.abacatepay.com/receipt/${providerBillingId}`;
     if (!isTrustedAbacateCheckoutUrl(inferredReceiptUrl)) {
       return null;
     }
@@ -455,7 +471,7 @@ export default async function BillingPage({
         <CardHeader>
           <CardTitle>Recibos de pagamento</CardTitle>
           <CardDescription>
-            Mostramos apenas comprovantes de transacao (links `receipt/tran_...`) para evitar novo checkout.
+            Abrimos apenas comprovantes em `receipt/...` (ex.: `tran_...` ou `bill_...`) para evitar novo checkout.
           </CardDescription>
           <CardAction>
             <form action={syncInvoicesAction}>
@@ -485,8 +501,13 @@ export default async function BillingPage({
                   const invoiceLink = resolveInvoiceLink({
                     receiptUrl: invoice.receiptUrl,
                     providerTransactionId: invoice.providerTransactionId,
+                    providerBillingId: invoice.providerBillingId,
                   });
-                  const reference = invoice.providerTransactionId ?? invoice.providerBillingId ?? invoice.id;
+                  const transactionReference =
+                    invoice.providerTransactionId && invoice.providerTransactionId.startsWith("tran_")
+                      ? invoice.providerTransactionId
+                      : null;
+                  const reference = transactionReference ?? invoice.providerBillingId ?? invoice.id;
 
                   return (
                     <TableRow key={invoice.id}>
