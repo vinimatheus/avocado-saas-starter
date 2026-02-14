@@ -174,7 +174,7 @@ export async function getDashboardInsights(organizationId: string): Promise<Dash
     productsInWindow = productsInWindowResult;
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2021") {
-      errors.push("Tabela de produtos ainda nao existe no banco. Execute: npm run prisma:push");
+      errors.push("Tabela de produtos ainda nao existe no banco. Execute: pnpm run prisma:push");
     } else {
       errors.push(toMessage(error, "Nao foi possivel carregar os indicadores de produtos."));
     }

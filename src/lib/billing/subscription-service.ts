@@ -67,6 +67,7 @@ type OwnerRestrictionState = {
 };
 
 export type OwnerEntitlements = {
+  organizationId: string;
   ownerUserId: string;
   subscription: OwnerSubscription;
   effectivePlanCode: BillingPlanCode;
@@ -110,7 +111,7 @@ function isStalePendingCheckout(createdAt: Date): boolean {
 }
 
 async function failStaleCheckout(input: {
-  ownerUserId: string;
+  organizationId: string;
   checkoutId: string;
   subscriptionId: string;
   targetPlanCode: BillingPlanCode;
@@ -119,7 +120,7 @@ async function failStaleCheckout(input: {
     prisma.billingCheckoutSession.updateMany({
       where: {
         id: input.checkoutId,
-        ownerUserId: input.ownerUserId,
+        organizationId: input.organizationId,
         status: CheckoutStatus.PENDING,
       },
       data: {
@@ -300,92 +301,42 @@ function buildOwnerRestrictionState(
   const effectivePlan = getPlanDefinition(effectivePlanCode);
   const usedSeats = usage.users + usage.pendingInvitations;
 
-  const exceededOrganizations =
-    effectivePlan.limits.maxOrganizations === null
-      ? 0
-      : Math.max(0, usage.organizations - effectivePlan.limits.maxOrganizations);
-
   const exceededUsers =
     effectivePlan.limits.maxUsers === null
       ? 0
       : Math.max(0, usedSeats - effectivePlan.limits.maxUsers);
 
   return {
-    isRestricted: exceededOrganizations > 0 || exceededUsers > 0,
-    exceededOrganizations,
+    isRestricted: exceededUsers > 0,
+    exceededOrganizations: 0,
     exceededUsers,
   };
 }
 
-async function listOwnedOrganizationIds(ownerUserId: string): Promise<string[]> {
-  const memberships = await prisma.member.findMany({
-    where: {
-      userId: ownerUserId,
-      role: {
-        contains: "owner",
-      },
-    },
-    select: {
-      organizationId: true,
-    },
-  });
-
-  return memberships.map((membership) => membership.organizationId);
-}
-
 async function getOwnerUsageSnapshot(
-  ownerUserId: string,
+  organizationId: string,
   metricKey: string = DEFAULT_USAGE_METRIC_KEY,
 ): Promise<OwnerUsageSnapshot> {
-  const organizationIds = await listOwnedOrganizationIds(ownerUserId);
-
-  if (organizationIds.length === 0) {
-    const monthlyUsageResult = await prisma.ownerMonthlyUsage.aggregate({
-      where: {
-        ownerUserId,
-        metricKey,
-        periodStart: startOfUtcMonth(),
-      },
-      _sum: {
-        value: true,
-      },
-    });
-
-    return {
-      organizations: 0,
-      users: 0,
-      pendingInvitations: 0,
-      projects: 0,
-      monthlyUsage: monthlyUsageResult._sum.value ?? 0,
-    };
-  }
-
   const [users, pendingInvitations, projects, monthlyUsageResult] = await Promise.all([
     prisma.member.count({
       where: {
-        organizationId: {
-          in: organizationIds,
-        },
+        organizationId,
       },
     }),
     prisma.invitation.count({
       where: {
-        organizationId: {
-          in: organizationIds,
-        },
+        organizationId,
         status: "pending",
       },
     }),
     prisma.product.count({
       where: {
-        organizationId: {
-          in: organizationIds,
-        },
+        organizationId,
       },
     }),
     prisma.ownerMonthlyUsage.aggregate({
       where: {
-        ownerUserId,
+        organizationId,
         metricKey,
         periodStart: startOfUtcMonth(),
       },
@@ -396,7 +347,7 @@ async function getOwnerUsageSnapshot(
   ]);
 
   return {
-    organizations: organizationIds.length,
+    organizations: 1,
     users,
     pendingInvitations,
     projects,
@@ -433,7 +384,7 @@ async function setSubscriptionAsExpiredIfNeeded(
   ) {
     return prisma.ownerSubscription.update({
       where: {
-        ownerUserId: subscription.ownerUserId,
+        organizationId: subscription.organizationId,
       },
       data: {
         status: SubscriptionStatus.FREE,
@@ -452,7 +403,7 @@ async function setSubscriptionAsExpiredIfNeeded(
     if (subscription.cancelAtPeriodEnd) {
       return prisma.ownerSubscription.update({
         where: {
-          ownerUserId: subscription.ownerUserId,
+          organizationId: subscription.organizationId,
         },
         data: {
           status: SubscriptionStatus.CANCELED,
@@ -467,7 +418,7 @@ async function setSubscriptionAsExpiredIfNeeded(
 
     return prisma.ownerSubscription.update({
       where: {
-        ownerUserId: subscription.ownerUserId,
+        organizationId: subscription.organizationId,
       },
       data: {
         status: SubscriptionStatus.PAST_DUE,
@@ -486,7 +437,7 @@ async function setSubscriptionAsExpiredIfNeeded(
   ) {
     return prisma.ownerSubscription.update({
       where: {
-        ownerUserId: subscription.ownerUserId,
+        organizationId: subscription.organizationId,
       },
       data: {
         status: SubscriptionStatus.EXPIRED,
@@ -538,25 +489,57 @@ export async function resolveOrganizationPrimaryOwnerUserId(
 }
 
 export async function ensureOwnerSubscription(
-  ownerUserId: string,
+  organizationId: string,
+  options?: {
+    ownerUserIdHint?: string | null;
+  },
 ): Promise<OwnerSubscription> {
+  const resolvedOwnerUserId = await resolveOrganizationPrimaryOwnerUserId(organizationId);
+  const hintedOwnerUserId = options?.ownerUserIdHint?.trim() ?? null;
+
+  // Note: `ensureOwnerSubscription` is used by org lifecycle hooks. During organization
+  // creation Better Auth calls `beforeAddMember` before the first member row exists,
+  // so resolving an owner via memberships can temporarily return null.
+  let ownerUserId = resolvedOwnerUserId ?? hintedOwnerUserId;
+
+  if (!ownerUserId) {
+    const existing = await prisma.ownerSubscription.findUnique({
+      where: {
+        organizationId,
+      },
+      select: {
+        ownerUserId: true,
+      },
+    });
+
+    ownerUserId = existing?.ownerUserId ?? null;
+  }
+
+  if (!ownerUserId) {
+    throw new Error("Organizacao sem proprietario para configurar assinatura.");
+  }
+
   const basicProfile = await getOwnerBasicProfile(ownerUserId);
 
   return prisma.ownerSubscription.upsert({
     where: {
-      ownerUserId,
+      organizationId,
     },
     create: {
+      organizationId,
       ownerUserId,
       status: SubscriptionStatus.FREE,
       planCode: BillingPlanCode.FREE,
       billingName: basicProfile.name,
     },
-    update: basicProfile.name
-      ? {
+    update: {
+      ownerUserId,
+      ...(basicProfile.name
+        ? {
           billingName: basicProfile.name,
         }
-      : {},
+        : {}),
+    },
   });
 }
 
@@ -597,22 +580,23 @@ function resolveEffectivePlanCode(subscription: OwnerSubscription): BillingPlanC
 }
 
 export async function getOwnerEntitlements(
-  ownerUserId: string,
+  organizationId: string,
   metricKey: string = DEFAULT_USAGE_METRIC_KEY,
 ): Promise<OwnerEntitlements> {
-  const subscription = await ensureOwnerSubscription(ownerUserId);
+  const subscription = await ensureOwnerSubscription(organizationId);
   const syncedSubscription = await setSubscriptionAsExpiredIfNeeded(subscription);
 
   const [effectivePlanCode, usage] = await Promise.all([
     Promise.resolve(resolveEffectivePlanCode(syncedSubscription)),
-    getOwnerUsageSnapshot(ownerUserId, metricKey),
+    getOwnerUsageSnapshot(organizationId, metricKey),
   ]);
 
   const dunning = buildOwnerDunningState(syncedSubscription);
   const restriction = buildOwnerRestrictionState(effectivePlanCode, usage);
 
   return {
-    ownerUserId,
+    organizationId,
+    ownerUserId: syncedSubscription.ownerUserId,
     subscription: syncedSubscription,
     effectivePlanCode,
     usage,
@@ -627,10 +611,6 @@ function buildLimitErrorMessage(limitLabel: string, currentValue: number, maxAll
 
 function buildRestrictionErrorMessage(restriction: OwnerRestrictionState): string {
   const exceeded: string[] = [];
-
-  if (restriction.exceededOrganizations > 0) {
-    exceeded.push(`${restriction.exceededOrganizations} organização(ões) acima do limite`);
-  }
 
   if (restriction.exceededUsers > 0) {
     exceeded.push(`${restriction.exceededUsers} usuário(s) acima do limite`);
@@ -649,30 +629,13 @@ function assertNotRestricted(entitlements: OwnerEntitlements): void {
 }
 
 export async function assertOwnerCanCreateOrganization(ownerUserId: string): Promise<void> {
-  const entitlements = await getOwnerEntitlements(ownerUserId);
-  const plan = getPlanDefinition(entitlements.effectivePlanCode);
-  const maxAllowed = plan.limits.maxOrganizations;
-
-  if (maxAllowed === null) {
-    return;
-  }
-
-  if (entitlements.usage.organizations >= maxAllowed) {
-    throw new Error(
-      buildLimitErrorMessage("organizações", entitlements.usage.organizations, maxAllowed),
-    );
-  }
+  void ownerUserId;
 }
 
 export async function assertOrganizationCanCreateInvitation(
   organizationId: string,
   email: string,
 ): Promise<void> {
-  const ownerUserId = await resolveOrganizationPrimaryOwnerUserId(organizationId);
-  if (!ownerUserId) {
-    return;
-  }
-
   const existingPendingInvitation = await prisma.invitation.findFirst({
     where: {
       organizationId,
@@ -688,7 +651,7 @@ export async function assertOrganizationCanCreateInvitation(
     return;
   }
 
-  const entitlements = await getOwnerEntitlements(ownerUserId);
+  const entitlements = await getOwnerEntitlements(organizationId);
   const plan = getPlanDefinition(entitlements.effectivePlanCode);
   const maxAllowed = plan.limits.maxUsers;
 
@@ -706,12 +669,7 @@ export async function assertOrganizationCanAddMember(
   organizationId: string,
   targetUserId?: string,
 ): Promise<void> {
-  const ownerUserId = await resolveOrganizationPrimaryOwnerUserId(organizationId);
-  if (!ownerUserId) {
-    return;
-  }
-
-  const entitlements = await getOwnerEntitlements(ownerUserId);
+  const entitlements = await getOwnerEntitlements(organizationId);
   const plan = getPlanDefinition(entitlements.effectivePlanCode);
   const maxAllowed = plan.limits.maxUsers;
 
@@ -759,12 +717,7 @@ export async function assertOrganizationCanAcceptInvitation(
   organizationId: string,
   invitationId: string,
 ): Promise<void> {
-  const ownerUserId = await resolveOrganizationPrimaryOwnerUserId(organizationId);
-  if (!ownerUserId) {
-    return;
-  }
-
-  const entitlements = await getOwnerEntitlements(ownerUserId);
+  const entitlements = await getOwnerEntitlements(organizationId);
   const plan = getPlanDefinition(entitlements.effectivePlanCode);
   const maxAllowed = plan.limits.maxUsers;
 
@@ -793,12 +746,7 @@ export async function assertOrganizationCanCreateProject(
   organizationId: string,
   increment: number = 1,
 ): Promise<void> {
-  const ownerUserId = await resolveOrganizationPrimaryOwnerUserId(organizationId);
-  if (!ownerUserId) {
-    return;
-  }
-
-  const entitlements = await getOwnerEntitlements(ownerUserId);
+  const entitlements = await getOwnerEntitlements(organizationId);
   assertNotRestricted(entitlements);
   const plan = getPlanDefinition(entitlements.effectivePlanCode);
   const maxAllowed = plan.limits.maxProjects;
@@ -819,12 +767,7 @@ export async function assertOrganizationCanConsumeMonthlyUsage(
   increment: number = 1,
   metricKey: string = DEFAULT_USAGE_METRIC_KEY,
 ): Promise<void> {
-  const ownerUserId = await resolveOrganizationPrimaryOwnerUserId(organizationId);
-  if (!ownerUserId) {
-    return;
-  }
-
-  const entitlements = await getOwnerEntitlements(ownerUserId, metricKey);
+  const entitlements = await getOwnerEntitlements(organizationId, metricKey);
   assertNotRestricted(entitlements);
   const plan = getPlanDefinition(entitlements.effectivePlanCode);
   const maxAllowed = plan.limits.maxMonthlyUsage;
@@ -845,10 +788,8 @@ export async function consumeOrganizationMonthlyUsage(input: {
   increment: number;
   metricKey?: string;
 }): Promise<void> {
-  const ownerUserId = await resolveOrganizationPrimaryOwnerUserId(input.organizationId);
-  if (!ownerUserId) {
-    return;
-  }
+  const subscription = await ensureOwnerSubscription(input.organizationId);
+  const ownerUserId = subscription.ownerUserId;
 
   const periodStart = startOfUtcMonth();
 
@@ -877,18 +818,18 @@ export async function consumeOrganizationMonthlyUsage(input: {
 }
 
 export async function updateOwnerBillingProfile(
-  ownerUserId: string,
+  organizationId: string,
   input: {
     billingName: string;
     billingCellphone: string;
     billingTaxId: string;
   },
 ): Promise<OwnerSubscription> {
-  await ensureOwnerSubscription(ownerUserId);
+  await ensureOwnerSubscription(organizationId);
 
   return prisma.ownerSubscription.update({
     where: {
-      ownerUserId,
+      organizationId,
     },
     data: {
       billingName: input.billingName.trim(),
@@ -899,14 +840,14 @@ export async function updateOwnerBillingProfile(
 }
 
 export async function startOwnerTrial(
-  ownerUserId: string,
+  organizationId: string,
   trialPlanCode: BillingPlanCode,
 ): Promise<OwnerSubscription> {
   if (!isPaidPlan(trialPlanCode)) {
     throw new Error("Trial disponivel apenas para planos pagos.");
   }
 
-  const subscription = await ensureOwnerSubscription(ownerUserId);
+  const subscription = await ensureOwnerSubscription(organizationId);
   const now = new Date();
 
   if (
@@ -923,7 +864,7 @@ export async function startOwnerTrial(
 
   return prisma.ownerSubscription.update({
     where: {
-      ownerUserId,
+      organizationId,
     },
     data: {
       status: SubscriptionStatus.TRIALING,
@@ -938,15 +879,15 @@ export async function startOwnerTrial(
 }
 
 export async function cancelOwnerSubscription(
-  ownerUserId: string,
+  organizationId: string,
   immediate: boolean,
 ): Promise<OwnerSubscription> {
-  const subscription = await ensureOwnerSubscription(ownerUserId);
+  const subscription = await ensureOwnerSubscription(organizationId);
 
   if (immediate || subscription.status === SubscriptionStatus.TRIALING) {
     return prisma.ownerSubscription.update({
       where: {
-        ownerUserId,
+        organizationId,
       },
       data: {
         status: SubscriptionStatus.CANCELED,
@@ -962,7 +903,7 @@ export async function cancelOwnerSubscription(
 
   return prisma.ownerSubscription.update({
     where: {
-      ownerUserId,
+      organizationId,
     },
     data: {
       cancelAtPeriodEnd: true,
@@ -971,8 +912,8 @@ export async function cancelOwnerSubscription(
   });
 }
 
-export async function reactivateOwnerSubscription(ownerUserId: string): Promise<OwnerSubscription> {
-  const subscription = await ensureOwnerSubscription(ownerUserId);
+export async function reactivateOwnerSubscription(organizationId: string): Promise<OwnerSubscription> {
+  const subscription = await ensureOwnerSubscription(organizationId);
 
   if (
     subscription.status === SubscriptionStatus.ACTIVE &&
@@ -981,7 +922,7 @@ export async function reactivateOwnerSubscription(ownerUserId: string): Promise<
   ) {
     return prisma.ownerSubscription.update({
       where: {
-        ownerUserId,
+        organizationId,
       },
       data: {
         cancelAtPeriodEnd: false,
@@ -997,7 +938,7 @@ export async function reactivateOwnerSubscription(ownerUserId: string): Promise<
   ) {
     return prisma.ownerSubscription.update({
       where: {
-        ownerUserId,
+        organizationId,
       },
       data: {
         cancelAtPeriodEnd: false,
@@ -1026,8 +967,8 @@ async function ensureAbacateCustomerId(subscription: OwnerSubscription): Promise
   // Reuse the provider customer when another owner already uses the same tax ID.
   const sharedCustomerId = await prisma.ownerSubscription.findFirst({
     where: {
-      ownerUserId: {
-        not: subscription.ownerUserId,
+      organizationId: {
+        not: subscription.organizationId,
       },
       billingTaxId: subscription.billingTaxId,
       abacateCustomerId: {
@@ -1056,7 +997,7 @@ async function ensureAbacateCustomerId(subscription: OwnerSubscription): Promise
   try {
     await prisma.ownerSubscription.update({
       where: {
-        ownerUserId: subscription.ownerUserId,
+        organizationId: subscription.organizationId,
       },
       data: {
         abacateCustomerId: customer.id,
@@ -1077,10 +1018,9 @@ async function ensureAbacateCustomerId(subscription: OwnerSubscription): Promise
 }
 
 export async function createPlanCheckoutSession(input: {
-  ownerUserId: string;
+  organizationId: string;
   targetPlanCode: BillingPlanCode;
   billingCycle?: PlanBillingCycle;
-  organizationId?: string | null;
   allowSamePlan?: boolean;
 }): Promise<{ checkoutUrl: string; checkoutId: string }> {
   if (!isPaidPlan(input.targetPlanCode)) {
@@ -1091,8 +1031,8 @@ export async function createPlanCheckoutSession(input: {
     throw new Error("ABACATEPAY_API_KEY não configurada para gerar checkout.");
   }
 
-  const subscription = await ensureOwnerSubscription(input.ownerUserId);
-  const currentEntitlements = await getOwnerEntitlements(input.ownerUserId);
+  const subscription = await ensureOwnerSubscription(input.organizationId);
+  const currentEntitlements = await getOwnerEntitlements(input.organizationId);
 
   if (!input.allowSamePlan && currentEntitlements.effectivePlanCode === input.targetPlanCode) {
     throw new Error("Este já é o plano ativo da conta.");
@@ -1113,14 +1053,15 @@ export async function createPlanCheckoutSession(input: {
   const externalId = `checkout_${randomUUID().replaceAll("-", "")}`;
   const checkout = await prisma.billingCheckoutSession.create({
     data: {
-      ownerUserId: input.ownerUserId,
+      ownerUserId: subscription.ownerUserId,
       subscriptionId: subscription.id,
-      organizationId: input.organizationId ?? null,
+      organizationId: input.organizationId,
       targetPlanCode: input.targetPlanCode,
       amountCents,
       metadata: {
         billingCycle,
         billingPeriodDays,
+        organizationId: input.organizationId,
       },
       providerExternalId: externalId,
       status: CheckoutStatus.PENDING,
@@ -1147,7 +1088,8 @@ export async function createPlanCheckoutSession(input: {
       customerId,
       externalId,
       metadata: {
-        ownerUserId: input.ownerUserId,
+        ownerUserId: subscription.ownerUserId,
+        organizationId: input.organizationId,
         checkoutId: checkout.id,
         targetPlanCode: input.targetPlanCode,
         billingCycle,
@@ -1172,7 +1114,7 @@ export async function createPlanCheckoutSession(input: {
       }),
       prisma.ownerSubscription.update({
         where: {
-          ownerUserId: input.ownerUserId,
+          organizationId: input.organizationId,
         },
         data: {
           pendingPlanCode: input.targetPlanCode,
@@ -1180,7 +1122,7 @@ export async function createPlanCheckoutSession(input: {
       }),
       prisma.billingInvoice.create({
         data: {
-          ownerUserId: input.ownerUserId,
+          ownerUserId: subscription.ownerUserId,
           subscriptionId: subscription.id,
           checkoutSessionId: checkout.id,
           providerBillingId: billing.id,
@@ -1209,12 +1151,12 @@ export async function createPlanCheckoutSession(input: {
   }
 }
 
-export async function applyFreeDowngrade(ownerUserId: string): Promise<OwnerSubscription> {
-  await ensureOwnerSubscription(ownerUserId);
+export async function applyFreeDowngrade(organizationId: string): Promise<OwnerSubscription> {
+  await ensureOwnerSubscription(organizationId);
 
   return prisma.ownerSubscription.update({
     where: {
-      ownerUserId,
+      organizationId,
     },
     data: {
       status: SubscriptionStatus.FREE,
@@ -1229,12 +1171,11 @@ export async function applyFreeDowngrade(ownerUserId: string): Promise<OwnerSubs
   });
 }
 
-export async function listOwnerInvoices(ownerUserId: string) {
-  const subscription = await ensureOwnerSubscription(ownerUserId);
+export async function listOwnerInvoices(organizationId: string) {
+  const subscription = await ensureOwnerSubscription(organizationId);
 
   return prisma.billingInvoice.findMany({
     where: {
-      ownerUserId,
       subscriptionId: subscription.id,
     },
     orderBy: {
@@ -1245,8 +1186,7 @@ export async function listOwnerInvoices(ownerUserId: string) {
 }
 
 async function syncInvoiceFromBilling(
-  ownerUserId: string,
-  subscriptionId: string,
+  subscription: Pick<OwnerSubscription, "id" | "ownerUserId" | "organizationId">,
   checkoutLookup: Map<string, { id: string; amountCents: number }>,
   billing: AbacateBilling,
 ): Promise<void> {
@@ -1260,7 +1200,7 @@ async function syncInvoiceFromBilling(
 
   const checkoutByBillingId = await prisma.billingCheckoutSession.findFirst({
     where: {
-      ownerUserId,
+      organizationId: subscription.organizationId,
       abacateBillingId: billing.id,
     },
     select: {
@@ -1295,8 +1235,8 @@ async function syncInvoiceFromBilling(
   if (!existingInvoice) {
     await prisma.billingInvoice.create({
       data: {
-        ownerUserId,
-        subscriptionId,
+        ownerUserId: subscription.ownerUserId,
+        subscriptionId: subscription.id,
         checkoutSessionId: checkout.id,
         providerBillingId: billing.id,
         status: nextStatus,
@@ -1319,15 +1259,15 @@ async function syncInvoiceFromBilling(
   });
 }
 
-export async function syncOwnerInvoicesFromAbacate(ownerUserId: string): Promise<void> {
+export async function syncOwnerInvoicesFromAbacate(organizationId: string): Promise<void> {
   if (!isAbacatePayConfigured()) {
     return;
   }
 
-  const subscription = await ensureOwnerSubscription(ownerUserId);
+  const subscription = await ensureOwnerSubscription(organizationId);
   const checkouts = await prisma.billingCheckoutSession.findMany({
     where: {
-      ownerUserId,
+      organizationId,
     },
     select: {
       id: true,
@@ -1344,7 +1284,15 @@ export async function syncOwnerInvoicesFromAbacate(ownerUserId: string): Promise
   const billings = await listAbacateBillings();
 
   for (const billing of billings) {
-    await syncInvoiceFromBilling(ownerUserId, subscription.id, checkoutLookup, billing);
+    await syncInvoiceFromBilling(
+      {
+        id: subscription.id,
+        ownerUserId: subscription.ownerUserId,
+        organizationId,
+      },
+      checkoutLookup,
+      billing,
+    );
   }
 }
 
@@ -1381,7 +1329,7 @@ async function findAbacateBillingForCheckout(
 }
 
 export async function reconcileCheckoutFromAbacate(input: {
-  ownerUserId: string;
+  organizationId: string;
   checkoutId: string;
 }): Promise<boolean> {
   if (!isAbacatePayConfigured()) {
@@ -1391,7 +1339,7 @@ export async function reconcileCheckoutFromAbacate(input: {
   const checkout = await prisma.billingCheckoutSession.findFirst({
     where: {
       id: input.checkoutId,
-      ownerUserId: input.ownerUserId,
+      organizationId: input.organizationId,
     },
     select: {
       id: true,
@@ -1478,16 +1426,18 @@ function bucketForRollout(seed: string, subjectKey: string): number {
 }
 
 export async function isFeatureEnabledForOwner(input: {
-  ownerUserId: string;
+  organizationId: string;
   featureKey: PlanFeatureKey;
   subjectKey?: string;
 }): Promise<boolean> {
-  const [entitlements, override, rollout] = await Promise.all([
-    getOwnerEntitlements(input.ownerUserId),
+  const entitlements = await getOwnerEntitlements(input.organizationId);
+  const ownerUserId = entitlements.ownerUserId;
+
+  const [override, rollout] = await Promise.all([
     prisma.ownerFeatureOverride.findUnique({
       where: {
         ownerUserId_featureKey: {
-          ownerUserId: input.ownerUserId,
+          ownerUserId,
           featureKey: input.featureKey,
         },
       },
@@ -1516,14 +1466,15 @@ export async function isFeatureEnabledForOwner(input: {
     return true;
   }
 
-  const subjectKey = input.subjectKey ?? `${input.ownerUserId}:${input.featureKey}`;
+  const subjectKey = input.subjectKey ?? `${input.organizationId}:${input.featureKey}`;
   return bucketForRollout(rollout.seed, subjectKey) < rollout.rolloutPercentage;
 }
 
 export async function listOwnerFeatureStatuses(
-  ownerUserId: string,
+  organizationId: string,
 ): Promise<OwnerFeatureStatus[]> {
-  const entitlements = await getOwnerEntitlements(ownerUserId);
+  const entitlements = await getOwnerEntitlements(organizationId);
+  const ownerUserId = entitlements.ownerUserId;
   const plan = getPlanDefinition(entitlements.effectivePlanCode);
   const overrides = await prisma.ownerFeatureOverride.findMany({
     where: {
@@ -1567,7 +1518,7 @@ export async function listOwnerFeatureStatuses(
       const enabled =
         rollout.rolloutPercentage >= 100
           ? true
-          : bucketForRollout(rollout.seed, `${ownerUserId}:${featureKey}`) <
+          : bucketForRollout(rollout.seed, `${organizationId}:${featureKey}`) <
             rollout.rolloutPercentage;
 
       return {
@@ -1588,7 +1539,7 @@ export async function listOwnerFeatureStatuses(
 }
 
 export async function getBillingPageData(
-  ownerUserId: string,
+  organizationId: string,
   options?: {
     checkoutId?: string | null;
   },
@@ -1607,7 +1558,7 @@ export async function getBillingPageData(
   if (checkoutId) {
     try {
       await reconcileCheckoutFromAbacate({
-        ownerUserId,
+        organizationId,
         checkoutId,
       });
     } catch (error) {
@@ -1622,7 +1573,7 @@ export async function getBillingPageData(
   } else {
     latestPendingCheckout = await prisma.billingCheckoutSession.findFirst({
       where: {
-        ownerUserId,
+        organizationId,
         status: CheckoutStatus.PENDING,
       },
       orderBy: {
@@ -1643,7 +1594,7 @@ export async function getBillingPageData(
       isStalePendingCheckout(latestPendingCheckout.createdAt)
     ) {
       await failStaleCheckout({
-        ownerUserId,
+        organizationId,
         checkoutId: latestPendingCheckout.id,
         subscriptionId: latestPendingCheckout.subscriptionId,
         targetPlanCode: latestPendingCheckout.targetPlanCode,
@@ -1654,7 +1605,7 @@ export async function getBillingPageData(
     if (latestPendingCheckout) {
       // Keep this reconciliation non-blocking so the billing page does not wait on provider I/O.
       void reconcileCheckoutFromAbacate({
-        ownerUserId,
+        organizationId,
         checkoutId: latestPendingCheckout.id,
       }).catch((error) => {
         if (isTimeoutError(error)) {
@@ -1672,7 +1623,7 @@ export async function getBillingPageData(
     ? await prisma.billingCheckoutSession.findFirst({
         where: {
           id: checkoutId,
-          ownerUserId,
+          organizationId,
         },
         select: {
           id: true,
@@ -1719,7 +1670,7 @@ export async function getBillingPageData(
     isStalePendingCheckout(selectedCheckout.createdAt)
   ) {
     await failStaleCheckout({
-      ownerUserId,
+      organizationId,
       checkoutId: selectedCheckout.id,
       subscriptionId: selectedCheckout.subscriptionId,
       targetPlanCode: selectedCheckout.targetPlanCode,
@@ -1727,7 +1678,7 @@ export async function getBillingPageData(
     selectedCheckout.status = CheckoutStatus.FAILED;
   }
 
-  const entitlements = await getOwnerEntitlements(ownerUserId);
+  const entitlements = await getOwnerEntitlements(organizationId);
   const hasPendingPlanChangeForSelectedCheckout = Boolean(
     selectedCheckout &&
       selectedCheckout.status === CheckoutStatus.PENDING &&

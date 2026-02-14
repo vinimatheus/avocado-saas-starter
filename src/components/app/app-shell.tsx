@@ -44,6 +44,8 @@ type AppShellProps = {
     id: string;
     name: string;
     slug: string;
+    logo: string | null;
+    isPremium: boolean;
   }>;
   pendingInvitations: UserInvitation[];
   role: OrganizationUserRole;

@@ -19,6 +19,7 @@ model Organization {
   invitations           Invitation[]
   products              Product[]
   activeSessions        Session[]               @relation("ActiveOrganizationSessions")
+  ownerSubscription     OwnerSubscription?
   billingCheckoutSessions BillingCheckoutSession[]
   monthlyUsages         OwnerMonthlyUsage[]
 
@@ -39,7 +40,7 @@ model User {
   twoFactor           TwoFactor?
   members             Member[]
   invitationsSent     Invitation[]            @relation("InvitationInviter")
-  ownerSubscription   OwnerSubscription?
+  ownerSubscriptions  OwnerSubscription[]
   billingCheckouts    BillingCheckoutSession[] @relation("OwnerCheckoutSessions")
   billingInvoices     BillingInvoice[]        @relation("OwnerBillingInvoices")
   subscriptionCancellationFeedbacks SubscriptionCancellationFeedback[]
@@ -195,7 +196,8 @@ enum WebhookProcessingStatus {
 
 model OwnerSubscription {
   id                String             @id @default(cuid())
-  ownerUserId       String             @unique @map("owner_user_id")
+  ownerUserId       String             @map("owner_user_id")
+  organizationId    String             @unique @map("organization_id")
   planCode          BillingPlanCode    @default(FREE) @map("plan_code")
   pendingPlanCode   BillingPlanCode?   @map("pending_plan_code")
   status            SubscriptionStatus @default(FREE)
@@ -214,10 +216,12 @@ model OwnerSubscription {
   createdAt         DateTime           @default(now()) @map("created_at")
   updatedAt         DateTime           @updatedAt @map("updated_at")
   owner             User               @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   checkoutSessions  BillingCheckoutSession[]
   invoices          BillingInvoice[]
   cancellationFeedbacks SubscriptionCancellationFeedback[]
 
+  @@index([ownerUserId], map: "owner_subscription_owner_user_id_idx")
   @@index([planCode], map: "owner_subscription_plan_code_idx")
   @@index([status], map: "owner_subscription_status_idx")
   @@map("owner_subscription")

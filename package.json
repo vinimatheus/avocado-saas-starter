@@ -2,7 +2,9 @@
   "name": "avocado-saas-starter",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@9.0.6",
   "scripts": {
+    "predev": "prisma generate",
     "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "next start",
@@ -14,7 +16,7 @@
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
     "db:logs": "docker compose logs -f postgres",
-    "db:setup": "npm run db:up && npm run prisma:generate && npm run prisma:push"
+    "db:setup": "pnpm run db:up && pnpm run prisma:generate && pnpm run prisma:push"
   },
   "dependencies": {
     "@base-ui/react": "^1.1.0",

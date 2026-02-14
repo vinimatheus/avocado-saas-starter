@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Building2Icon, UsersIcon } from "lucide-react";
+import { BoxesIcon, UsersIcon } from "lucide-react";
 import Image from "next/image";
 import { redirect } from "next/navigation";
 
@@ -181,10 +181,10 @@ export default async function BillingPage({
   }
 
   const [billingData, invoices] = await Promise.all([
-    getBillingPageData(user.id, {
+    getBillingPageData(tenantContext.organizationId, {
       checkoutId: checkoutId || null,
     }),
-    listOwnerInvoices(user.id),
+    listOwnerInvoices(tenantContext.organizationId),
   ]);
 
   const paidInvoices = invoices
@@ -218,9 +218,6 @@ export default async function BillingPage({
         checkoutState.status === "CHARGEBACK"),
   );
   const restrictionHints = [
-    restriction.exceededOrganizations > 0
-      ? `${restriction.exceededOrganizations} organizacao(oes) acima do limite`
-      : null,
     restriction.exceededUsers > 0 ? `${restriction.exceededUsers} usuario(s) acima do limite` : null,
   ].filter((value): value is string => Boolean(value));
 
@@ -243,7 +240,6 @@ export default async function BillingPage({
     name: plan.name,
     description: plan.description,
     monthlyPriceCents: plan.monthlyPriceCents,
-    organizationsLimitLabel: formatLimitValue(plan.limits.maxOrganizations),
     usersLimitLabel: formatLimitValue(plan.limits.maxUsers),
     featureLabels: plan.features.map((featureKey) => FEATURE_LABELS[featureKey]),
   }));
@@ -259,7 +255,7 @@ export default async function BillingPage({
       <section className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Pagamentos</h1>
         <p className="text-muted-foreground text-sm sm:text-base">
-          Escolha um plano e escale usuarios, organizacoes e resultados sem perder controle.
+          Escolha um plano para a sua organizacao e escale usuarios sem perder controle.
         </p>
       </section>
 
@@ -432,10 +428,10 @@ export default async function BillingPage({
               <p className="font-semibold">{formatDate(subscription.currentPeriodEnd)}</p>
             </div>
             <div className="rounded-md border p-2">
-              <p className="text-muted-foreground text-xs">Organizacoes</p>
+              <p className="text-muted-foreground text-xs">Produtos cadastrados</p>
               <p className="font-semibold">
-                <Building2Icon className="mr-1 inline size-3.5" />
-                {usage.organizations} / {formatLimitValue(currentPlan.limits.maxOrganizations)}
+                <BoxesIcon className="mr-1 inline size-3.5" />
+                {usage.projects} / {formatLimitValue(currentPlan.limits.maxProjects)}
               </p>
             </div>
             <div className="rounded-md border p-2">

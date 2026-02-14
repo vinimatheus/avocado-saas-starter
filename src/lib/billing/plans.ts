@@ -37,10 +37,10 @@ export const BILLING_PLANS: Record<BillingPlanCode, PlanDefinition> = {
   FREE: {
     code: "FREE",
     name: "Gratuito",
-    description: "Ideal para uso individual e validação inicial.",
+    description: "Ideal para uma organizacao em fase inicial.",
     monthlyPriceCents: 0,
     limits: {
-      maxOrganizations: 1,
+      maxOrganizations: null,
       maxUsers: 1,
       maxProjects: null,
       maxMonthlyUsage: null,
@@ -50,10 +50,10 @@ export const BILLING_PLANS: Record<BillingPlanCode, PlanDefinition> = {
   STARTER_50: {
     code: "STARTER_50",
     name: "Plano R$ 50",
-    description: "Até 5 organizações e 50 usuários.",
+    description: "Ate 50 usuarios por organizacao.",
     monthlyPriceCents: 5_000,
     limits: {
-      maxOrganizations: 5,
+      maxOrganizations: null,
       maxUsers: 50,
       maxProjects: null,
       maxMonthlyUsage: null,
@@ -63,10 +63,10 @@ export const BILLING_PLANS: Record<BillingPlanCode, PlanDefinition> = {
   PRO_100: {
     code: "PRO_100",
     name: "Plano R$ 100",
-    description: "Até 10 organizações e 100 usuários.",
+    description: "Ate 100 usuarios por organizacao.",
     monthlyPriceCents: 10_000,
     limits: {
-      maxOrganizations: 10,
+      maxOrganizations: null,
       maxUsers: 100,
       maxProjects: null,
       maxMonthlyUsage: null,
@@ -81,7 +81,7 @@ export const BILLING_PLANS: Record<BillingPlanCode, PlanDefinition> = {
   SCALE_400: {
     code: "SCALE_400",
     name: "Plano R$ 400",
-    description: "Escala total com usuários e organizações ilimitados.",
+    description: "Escala total com usuarios ilimitados por organizacao.",
     monthlyPriceCents: 40_000,
     limits: {
       maxOrganizations: null,

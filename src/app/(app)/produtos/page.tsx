@@ -69,7 +69,7 @@ async function listProducts(organizationId: string | null): Promise<ProductsResu
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2021") {
       return {
         items: [],
-        errorMessage: "Tabela de produtos ainda nao existe no banco. Execute: npm run prisma:push",
+        errorMessage: "Tabela de produtos ainda nao existe no banco. Execute: pnpm run prisma:push",
       };
     }
 

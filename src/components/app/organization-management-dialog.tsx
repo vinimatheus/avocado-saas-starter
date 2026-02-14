@@ -4,6 +4,7 @@ import * as React from "react"
 import {
   Building2Icon,
   CrownIcon,
+  ImageUpIcon,
   MailIcon,
   SendIcon,
   ShieldCheckIcon,
@@ -17,6 +18,7 @@ import {
   deleteOrganizationSafelyAction,
   transferOrganizationOwnershipAction,
   updateOrganizationDetailsAction,
+  updateOrganizationLogoAction,
 } from "@/actions/organization-governance-actions"
 import {
   inviteOrganizationUserAction,
@@ -75,6 +77,7 @@ type OrganizationManagementDialogProps = {
   onOpenChange: (open: boolean) => void
   organizationName: string
   organizationSlug: string | null
+  organizationLogo: string | null
   currentUserId: string | null
   isOwner: boolean
   isAdmin: boolean
@@ -146,6 +149,7 @@ export function OrganizationManagementDialog({
   onOpenChange,
   organizationName,
   organizationSlug,
+  organizationLogo,
   currentUserId,
   isOwner,
   isAdmin,
@@ -167,6 +171,7 @@ export function OrganizationManagementDialog({
   const [isInvitePending, startInviteTransition] = React.useTransition()
   const [isTransferPending, startTransferTransition] = React.useTransition()
   const [isUpdateOrganizationPending, startUpdateOrganizationTransition] = React.useTransition()
+  const [isUpdateOrganizationLogoPending, startUpdateOrganizationLogoTransition] = React.useTransition()
   const [isDeletePending, startDeleteTransition] = React.useTransition()
   const [isUpdateMemberRolePending, startUpdateMemberRoleTransition] = React.useTransition()
   const [isRemoveMemberPending, startRemoveMemberTransition] = React.useTransition()
@@ -181,6 +186,10 @@ export function OrganizationManagementDialog({
   )
   const [updateOrganizationState, updateOrganizationAction] = React.useActionState(
     updateOrganizationDetailsAction,
+    initialOrganizationUserActionState,
+  )
+  const [updateOrganizationLogoState, updateOrganizationLogoActionState] = React.useActionState(
+    updateOrganizationLogoAction,
     initialOrganizationUserActionState,
   )
   const [deleteState, deleteAction] = React.useActionState(
@@ -265,6 +274,14 @@ export function OrganizationManagementDialog({
         }),
     [members],
   )
+  const [failedOrganizationLogoSrc, setFailedOrganizationLogoSrc] = React.useState<string | null>(null)
+  const organizationLogoFormRef = React.useRef<HTMLFormElement>(null)
+  const normalizedOrganizationLogo = React.useMemo(() => {
+    const value = organizationLogo?.trim() ?? ""
+    return value || null
+  }, [organizationLogo])
+  const showOrganizationLogo =
+    Boolean(normalizedOrganizationLogo) && failedOrganizationLogoSrc !== normalizedOrganizationLogo
 
   React.useEffect(() => {
     if (!open) {
@@ -274,6 +291,8 @@ export function OrganizationManagementDialog({
     setOrganizationNameInput(organizationName)
     setOrganizationSlugInput(organizationSlug ?? toSlug(organizationName))
     setDeleteConfirmationName("")
+    setFailedOrganizationLogoSrc(null)
+    organizationLogoFormRef.current?.reset()
   }, [open, organizationName, organizationSlug])
 
   React.useEffect(() => {
@@ -288,6 +307,7 @@ export function OrganizationManagementDialog({
       inviteState.status === "success" ||
       transferState.status === "success" ||
       updateOrganizationState.status === "success" ||
+      updateOrganizationLogoState.status === "success" ||
       deleteState.status === "success" ||
       updateMemberRoleState.status === "success" ||
       removeMemberState.status === "success"
@@ -298,6 +318,10 @@ export function OrganizationManagementDialog({
     if (inviteState.status === "success") {
       setInviteEmail("")
     }
+
+    if (updateOrganizationLogoState.status === "success") {
+      organizationLogoFormRef.current?.reset()
+    }
   }, [
     deleteState.redirectTo,
     deleteState.status,
@@ -307,6 +331,7 @@ export function OrganizationManagementDialog({
     router,
     transferState.status,
     updateMemberRoleState.status,
+    updateOrganizationLogoState.status,
     updateOrganizationState.status,
   ])
 
@@ -344,6 +369,15 @@ export function OrganizationManagementDialog({
 
     startUpdateOrganizationTransition(() => {
       updateOrganizationAction(payload)
+    })
+  }
+
+  function submitOrganizationLogoUpdate(event: React.FormEvent<HTMLFormElement>): void {
+    event.preventDefault()
+
+    const payload = new FormData(event.currentTarget)
+    startUpdateOrganizationLogoTransition(() => {
+      updateOrganizationLogoActionState(payload)
     })
   }
 
@@ -465,40 +499,79 @@ export function OrganizationManagementDialog({
                         <span className="text-muted-foreground">Slug:</span>{" "}
                         {organizationSlug || toSlug(organizationName)}
                       </p>
+                      <p>
+                        <span className="text-muted-foreground">Imagem:</span>{" "}
+                        {normalizedOrganizationLogo ? "Configurada" : "Nao configurada"}
+                      </p>
                     </div>
                   </div>
 
                   {isOwner ? (
-                    <form onSubmit={submitOrganizationUpdate} className="space-y-3 rounded-lg border p-3">
-                      <p className="text-xs font-medium">Atualizar organizacao</p>
-                      <Input
-                        value={organizationNameInput}
-                        onChange={(event) => {
-                          const value = event.target.value
-                          setOrganizationNameInput(value)
-                          if (!organizationSlugInput) {
-                            setOrganizationSlugInput(toSlug(value))
-                          }
-                        }}
-                        placeholder="Nome da empresa"
-                        required
-                      />
-                      <Input
-                        value={organizationSlugInput}
-                        onChange={(event) => {
-                          setOrganizationSlugInput(toSlug(event.target.value))
-                        }}
-                        placeholder="slug-da-empresa"
-                        required
-                      />
-                      <Button type="submit" size="sm" disabled={isUpdateOrganizationPending}>
-                        <ShieldCheckIcon data-icon="inline-start" />
-                        {isUpdateOrganizationPending ? "Salvando..." : "Salvar organizacao"}
-                      </Button>
-                    </form>
+                    <>
+                      <form onSubmit={submitOrganizationUpdate} className="space-y-3 rounded-lg border p-3">
+                        <p className="text-xs font-medium">Atualizar organizacao</p>
+                        <Input
+                          value={organizationNameInput}
+                          onChange={(event) => {
+                            const value = event.target.value
+                            setOrganizationNameInput(value)
+                            if (!organizationSlugInput) {
+                              setOrganizationSlugInput(toSlug(value))
+                            }
+                          }}
+                          placeholder="Nome da empresa"
+                          required
+                        />
+                        <Input
+                          value={organizationSlugInput}
+                          onChange={(event) => {
+                            setOrganizationSlugInput(toSlug(event.target.value))
+                          }}
+                          placeholder="slug-da-empresa"
+                          required
+                        />
+                        <Button type="submit" size="sm" disabled={isUpdateOrganizationPending}>
+                          <ShieldCheckIcon data-icon="inline-start" />
+                          {isUpdateOrganizationPending ? "Salvando..." : "Salvar organizacao"}
+                        </Button>
+                      </form>
+
+                      <form
+                        ref={organizationLogoFormRef}
+                        onSubmit={submitOrganizationLogoUpdate}
+                        className="space-y-3 rounded-lg border p-3"
+                      >
+                        <p className="text-xs font-medium">Imagem da empresa</p>
+                        <div className="flex items-center gap-3">
+                          <div className="bg-muted text-muted-foreground flex size-12 items-center justify-center overflow-hidden rounded-md border">
+                            {showOrganizationLogo && normalizedOrganizationLogo ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={normalizedOrganizationLogo}
+                                alt={`Imagem de ${organizationName}`}
+                                className="size-full object-cover"
+                                onError={() => {
+                                  setFailedOrganizationLogoSrc(normalizedOrganizationLogo)
+                                }}
+                              />
+                            ) : (
+                              <Building2Icon className="size-5" />
+                            )}
+                          </div>
+                          <p className="text-muted-foreground text-xs">
+                            Envie PNG, JPG ou WEBP com ate 5 MB.
+                          </p>
+                        </div>
+                        <Input name="image" type="file" accept="image/*" required />
+                        <Button type="submit" size="sm" disabled={isUpdateOrganizationLogoPending}>
+                          <ImageUpIcon data-icon="inline-start" />
+                          {isUpdateOrganizationLogoPending ? "Enviando..." : "Salvar imagem"}
+                        </Button>
+                      </form>
+                    </>
                   ) : (
                     <div className="text-muted-foreground rounded-lg border p-3 text-xs">
-                      Apenas o proprietario pode alterar nome e slug da organizacao.
+                      Apenas o proprietario pode alterar nome, slug e imagem da organizacao.
                     </div>
                   )}
 
@@ -685,6 +758,7 @@ export function OrganizationManagementDialog({
                 <FormFeedback state={inviteState} showInline={false} />
                 <FormFeedback state={transferState} showInline={false} />
                 <FormFeedback state={updateOrganizationState} showInline={false} />
+                <FormFeedback state={updateOrganizationLogoState} showInline={false} />
                 <FormFeedback state={deleteState} showInline={false} />
                 <FormFeedback state={updateMemberRoleState} showInline={false} />
                 <FormFeedback state={removeMemberState} showInline={false} />
