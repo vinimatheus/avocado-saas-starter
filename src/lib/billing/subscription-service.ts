@@ -521,7 +521,7 @@ export async function ensureOwnerSubscription(
 
   const basicProfile = await getOwnerBasicProfile(ownerUserId);
 
-  return prisma.ownerSubscription.upsert({
+  const upsertPayload = {
     where: {
       organizationId,
     },
@@ -540,6 +540,52 @@ export async function ensureOwnerSubscription(
         }
         : {}),
     },
+  } satisfies Prisma.OwnerSubscriptionUpsertArgs;
+
+  try {
+    return await prisma.ownerSubscription.upsert(upsertPayload);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    const normalized = message.toLowerCase();
+    const shouldFallback =
+      normalized.includes("42p10") ||
+      (normalized.includes("on conflict") &&
+        normalized.includes("unique or exclusion constraint"));
+
+    if (!shouldFallback) {
+      throw error;
+    }
+
+    // Database drift fallback: some production databases might be missing the UNIQUE constraint for
+    // `owner_subscription.organization_id`, which makes Postgres reject `ON CONFLICT`. We can still
+    // ensure a subscription by reading + updating/creating.
+    console.warn(
+      "OwnerSubscription upsert fallback: missing UNIQUE constraint on organization_id (42P10).",
+    );
+  }
+
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.ownerSubscription.findFirst({
+      where: {
+        organizationId,
+      },
+      orderBy: {
+        createdAt: "asc",
+      },
+    });
+
+    if (existing) {
+      return tx.ownerSubscription.update({
+        where: {
+          id: existing.id,
+        },
+        data: upsertPayload.update,
+      });
+    }
+
+    return tx.ownerSubscription.create({
+      data: upsertPayload.create,
+    });
   });
 }
 
