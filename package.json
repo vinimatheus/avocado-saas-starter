@@ -25,6 +25,7 @@
     "@tanstack/react-table": "^8.21.3",
     "@vercel/analytics": "^1.6.1",
     "better-auth": "^1.4.18",
+    "better-call": "1.1.8",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "kbar": "^0.1.0-beta.48",
