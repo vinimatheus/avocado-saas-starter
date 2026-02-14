@@ -9,7 +9,6 @@ import {
   assertOrganizationCanCreateProject,
   consumeOrganizationMonthlyUsage,
   isFeatureEnabledForOwner,
-  resolveOrganizationPrimaryOwnerUserId,
 } from "@/lib/billing/subscription-service";
 import { isOrganizationAdminRole } from "@/lib/organization/helpers";
 import {
@@ -51,7 +50,7 @@ function parseActionError(error: unknown, fallbackMessage: string): string {
     }
 
     if (error.code === "P2021") {
-      return "Tabela de produtos ainda nao existe no banco. Execute: npm run prisma:push";
+      return "Tabela de produtos ainda nao existe no banco. Execute: pnpm run prisma:push";
     }
 
     if (
@@ -69,7 +68,7 @@ function parseActionError(error: unknown, fallbackMessage: string): string {
       typeof error.message === "string" &&
       error.message.includes("23502")
     ) {
-      return "Estrutura da tabela de produtos esta inconsistente. Execute: npm run prisma:push";
+      return "Estrutura da tabela de produtos esta inconsistente. Execute: pnpm run prisma:push";
     }
 
     if (
@@ -78,7 +77,7 @@ function parseActionError(error: unknown, fallbackMessage: string): string {
       (error.message.includes("42P01") ||
         error.message.toLowerCase().includes("relation \"product\" does not exist"))
     ) {
-      return "Tabela de produtos ainda nao existe no banco. Execute: npm run prisma:push";
+      return "Tabela de produtos ainda nao existe no banco. Execute: pnpm run prisma:push";
     }
   }
 
@@ -152,13 +151,8 @@ function revalidateProductPaths() {
 }
 
 async function assertBulkProductActionsAvailable(organizationId: string): Promise<void> {
-  const ownerUserId = await resolveOrganizationPrimaryOwnerUserId(organizationId);
-  if (!ownerUserId) {
-    return;
-  }
-
   const enabled = await isFeatureEnabledForOwner({
-    ownerUserId,
+    organizationId,
     featureKey: "bulk_product_actions",
     subjectKey: `${organizationId}:bulk_product_actions`,
   });

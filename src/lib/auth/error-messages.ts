@@ -35,6 +35,14 @@ export function localizeAuthErrorMessage(message: string): string {
     return "Ja existe uma conta com este e-mail.";
   }
 
+  if (includesSome(normalized, ["organization already exists"])) {
+    return "Esta empresa ja existe.";
+  }
+
+  if (includesSome(normalized, ["organization slug already taken", "slug is taken"])) {
+    return "Este identificador de empresa ja esta em uso.";
+  }
+
   if (includesSome(normalized, ["invalid email"])) {
     return "E-mail invalido.";
   }

@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { cache } from "react";
 
 import { auth } from "@/lib/auth/server";
+import { isPaidPlan } from "@/lib/billing/plans";
 import { normalizeOrganizationRole, type OrganizationUserRole } from "@/lib/organization/helpers";
 import { prisma } from "@/lib/db/prisma";
 
@@ -13,6 +14,8 @@ export type TenantContext = {
     id: string;
     name: string;
     slug: string;
+    logo: string | null;
+    isPremium: boolean;
   }>;
   role: OrganizationUserRole | null;
 };
@@ -46,6 +49,52 @@ function cacheRoleNormalization(organizationId: string): void {
   if (oldestKey) {
     normalizedOrganizationRolesCache.delete(oldestKey);
   }
+}
+
+function normalizeOrganizationLogo(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim();
+  return normalized || null;
+}
+
+type OrganizationBillingSnapshot = {
+  organizationId: string;
+  planCode: "FREE" | "STARTER_50" | "PRO_100" | "SCALE_400";
+  trialPlanCode: "FREE" | "STARTER_50" | "PRO_100" | "SCALE_400" | null;
+  status: "FREE" | "TRIALING" | "ACTIVE" | "PAST_DUE" | "CANCELED" | "EXPIRED";
+  trialEndsAt: Date | null;
+  currentPeriodEnd: Date | null;
+};
+
+function isPremiumOrganization(
+  subscription: OrganizationBillingSnapshot | null | undefined,
+): boolean {
+  if (!subscription) {
+    return false;
+  }
+
+  const now = new Date();
+  if (
+    subscription.status === "TRIALING" &&
+    subscription.trialPlanCode &&
+    subscription.trialEndsAt &&
+    subscription.trialEndsAt > now
+  ) {
+    return isPaidPlan(subscription.trialPlanCode);
+  }
+
+  if (
+    (subscription.status === "ACTIVE" || subscription.status === "PAST_DUE") &&
+    subscription.currentPeriodEnd &&
+    subscription.currentPeriodEnd > now
+  ) {
+    return isPaidPlan(subscription.planCode);
+  }
+
+  return false;
 }
 
 async function ensureOrganizationRolesNormalized(organizationId: string): Promise<void> {
@@ -154,6 +203,37 @@ async function resolveTenantContext(): Promise<TenantContext> {
     })
     .catch(() => []);
 
+  const organizationSubscriptions =
+    organizations.length > 0
+      ? await prisma.ownerSubscription.findMany({
+          where: {
+            organizationId: {
+              in: organizations.map((organization) => organization.id),
+            },
+          },
+          select: {
+            organizationId: true,
+            planCode: true,
+            trialPlanCode: true,
+            status: true,
+            trialEndsAt: true,
+            currentPeriodEnd: true,
+          },
+        })
+      : [];
+  const subscriptionByOrganizationId = new Map(
+    organizationSubscriptions.map((subscription) => [subscription.organizationId, subscription]),
+  );
+  const organizationsWithBillingState = organizations.map((organization) => ({
+    id: organization.id,
+    name: organization.name,
+    slug: organization.slug,
+    logo: normalizeOrganizationLogo((organization as { logo?: unknown }).logo),
+    isPremium: isPremiumOrganization(
+      subscriptionByOrganizationId.get(organization.id) as OrganizationBillingSnapshot | undefined,
+    ),
+  }));
+
   const activeOrganizationId = session.session.activeOrganizationId ?? null;
   const activeOrganization = organizations.find((organization) => organization.id === activeOrganizationId);
   const fallbackOrganization = organizations[0] ?? null;
@@ -201,11 +281,7 @@ async function resolveTenantContext(): Promise<TenantContext> {
       session,
       organizationId: null,
       organizationName: null,
-      organizations: organizations.map((organization) => ({
-        id: organization.id,
-        name: organization.name,
-        slug: organization.slug,
-      })),
+      organizations: organizationsWithBillingState,
       role: null,
     };
   }
@@ -214,11 +290,7 @@ async function resolveTenantContext(): Promise<TenantContext> {
     session,
     organizationId: selectedOrganization.id,
     organizationName: selectedOrganization.name,
-    organizations: organizations.map((organization) => ({
-      id: organization.id,
-      name: organization.name,
-      slug: organization.slug,
-    })),
+    organizations: organizationsWithBillingState,
     role: normalizeOrganizationRole(membership.role),
   };
 }

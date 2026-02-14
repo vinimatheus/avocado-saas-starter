@@ -337,8 +337,44 @@ type BrandedEmailTemplatePayload = {
   footerHtml: string;
 };
 
+const HTTP_PROTOCOL_REGEX = /^https?:\/\//i;
+
+function resolveEmailAssetBaseUrl(request?: Request): string {
+  const configuredAssetBaseUrl = process.env.EMAIL_ASSET_BASE_URL?.trim() ?? "";
+  if (configuredAssetBaseUrl) {
+    const normalizedAssetBaseUrl = HTTP_PROTOCOL_REGEX.test(configuredAssetBaseUrl)
+      ? configuredAssetBaseUrl
+      : `https://${configuredAssetBaseUrl}`;
+
+    try {
+      return new URL(normalizedAssetBaseUrl).origin;
+    } catch {
+      console.warn(
+        "EMAIL_ASSET_BASE_URL invalida. Use uma URL absoluta valida (ex.: https://app.seudominio.com).",
+      );
+    }
+  }
+
+  const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim() ?? "";
+  if (configuredSiteUrl) {
+    const normalizedSiteUrl = HTTP_PROTOCOL_REGEX.test(configuredSiteUrl)
+      ? configuredSiteUrl
+      : `https://${configuredSiteUrl}`;
+
+    try {
+      return new URL(normalizedSiteUrl).origin;
+    } catch {
+      console.warn(
+        "NEXT_PUBLIC_SITE_URL invalida. Use uma URL absoluta valida (ex.: https://app.seudominio.com).",
+      );
+    }
+  }
+
+  return resolveAppBaseUrl(request);
+}
+
 function getBrandedEmailAssetUrl(assetPath: string, request?: Request): string {
-  return new URL(assetPath, resolveAppBaseUrl(request)).toString();
+  return new URL(assetPath, resolveEmailAssetBaseUrl(request)).toString();
 }
 
 function renderBrandedEmailHtml(payload: BrandedEmailTemplatePayload): string {
@@ -595,8 +631,10 @@ export const auth = betterAuth({
             });
           }
         },
-        afterCreateOrganization: async ({ user }) => {
-          await ensureOwnerSubscription(user.id);
+        afterCreateOrganization: async ({ organization, user }) => {
+          await ensureOwnerSubscription(organization.id, {
+            ownerUserIdHint: user.id,
+          });
         },
         beforeCreateInvitation: async ({ invitation }) => {
           try {
@@ -624,6 +662,13 @@ export const auth = betterAuth({
         },
         beforeAddMember: async ({ member }) => {
           try {
+            // Better Auth chama `beforeAddMember` durante a criacao da organizacao,
+            // antes do primeiro registro de member existir. Garanta a assinatura
+            // com um hint para evitar "Organizacao sem proprietario...".
+            await ensureOwnerSubscription(member.organizationId, {
+              ownerUserIdHint: member.userId,
+            });
+
             await assertOrganizationCanAddMember(member.organizationId, member.userId);
           } catch (error) {
             throw new APIError("FORBIDDEN", {

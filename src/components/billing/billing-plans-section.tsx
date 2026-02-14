@@ -34,7 +34,6 @@ type BillingPlanCardViewModel = {
   name: string;
   description: string;
   monthlyPriceCents: number;
-  organizationsLimitLabel: string;
   usersLimitLabel: string;
   featureLabels: string[];
 };
@@ -225,11 +224,7 @@ export function BillingPlansSection({
                   <ul className="space-y-2 text-sm">
                     <li className="flex items-center gap-2">
                       <CheckIcon className="text-primary size-3.5" />
-                      Ate {plan.organizationsLimitLabel} organizacoes
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <CheckIcon className="text-primary size-3.5" />
-                      Ate {plan.usersLimitLabel} usuarios
+                      Ate {plan.usersLimitLabel} usuarios por organizacao
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <button type="button" className="text-muted-foreground inline-flex" aria-label="Ajuda sobre limite de usuarios">

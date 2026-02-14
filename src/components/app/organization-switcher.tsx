@@ -7,6 +7,7 @@ import {
   Building2Icon,
   CheckIcon,
   ChevronsUpDownIcon,
+  CrownIcon,
   LogOutIcon,
   PlusIcon,
   SettingsIcon,
@@ -48,6 +49,8 @@ type OrganizationSwitcherItem = {
   id: string;
   name: string;
   slug: string;
+  logo: string | null;
+  isPremium: boolean;
 };
 
 type OrganizationSwitcherProps = {
@@ -62,6 +65,8 @@ function toOrganizationItems(
     id: string;
     name: string;
     slug: string;
+    logo?: string | null;
+    isPremium?: boolean;
   }> | null | undefined,
 ): OrganizationSwitcherItem[] {
   if (!organizations || organizations.length === 0) {
@@ -72,6 +77,8 @@ function toOrganizationItems(
     id: organization.id,
     name: organization.name,
     slug: organization.slug,
+    logo: organization.logo ?? null,
+    isPremium: organization.isPremium ?? false,
   }));
 }
 
@@ -119,14 +126,22 @@ export function OrganizationSwitcher({
   const activeOrganizationQuery = authClient.useActiveOrganization();
   const activeMemberQuery = authClient.useActiveMember();
   const sessionQuery = authClient.useSession();
+  const premiumByOrganizationId = useMemo(
+    () =>
+      new Map(initialOrganizations.map((organization) => [organization.id, organization.isPremium])),
+    [initialOrganizations],
+  );
 
   const organizations = useMemo(() => {
     if (listOrganizationsQuery.data && listOrganizationsQuery.data.length > 0) {
-      return toOrganizationItems(listOrganizationsQuery.data);
+      return toOrganizationItems(listOrganizationsQuery.data).map((organization) => ({
+        ...organization,
+        isPremium: premiumByOrganizationId.get(organization.id) ?? organization.isPremium,
+      }));
     }
 
     return initialOrganizations;
-  }, [initialOrganizations, listOrganizationsQuery.data]);
+  }, [initialOrganizations, listOrganizationsQuery.data, premiumByOrganizationId]);
 
   const resolvedActiveOrganizationId =
     activeOrganizationQuery.data?.id ??
@@ -143,6 +158,12 @@ export function OrganizationSwitcher({
     organizations.find((organization) => organization.id === resolvedActiveOrganizationId)?.slug ??
     activeOrganizationQuery.data?.slug ??
     null;
+  const activeOrganizationLogo =
+    organizations.find((organization) => organization.id === resolvedActiveOrganizationId)?.logo ??
+    activeOrganizationQuery.data?.logo ??
+    null;
+  const activeOrganizationIsPremium =
+    organizations.find((organization) => organization.id === resolvedActiveOrganizationId)?.isPremium ?? false;
 
   const activeMemberRole = activeMemberQuery.data?.role ?? "";
   const isOwner = hasOrganizationRole(activeMemberRole, "owner");
@@ -236,7 +257,12 @@ export function OrganizationSwitcher({
 
             <div className="grid flex-1 text-left text-xs leading-tight group-data-[collapsible=icon]:hidden">
               <span className="truncate font-semibold">Empresas</span>
-              <span className="text-muted-foreground truncate text-[0.7rem]">{activeOrganizationName}</span>
+              <span className="text-muted-foreground flex items-center gap-1 truncate text-[0.7rem]">
+                <span className="truncate">{activeOrganizationName}</span>
+                {activeOrganizationIsPremium ? (
+                  <CrownIcon className="size-3 shrink-0 text-amber-500" />
+                ) : null}
+              </span>
             </div>
 
             <ChevronsUpDownIcon className="text-muted-foreground size-3.5 shrink-0 group-data-[collapsible=icon]:hidden" />
@@ -257,7 +283,12 @@ export function OrganizationSwitcher({
                 }}
                 disabled={isSwitchingOrganization}
               >
-                <span className="truncate">{organization.name}</span>
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span className="truncate">{organization.name}</span>
+                  {organization.isPremium ? (
+                    <CrownIcon className="size-3.5 shrink-0 text-amber-500" />
+                  ) : null}
+                </span>
                 {organization.id === resolvedActiveOrganizationId ? (
                   <CheckIcon className="ml-auto size-3.5" />
                 ) : null}
@@ -305,6 +336,7 @@ export function OrganizationSwitcher({
         onOpenChange={setIsManagementOpen}
         organizationName={activeOrganizationName}
         organizationSlug={activeOrganizationSlug}
+        organizationLogo={activeOrganizationLogo}
         currentUserId={currentUserId}
         isOwner={isOwner}
         isAdmin={isAdmin}

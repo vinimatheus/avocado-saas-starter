@@ -195,7 +195,10 @@ const cancelSubscriptionSchema = z
     }
   });
 
-async function getAuthenticatedUserId(): Promise<string> {
+async function getAuthenticatedBillingContext(): Promise<{
+  userId: string;
+  organizationId: string;
+}> {
   const tenantContext = await getTenantContext();
   if (!tenantContext.session?.user?.id) {
     redirect("/sign-in");
@@ -205,7 +208,10 @@ async function getAuthenticatedUserId(): Promise<string> {
     redirect("/dashboard");
   }
 
-  return tenantContext.session.user.id;
+  return {
+    userId: tenantContext.session.user.id,
+    organizationId: tenantContext.organizationId,
+  };
 }
 
 function redirectWithMessage(kind: "success" | "error", message: string): never {
@@ -241,7 +247,7 @@ function isNextRedirectError(error: unknown): boolean {
 }
 
 export async function saveBillingProfileAction(formData: FormData): Promise<void> {
-  const userId = await getAuthenticatedUserId();
+  const { organizationId } = await getAuthenticatedBillingContext();
 
   const parsed = billingProfileSchema.safeParse({
     billingName: String(formData.get("billingName") ?? ""),
@@ -254,7 +260,7 @@ export async function saveBillingProfileAction(formData: FormData): Promise<void
   }
 
   try {
-    await updateOwnerBillingProfile(userId, parsed.data);
+    await updateOwnerBillingProfile(organizationId, parsed.data);
     revalidatePath("/billing");
     redirectWithMessage("success", "Dados de faturamento atualizados com sucesso.");
   } catch (error) {
@@ -267,7 +273,7 @@ export async function saveBillingProfileAction(formData: FormData): Promise<void
 }
 
 export async function createPlanCheckoutAction(formData: FormData): Promise<void> {
-  const userId = await getAuthenticatedUserId();
+  const { organizationId } = await getAuthenticatedBillingContext();
 
   const parsed = planSchema.safeParse({
     planCode: String(formData.get("planCode") ?? ""),
@@ -299,7 +305,7 @@ export async function createPlanCheckoutAction(formData: FormData): Promise<void
     }
 
     try {
-      await updateOwnerBillingProfile(userId, parsedBillingProfile.data);
+      await updateOwnerBillingProfile(organizationId, parsedBillingProfile.data);
     } catch (error) {
       if (isNextRedirectError(error)) {
         throw error;
@@ -314,23 +320,22 @@ export async function createPlanCheckoutAction(formData: FormData): Promise<void
 
   try {
     if (parsed.data.planCode === BillingPlanCode.FREE) {
-      const entitlements = await getOwnerEntitlements(userId);
+      const entitlements = await getOwnerEntitlements(organizationId);
 
       if (entitlements.effectivePlanCode === BillingPlanCode.FREE) {
         revalidatePath("/billing");
         redirectWithMessage("success", "Sua conta já está no plano Free.");
       }
 
-      await cancelOwnerSubscription(userId, false);
+      await cancelOwnerSubscription(organizationId, false);
       revalidatePath("/billing");
       redirectWithMessage("success", "Downgrade para Free agendado para o fim do período.");
     }
 
     const result = await createPlanCheckoutSession({
-      ownerUserId: userId,
+      organizationId,
       targetPlanCode: parsed.data.planCode,
       billingCycle: parsed.data.billingCycle,
-      organizationId: null,
       allowSamePlan: parsed.data.forceCheckout,
     });
 
@@ -350,7 +355,7 @@ export async function createPlanCheckoutAction(formData: FormData): Promise<void
 }
 
 export async function startTrialAction(formData: FormData): Promise<void> {
-  const userId = await getAuthenticatedUserId();
+  const { organizationId } = await getAuthenticatedBillingContext();
 
   const parsed = trialSchema.safeParse({
     trialPlanCode: String(formData.get("trialPlanCode") ?? ""),
@@ -361,7 +366,7 @@ export async function startTrialAction(formData: FormData): Promise<void> {
   }
 
   try {
-    await startOwnerTrial(userId, parsed.data.trialPlanCode);
+    await startOwnerTrial(organizationId, parsed.data.trialPlanCode);
     revalidatePath("/billing");
     redirectWithMessage("success", "Trial ativado com sucesso.");
   } catch (error) {
@@ -374,7 +379,7 @@ export async function startTrialAction(formData: FormData): Promise<void> {
 }
 
 export async function cancelSubscriptionAction(formData: FormData): Promise<void> {
-  const userId = await getAuthenticatedUserId();
+  const { userId, organizationId } = await getAuthenticatedBillingContext();
 
   const parsed = cancelSubscriptionSchema.safeParse({
     immediate: String(formData.get("immediate") ?? ""),
@@ -415,14 +420,14 @@ export async function cancelSubscriptionAction(formData: FormData): Promise<void
   }
 
   try {
-    const subscription = await ensureOwnerSubscription(userId);
-    await cancelOwnerSubscription(userId, parsed.data.immediate);
+    const subscription = await ensureOwnerSubscription(organizationId);
+    await cancelOwnerSubscription(organizationId, parsed.data.immediate);
     let feedbackSaved = true;
 
     try {
       await prisma.subscriptionCancellationFeedback.create({
         data: {
-          ownerUserId: userId,
+          ownerUserId: subscription.ownerUserId,
           subscriptionId: subscription.id,
           immediate: parsed.data.immediate,
           reasonCode: parsed.data.cancellationReason,
@@ -456,10 +461,10 @@ export async function cancelSubscriptionAction(formData: FormData): Promise<void
 }
 
 export async function reactivateSubscriptionAction(): Promise<void> {
-  const userId = await getAuthenticatedUserId();
+  const { organizationId } = await getAuthenticatedBillingContext();
 
   try {
-    await reactivateOwnerSubscription(userId);
+    await reactivateOwnerSubscription(organizationId);
     revalidatePath("/billing");
     redirectWithMessage("success", "Assinatura reativada com sucesso.");
   } catch (error) {
@@ -472,10 +477,10 @@ export async function reactivateSubscriptionAction(): Promise<void> {
 }
 
 export async function syncInvoicesAction(): Promise<void> {
-  const userId = await getAuthenticatedUserId();
+  const { organizationId } = await getAuthenticatedBillingContext();
 
   try {
-    await syncOwnerInvoicesFromAbacate(userId);
+    await syncOwnerInvoicesFromAbacate(organizationId);
     revalidatePath("/billing");
     redirectWithMessage("success", "Faturas sincronizadas com sucesso.");
   } catch (error) {

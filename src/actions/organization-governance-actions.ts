@@ -1,5 +1,6 @@
 "use server";
 
+import { createHash } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { z } from "zod";
@@ -18,6 +19,8 @@ const ORGANIZATION_GOVERNANCE_PATHS = [
   "/profile",
   "/onboarding/company",
 ] as const;
+const ORGANIZATION_LOGO_MAX_BYTES = 5 * 1024 * 1024;
+const DEFAULT_ORGANIZATION_LOGO_FOLDER = "avocado-saas-starter/organization";
 
 const transferOwnershipSchema = z.object({
   targetMemberId: z.string().trim().min(1, "Selecione o novo proprietario da organizacao."),
@@ -85,6 +88,82 @@ function revalidateOrganizationGovernancePaths(): void {
   for (const path of ORGANIZATION_GOVERNANCE_PATHS) {
     revalidatePath(path);
   }
+}
+
+function getCloudinaryConfig(): {
+  cloudName: string;
+  apiKey: string;
+  apiSecret: string;
+  folder: string;
+} {
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME?.trim() || "";
+  const apiKey = process.env.CLOUDINARY_API_KEY?.trim() || "";
+  const apiSecret = process.env.CLOUDINARY_API_SECRET?.trim() || "";
+  const folder =
+    process.env.CLOUDINARY_ORGANIZATION_FOLDER?.trim() ||
+    process.env.CLOUDINARY_PROFILE_FOLDER?.trim() ||
+    DEFAULT_ORGANIZATION_LOGO_FOLDER;
+
+  if (!cloudName || !apiKey || !apiSecret) {
+    throw new Error(
+      "Cloudinary nao configurado. Defina CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY e CLOUDINARY_API_SECRET.",
+    );
+  }
+
+  return {
+    cloudName,
+    apiKey,
+    apiSecret,
+    folder,
+  };
+}
+
+function signCloudinaryParams(params: Record<string, string>, apiSecret: string): string {
+  const serializedParams = Object.entries(params)
+    .filter(([, value]) => value.length > 0)
+    .sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey))
+    .map(([key, value]) => `${key}=${value}`)
+    .join("&");
+
+  return createHash("sha1").update(`${serializedParams}${apiSecret}`).digest("hex");
+}
+
+async function uploadOrganizationLogoToCloudinary(file: File): Promise<string> {
+  const { cloudName, apiKey, apiSecret, folder } = getCloudinaryConfig();
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const signature = signCloudinaryParams(
+    {
+      folder,
+      timestamp,
+    },
+    apiSecret,
+  );
+
+  const payload = new FormData();
+  payload.set("file", file);
+  payload.set("api_key", apiKey);
+  payload.set("folder", folder);
+  payload.set("timestamp", timestamp);
+  payload.set("signature", signature);
+
+  const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+    method: "POST",
+    body: payload,
+  });
+
+  if (!response.ok) {
+    const cloudinaryError = await response.text().catch(() => "");
+    throw new Error(`Falha no upload da imagem para o Cloudinary. ${cloudinaryError}`.trim());
+  }
+
+  const result = (await response.json()) as {
+    secure_url?: string;
+  };
+  if (!result.secure_url) {
+    throw new Error("Cloudinary nao retornou a URL da imagem.");
+  }
+
+  return result.secure_url;
 }
 
 type GovernanceContext = {
@@ -217,6 +296,47 @@ export async function updateOrganizationDetailsAction(
     return successState("Dados da organizacao atualizados com sucesso.");
   } catch (error) {
     return errorState(parseActionError(error, "Falha ao atualizar dados da organizacao."));
+  }
+}
+
+export async function updateOrganizationLogoAction(
+  _previousState: OrganizationUserActionState,
+  formData: FormData,
+): Promise<OrganizationUserActionState> {
+  try {
+    const context = await getGovernanceContext();
+    if (!context.currentIsOwner) {
+      return errorState("Somente o proprietario pode atualizar a imagem da organizacao.");
+    }
+
+    const image = formData.get("image");
+    if (!(image instanceof File) || image.size === 0) {
+      return errorState("Selecione uma imagem para enviar.");
+    }
+
+    if (!image.type.startsWith("image/")) {
+      return errorState("Arquivo invalido. Selecione uma imagem.");
+    }
+
+    if (image.size > ORGANIZATION_LOGO_MAX_BYTES) {
+      return errorState("A imagem deve ter no maximo 5 MB.");
+    }
+
+    const imageUrl = await uploadOrganizationLogoToCloudinary(image);
+    await auth.api.updateOrganization({
+      headers: context.requestHeaders,
+      body: {
+        organizationId: context.organizationId,
+        data: {
+          logo: imageUrl,
+        },
+      },
+    });
+
+    revalidateOrganizationGovernancePaths();
+    return successState("Imagem da organizacao atualizada com sucesso.");
+  } catch (error) {
+    return errorState(parseActionError(error, "Falha ao atualizar imagem da organizacao."));
   }
 }
 

@@ -13,7 +13,7 @@ Template SaaS com:
 1. Instale as dependencias:
 
 ```bash
-npm install
+pnpm install
 ```
 
 2. Configure as variaveis de ambiente:
@@ -23,6 +23,7 @@ npm install
 - `BETTER_AUTH_URL`
 - `NEXT_PUBLIC_BETTER_AUTH_URL`
 - `NEXT_PUBLIC_SITE_URL` (URL canonica do site para metadata/SEO, ex.: `https://seu-dominio.com`)
+- `EMAIL_ASSET_BASE_URL` (opcional, URL base publica para imagens nos e-mails, ex.: `https://app.seudominio.com`)
 - `GOOGLE_CLIENT_ID` (opcional, para login social)
 - `GOOGLE_CLIENT_SECRET` (opcional, para login social)
 - `RESEND_API_KEY`
@@ -43,26 +44,26 @@ npm install
 3. Suba o PostgreSQL no Docker:
 
 ```bash
-npm run db:up
+pnpm run db:up
 ```
 
 4. Gere o client Prisma e sincronize schema:
 
 ```bash
-npm run prisma:generate
-npm run prisma:push
+pnpm run prisma:generate
+pnpm run prisma:push
 ```
 
 ou rode tudo de uma vez:
 
 ```bash
-npm run db:setup
+pnpm run db:setup
 ```
 
 5. Rode o projeto:
 
 ```bash
-npm run dev
+pnpm run dev
 ```
 
 Abra [http://localhost:3000](http://localhost:3000).
@@ -81,13 +82,14 @@ Abra [http://localhost:3000](http://localhost:3000).
 - `ABACATEPAY_TIMEOUT_MS` (opcional), `ABACATEPAY_BILLING_LIST_TIMEOUT_MS` (opcional), `ABACATEPAY_BILLING_LIST_RETRIES` (opcional)
 - `CHECKOUT_PENDING_TIMEOUT_MINUTES` (opcional)
 - `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`
+- `CLOUDINARY_PROFILE_FOLDER` (opcional), `CLOUDINARY_ORGANIZATION_FOLDER` (opcional)
 3. O build ja esta preparado para Vercel:
-- `npm run build` executa `prisma generate` antes do `next build`.
+- `pnpm run build` executa `prisma generate` antes do `next build`.
 - `postinstall` tambem executa `prisma generate` para evitar client Prisma desatualizado em cache de build.
 4. Para mudancas de schema em producao, prefira migracoes:
 
 ```bash
-npm run prisma:migrate:deploy
+pnpm run prisma:migrate:deploy
 ```
 
 5. Fallback de URL na Vercel:
@@ -117,15 +119,15 @@ npm run prisma:migrate:deploy
 3. Comandos úteis:
 
 ```bash
-npm run db:up
-npm run db:logs
-npm run db:down
+pnpm run db:up
+pnpm run db:logs
+pnpm run db:down
 ```
 
 Se a porta `5432` ja estiver em uso, rode com outra porta:
 
 ```bash
-POSTGRES_PORT=5433 npm run db:up
+POSTGRES_PORT=5433 pnpm run db:up
 ```
 
 e ajuste o `DATABASE_URL` para a mesma porta.
@@ -143,7 +145,7 @@ e ajuste o `DATABASE_URL` para a mesma porta.
 
 ## Billing / Webhooks
 
-- O billing fica em `/billing` (planos, trial, upgrade/downgrade, cancelamento, reativacao, faturas).
+- O billing fica em `/billing` (planos por organizacao, trial, upgrade/downgrade, cancelamento, reativacao, faturas).
 - Webhook AbacatePay: `POST /api/webhooks/abacatepay` com header `X-Webhook-Secret: SEU_SEGREDO`
 - O webhook valida `X-Webhook-Secret`, valida obrigatoriamente `X-Webhook-Signature` (HMAC SHA-256) e aplica idempotencia por `event.id`.
 - Se `ABACATEPAY_WEBHOOK_SIGNATURE_KEY`/`ABACATEPAY_PUBLIC_KEY` nao estiver configurada, o webhook valida apenas o secret (modo compatibilidade).
