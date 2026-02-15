@@ -589,7 +589,12 @@ export async function ensureOwnerSubscription(
   });
 }
 
-function resolveEffectivePlanCode(subscription: OwnerSubscription): BillingPlanCode {
+function resolveEffectivePlanCode(
+  subscription: Pick<
+    OwnerSubscription,
+    "status" | "trialPlanCode" | "trialEndsAt" | "currentPeriodEnd" | "planCode"
+  >,
+): BillingPlanCode {
   const now = new Date();
 
   if (
@@ -675,7 +680,59 @@ function assertNotRestricted(entitlements: OwnerEntitlements): void {
 }
 
 export async function assertOwnerCanCreateOrganization(ownerUserId: string): Promise<void> {
-  void ownerUserId;
+  const normalizedOwnerUserId = ownerUserId.trim();
+  if (!normalizedOwnerUserId) {
+    throw new Error("Usuario invalido para criar organizacao.");
+  }
+
+  const [ownedOrganizationsCount, subscriptions] = await Promise.all([
+    prisma.member.count({
+      where: {
+        userId: normalizedOwnerUserId,
+        role: {
+          contains: "owner",
+        },
+      },
+    }),
+    prisma.ownerSubscription.findMany({
+      where: {
+        ownerUserId: normalizedOwnerUserId,
+      },
+      select: {
+        status: true,
+        planCode: true,
+        trialPlanCode: true,
+        trialEndsAt: true,
+        currentPeriodEnd: true,
+      },
+    }),
+  ]);
+
+  const candidatePlanCodes =
+    subscriptions.length > 0
+      ? subscriptions.map((subscription) => resolveEffectivePlanCode(subscription))
+      : [BillingPlanCode.FREE];
+
+  let maxAllowedOrganizations: number | null = 0;
+  for (const planCode of candidatePlanCodes) {
+    const currentLimit = getPlanDefinition(planCode).limits.maxOrganizations;
+    if (currentLimit === null) {
+      maxAllowedOrganizations = null;
+      break;
+    }
+
+    maxAllowedOrganizations = Math.max(maxAllowedOrganizations, currentLimit);
+  }
+
+  if (maxAllowedOrganizations === null) {
+    return;
+  }
+
+  if (ownedOrganizationsCount + 1 > maxAllowedOrganizations) {
+    throw new Error(
+      buildLimitErrorMessage("organizacoes", ownedOrganizationsCount, maxAllowedOrganizations),
+    );
+  }
 }
 
 export async function assertOrganizationCanCreateInvitation(
@@ -1010,9 +1067,10 @@ async function ensureAbacateCustomerId(subscription: OwnerSubscription): Promise
     throw new Error("Usuário sem e-mail válido para criar cliente no AbacatePay.");
   }
 
-  // Reuse the provider customer when another owner already uses the same tax ID.
+  // Reuse provider customer only for the same owner to avoid cross-tenant coupling.
   const sharedCustomerId = await prisma.ownerSubscription.findFirst({
     where: {
+      ownerUserId: subscription.ownerUserId,
       organizationId: {
         not: subscription.organizationId,
       },

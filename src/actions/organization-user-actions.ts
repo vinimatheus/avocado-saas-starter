@@ -34,7 +34,6 @@ const updateMemberRoleSchema = z.object({
 
 const removeMemberSchema = z.object({
   memberId: z.string().trim().min(1, "Membro nao informado."),
-  targetUserId: z.string().trim().optional(),
 });
 
 const invitationSchema = z.object({
@@ -283,15 +282,10 @@ export async function removeOrganizationMemberAction(
     const context = await getAdminActionContext();
     const parsed = removeMemberSchema.safeParse({
       memberId: getFormValue(formData, "memberId"),
-      targetUserId: getFormValue(formData, "targetUserId"),
     });
 
     if (!parsed.success) {
       return errorState(parsed.error.issues[0]?.message ?? "Dados invalidos para remover usuario.");
-    }
-
-    if (parsed.data.targetUserId && parsed.data.targetUserId === context.userId) {
-      return errorState("Nao e permitido remover o proprio usuario nesta tela.");
     }
 
     const membersResult = await auth.api.listMembers({
@@ -304,6 +298,10 @@ export async function removeOrganizationMemberAction(
     const targetMember = membersResult.members.find((member) => member.id === parsed.data.memberId);
     if (!targetMember) {
       return errorState("Membro nao encontrado na organizacao.");
+    }
+
+    if (targetMember.userId === context.userId) {
+      return errorState("Nao e permitido remover o proprio usuario nesta tela.");
     }
 
     if (hasOrganizationRole(targetMember.role, "owner")) {

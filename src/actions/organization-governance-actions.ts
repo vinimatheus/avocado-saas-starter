@@ -12,6 +12,7 @@ import {
   isOrganizationAdminRole,
 } from "@/lib/organization/helpers";
 import { getTenantContext } from "@/lib/organization/tenant-context";
+import { detectImageMimeTypeBySignature } from "@/lib/uploads/image-signature";
 
 const ORGANIZATION_GOVERNANCE_PATHS = [
   "/",
@@ -82,6 +83,18 @@ function parseActionError(error: unknown, fallbackMessage: string): string {
 
 function organizationNameMatches(organizationName: string, expectedName: string | null): boolean {
   return Boolean(expectedName) && organizationName === expectedName;
+}
+
+function toOrganizationMemberRoleToken(role: string): "owner" | "admin" | "member" {
+  if (hasOrganizationRole(role, "owner")) {
+    return "owner";
+  }
+
+  if (hasOrganizationRole(role, "admin")) {
+    return "admin";
+  }
+
+  return "member";
 }
 
 function revalidateOrganizationGovernancePaths(): void {
@@ -318,6 +331,11 @@ export async function updateOrganizationLogoAction(
       return errorState("Arquivo invalido. Selecione uma imagem.");
     }
 
+    const detectedImageMimeType = await detectImageMimeTypeBySignature(image);
+    if (!detectedImageMimeType) {
+      return errorState("Arquivo invalido. Envie uma imagem PNG, JPEG, GIF ou WEBP valida.");
+    }
+
     if (image.size > ORGANIZATION_LOGO_MAX_BYTES) {
       return errorState("A imagem deve ter no maximo 5 MB.");
     }
@@ -366,6 +384,7 @@ export async function transferOrganizationOwnershipAction(
       return errorState("Membro selecionado nao encontrado na organizacao.");
     }
 
+    const previousTargetRole = toOrganizationMemberRoleToken(targetMember.role);
     await auth.api.updateMemberRole({
       headers: context.requestHeaders,
       body: {
@@ -376,14 +395,35 @@ export async function transferOrganizationOwnershipAction(
     });
 
     if (context.currentIsOwner) {
-      await auth.api.updateMemberRole({
-        headers: context.requestHeaders,
-        body: {
-          organizationId: context.organizationId,
-          memberId: context.currentMember.id,
-          role: "admin",
-        },
-      });
+      try {
+        await auth.api.updateMemberRole({
+          headers: context.requestHeaders,
+          body: {
+            organizationId: context.organizationId,
+            memberId: context.currentMember.id,
+            role: "admin",
+          },
+        });
+      } catch (demotionError) {
+        if (previousTargetRole !== "owner") {
+          try {
+            await auth.api.updateMemberRole({
+              headers: context.requestHeaders,
+              body: {
+                organizationId: context.organizationId,
+                memberId: targetMember.id,
+                role: previousTargetRole,
+              },
+            });
+          } catch {
+            throw new Error(
+              "Falha parcial na transferencia de propriedade e o rollback automatico nao concluiu. Revise os cargos da equipe.",
+            );
+          }
+        }
+
+        throw demotionError;
+      }
     }
 
     const targetLabel =
@@ -457,7 +497,10 @@ export async function deleteOrganizationSafelyAction(
       return errorState("Somente o proprietario atual pode excluir a organizacao.");
     }
 
-    if (!context.currentIsOwner) {
+    const previousCurrentRole = toOrganizationMemberRoleToken(context.currentMember.role);
+    const shouldPromoteCurrentMember = !context.currentIsOwner;
+
+    if (shouldPromoteCurrentMember) {
       await auth.api.updateMemberRole({
         headers: context.requestHeaders,
         body: {
@@ -468,12 +511,33 @@ export async function deleteOrganizationSafelyAction(
       });
     }
 
-    await auth.api.deleteOrganization({
-      headers: context.requestHeaders,
-      body: {
-        organizationId: context.organizationId,
-      },
-    });
+    try {
+      await auth.api.deleteOrganization({
+        headers: context.requestHeaders,
+        body: {
+          organizationId: context.organizationId,
+        },
+      });
+    } catch (deleteError) {
+      if (shouldPromoteCurrentMember && previousCurrentRole !== "owner") {
+        try {
+          await auth.api.updateMemberRole({
+            headers: context.requestHeaders,
+            body: {
+              organizationId: context.organizationId,
+              memberId: context.currentMember.id,
+              role: previousCurrentRole,
+            },
+          });
+        } catch {
+          throw new Error(
+            "Falha ao excluir organizacao e nao foi possivel restaurar o cargo original automaticamente.",
+          );
+        }
+      }
+
+      throw deleteError;
+    }
 
     const redirectTo = await resolveRedirectAfterOrganizationMutation(context.requestHeaders);
     revalidateOrganizationGovernancePaths();

@@ -43,6 +43,24 @@ function errorState(message: string): ProductActionState {
   };
 }
 
+function isSafeProductErrorMessage(message: string): boolean {
+  const normalized = message.trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  const safeFragments = [
+    "limite do plano",
+    "conta em modo restrito",
+    "acoes em lote indisponiveis",
+    "sessao invalida",
+    "usuario sem organizacao ativa",
+    "somente administradores",
+  ];
+
+  return safeFragments.some((fragment) => normalized.includes(fragment));
+}
+
 function parseActionError(error: unknown, fallbackMessage: string): string {
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     if (error.code === "P2002") {
@@ -89,7 +107,11 @@ function parseActionError(error: unknown, fallbackMessage: string): string {
       return "Client Prisma desatualizado no servidor. Reinicie o dev server e tente novamente.";
     }
 
-    return error.message;
+    if (isSafeProductErrorMessage(error.message)) {
+      return error.message;
+    }
+
+    return fallbackMessage;
   }
 
   if (
@@ -98,7 +120,11 @@ function parseActionError(error: unknown, fallbackMessage: string): string {
     "message" in error &&
     typeof error.message === "string"
   ) {
-    return error.message;
+    if (isSafeProductErrorMessage(error.message)) {
+      return error.message;
+    }
+
+    return fallbackMessage;
   }
 
   return fallbackMessage;

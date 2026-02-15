@@ -13,6 +13,7 @@ import {
   profileUpdateSchema,
 } from "@/lib/auth/schemas";
 import { getTenantContext } from "@/lib/organization/tenant-context";
+import { detectImageMimeTypeBySignature } from "@/lib/uploads/image-signature";
 
 const PROFILE_PATHS = ["/profile"] as const;
 const PROFILE_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
@@ -287,6 +288,11 @@ export async function updateProfileImageAction(
 
     if (!image.type.startsWith("image/")) {
       return errorState("Arquivo invalido. Selecione uma imagem.");
+    }
+
+    const detectedImageMimeType = await detectImageMimeTypeBySignature(image);
+    if (!detectedImageMimeType) {
+      return errorState("Arquivo invalido. Envie uma imagem PNG, JPEG, GIF ou WEBP valida.");
     }
 
     if (image.size > PROFILE_IMAGE_MAX_BYTES) {
