@@ -8,6 +8,10 @@ Template SaaS com:
 - Convites e gestao de equipe
 - Prisma + PostgreSQL
 
+## Preview
+
+![Dashboard do avocado SaaS Starter](./public/img/readme-dashboard.png)
+
 ## Setup local (ativar no computador)
 
 ### 1) Pre-requisitos
