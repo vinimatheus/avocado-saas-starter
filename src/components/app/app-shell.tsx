@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboardIcon, PackageSearchIcon } from "lucide-react";
+import { ArrowUpRightIcon, LayoutDashboardIcon, PackageSearchIcon, SparklesIcon } from "lucide-react";
 
 import { Logo } from "@/components/shared/logo";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
@@ -28,6 +28,7 @@ import {
   SidebarProvider,
   SidebarRail,
   SidebarTrigger,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { OrganizationUserRole } from "@/lib/organization/helpers";
@@ -82,6 +83,14 @@ function AppSidebar({
   userImage,
 }: Omit<AppShellProps, "children" | "pendingInvitations">) {
   const pathname = usePathname();
+  const { isMobile, open, openMobile } = useSidebar();
+  const activeOrganization =
+    organizations.find((organization) => organization.id === activeOrganizationId) ??
+    organizations.find((organization) => organization.name === organizationName) ??
+    organizations[0] ??
+    null;
+  const shouldShowUpgradePrompt =
+    (isMobile ? openMobile : open) && activeOrganization?.planCode === "FREE";
 
   return (
     <Sidebar collapsible="icon">
@@ -145,6 +154,33 @@ function AppSidebar({
 
       <SidebarFooter>
         <SidebarMenu>
+          {shouldShowUpgradePrompt ? (
+            <SidebarMenuItem>
+              <Link
+                href="/billing"
+                className="group relative block overflow-hidden rounded-xl border border-sidebar-border/70 bg-gradient-to-br from-sidebar-accent/60 via-sidebar/95 to-sidebar p-3 transition-colors hover:border-sidebar-primary/45 hover:from-sidebar-accent/75"
+              >
+                <span className="bg-sidebar-primary/20 pointer-events-none absolute -top-6 right-1 size-16 rounded-full blur-xl" />
+                <div className="relative flex items-start gap-2.5">
+                  <div className="bg-sidebar-primary/18 text-sidebar-primary ring-sidebar-primary/35 mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md ring-1">
+                    <SparklesIcon className="size-3.5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sidebar-foreground/70 text-[0.65rem] font-semibold tracking-[0.14em] uppercase">
+                      Plano Gratis
+                    </p>
+                    <p className="text-sidebar-foreground mt-1 text-[0.72rem] leading-snug">
+                      Assine para liberar mais recursos no seu workspace.
+                    </p>
+                    <span className="text-sidebar-primary mt-1.5 inline-flex items-center gap-1 text-[0.68rem] font-semibold">
+                      Ver planos
+                      <ArrowUpRightIcon className="size-3" />
+                    </span>
+                  </div>
+                </div>
+              </Link>
+            </SidebarMenuItem>
+          ) : null}
           <SidebarMenuItem>
             <AppUserMenu role={role} userName={userName} userImage={userImage} />
           </SidebarMenuItem>
