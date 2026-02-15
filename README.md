@@ -8,65 +8,114 @@ Template SaaS com:
 - Convites e gestao de equipe
 - Prisma + PostgreSQL
 
-## Getting Started
+## Setup local (ativar no computador)
 
-1. Instale as dependencias:
+### 1) Pre-requisitos
+
+- Node.js 20+
+- pnpm 9+ (via Corepack)
+- Docker + Docker Compose
+- Git
+
+### 2) Clonar e instalar dependencias
 
 ```bash
+git clone <url-do-seu-repositorio>
+cd avocado-saas-starter
+```
+
+Depois instale as dependencias:
+
+```bash
+corepack enable
 pnpm install
 ```
 
-2. Configure as variaveis de ambiente:
-- `DATABASE_URL`
-- `BETTER_AUTH_SECRET`
-- `BETTER_AUTH_BASE_URL` (ex.: `http://localhost:3000`)
-- `BETTER_AUTH_URL`
-- `NEXT_PUBLIC_BETTER_AUTH_URL`
-- `NEXT_PUBLIC_SITE_URL` (URL canonica do site para metadata/SEO, ex.: `https://seu-dominio.com`)
-- `EMAIL_ASSET_BASE_URL` (opcional, URL base publica para imagens nos e-mails, ex.: `https://app.seudominio.com`)
-- `GOOGLE_CLIENT_ID` (opcional, para login social)
-- `GOOGLE_CLIENT_SECRET` (opcional, para login social)
-- `RESEND_API_KEY`
-- `RESEND_FROM_EMAIL`
-- `ABACATEPAY_API_KEY`
-- `ABACATEPAY_WEBHOOK_SECRET`
-- `ABACATEPAY_WEBHOOK_SIGNATURE_KEY` (ou `ABACATEPAY_PUBLIC_KEY`)
-- `ABACATEPAY_BASE_URL` (default: `https://api.abacatepay.com/v1`)
-- `ABACATEPAY_TIMEOUT_MS` (opcional, default: `10000`)
-- `ABACATEPAY_BILLING_LIST_TIMEOUT_MS` (opcional, default: `20000`)
-- `ABACATEPAY_BILLING_LIST_RETRIES` (opcional, default: `1`)
-- `CHECKOUT_PENDING_TIMEOUT_MINUTES` (opcional, default: `20`)
-- `ABACATEPAY_ALLOWED_CHECKOUT_HOSTS` (opcional, default: `abacatepay.com`)
-- `ABACATEPAY_WEBHOOK_ALLOWED_IPS` (opcional, lista de IPs separados por virgula)
-- `ABACATEPAY_WEBHOOK_RATE_LIMIT_MAX` (opcional, default: `120`)
-- `ABACATEPAY_WEBHOOK_RATE_LIMIT_WINDOW_SECONDS` (opcional, default: `60`)
-
-3. Suba o PostgreSQL no Docker:
+### 3) Criar arquivo `.env`
 
 ```bash
-pnpm run db:up
+cp .env.example .env
 ```
 
-4. Gere o client Prisma e sincronize schema:
+Depois, preencha no `.env` as variaveis da tabela abaixo (principalmente as keys de integracao).
+
+No arquivo `.env`, mantenha as URLs locais assim durante desenvolvimento:
 
 ```bash
-pnpm run prisma:generate
-pnpm run prisma:push
+BETTER_AUTH_BASE_URL=http://localhost:3000
+BETTER_AUTH_URL=http://localhost:3000
+NEXT_PUBLIC_BETTER_AUTH_URL=http://localhost:3000
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+TRUSTED_ORIGINS=http://localhost:3000
 ```
 
-ou rode tudo de uma vez:
+### 4) Onde pegar cada key
+
+| Variavel | Obrigatoria para rodar local | Onde pegar |
+| --- | --- | --- |
+| `BETTER_AUTH_SECRET` | Sim (recomendado) | Gere localmente com: `openssl rand -base64 32` |
+| `RESEND_API_KEY` | Sim para fluxo completo de cadastro/login por e-mail | Painel Resend: [API Keys](https://resend.com/docs/dashboard/api-keys/introduction) |
+| `RESEND_FROM_EMAIL` | Sim junto com `RESEND_API_KEY` | Endereco remetente do seu dominio verificado em [Domains (Resend)](https://resend.com/docs/dashboard/domains/introduction). Em testes, pode usar `Acme <onboarding@resend.dev>` |
+| `ABACATEPAY_API_KEY` | Nao (apenas billing/checkout) | Painel AbacatePay, secao Integracao/Autenticacao: [docs](https://docs.abacatepay.com/pages/authentication) |
+| `ABACATEPAY_WEBHOOK_SECRET` | Nao (apenas webhook do billing) | Defina ao criar webhook no painel da AbacatePay e replique no `.env`: [docs](https://docs.abacatepay.com/pages/webhooks) |
+| `ABACATEPAY_WEBHOOK_SIGNATURE_KEY` (ou `ABACATEPAY_PUBLIC_KEY`) | Nao (recomendado para seguranca do webhook) | Chave de assinatura/publica exibida na configuracao de webhook da AbacatePay: [docs](https://docs.abacatepay.com/pages/webhooks) |
+| `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` | Nao (login Google) | Google Cloud Console > APIs & Services > Credentials > OAuth Client ID (Web Application): [guia](https://support.google.com/googleapi/answer/6158849?hl=pt-BR) |
+| `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | Nao (upload de avatar/logo) | Painel Cloudinary > Settings > API Keys: [guia](https://cloudinary.com/documentation/django_integration#configure) |
+
+Observacoes importantes:
+
+- Sem `RESEND_API_KEY` e `RESEND_FROM_EMAIL`, os e-mails transacionais nao sao enviados (verificacao de conta, convite e reset de senha).
+- Sem `ABACATEPAY_API_KEY`, o app sobe normalmente, mas checkout de planos pagos fica indisponivel.
+- Sem chaves da Cloudinary, apenas upload de avatar/logo falha.
+
+### 5) Subir banco e Prisma
 
 ```bash
 pnpm run db:setup
 ```
 
-5. Rode o projeto:
+Esse comando faz:
+
+1. `docker compose up -d postgres`
+2. `prisma generate`
+3. `prisma db push`
+
+### 6) Rodar o projeto
 
 ```bash
 pnpm run dev
 ```
 
 Abra [http://localhost:3000](http://localhost:3000).
+
+### 7) Primeiro acesso (checklist rapido)
+
+1. Acesse `/sign-up` e crie uma conta.
+2. Confirme o e-mail recebido (Resend).
+3. Faca login em `/sign-in`.
+4. Conclua o onboarding da empresa.
+
+## Problemas comuns no setup local
+
+### Porta do Postgres em uso (5432)
+
+Suba o banco em outra porta:
+
+```bash
+POSTGRES_PORT=5433 pnpm run db:up
+```
+
+Depois ajuste o `DATABASE_URL` no `.env` para a mesma porta.
+
+### Sem Docker
+
+Se voce nao usar Docker, rode um PostgreSQL local/manual e ajuste `DATABASE_URL`.
+Depois execute:
+
+```bash
+pnpm run prisma:generate
+pnpm run prisma:push
+```
 
 ## Deploy na Vercel
 
@@ -96,41 +145,14 @@ pnpm run prisma:migrate:deploy
 - Se `BETTER_AUTH_URL` nao estiver definida, o projeto tenta usar variaveis de sistema da Vercel (`VERCEL_URL` e relacionadas).
 - Em producao com dominio proprio, mantenha `BETTER_AUTH_URL` explicita para evitar callback incorreto em auth.
 
-## Verificacao de e-mail
-
-- O projeto exige verificacao de e-mail para login.
-- No cadastro, o sistema envia automaticamente o link de verificacao.
-- No login, se o e-mail nao estiver verificado, e possivel reenviar o link pela propria tela.
-- Para envio de e-mail, configure `RESEND_API_KEY` e `RESEND_FROM_EMAIL`.
-
 ## Login com Google (opcional)
 
 - O botao de login com Google ja fica disponivel em `/sign-in`.
 - Para funcionar, configure `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET`.
-- No Google Cloud Console, use esta URI de redirecionamento em desenvolvimento:
+- URI de redirecionamento em desenvolvimento:
   - `http://localhost:3000/api/auth/callback/google`
-- Em producao, use:
+- Em producao:
   - `https://seu-dominio.com/api/auth/callback/google`
-
-## Banco com Docker
-
-1. Copie `.env.example` para `.env`.
-2. Ajuste usuário/senha/porta se necessário.
-3. Comandos úteis:
-
-```bash
-pnpm run db:up
-pnpm run db:logs
-pnpm run db:down
-```
-
-Se a porta `5432` ja estiver em uso, rode com outra porta:
-
-```bash
-POSTGRES_PORT=5433 pnpm run db:up
-```
-
-e ajuste o `DATABASE_URL` para a mesma porta.
 
 ## Rotas principais
 
@@ -146,7 +168,7 @@ e ajuste o `DATABASE_URL` para a mesma porta.
 ## Billing / Webhooks
 
 - O billing fica em `/billing` (planos por organizacao, trial, upgrade/downgrade, cancelamento, reativacao, faturas).
-- Webhook AbacatePay: `POST /api/webhooks/abacatepay` com header `X-Webhook-Secret: SEU_SEGREDO`
+- Webhook AbacatePay: `POST /api/webhooks/abacatepay` com header `X-Webhook-Secret: SEU_SEGREDO`.
 - O webhook valida `X-Webhook-Secret`, valida obrigatoriamente `X-Webhook-Signature` (HMAC SHA-256) e aplica idempotencia por `event.id`.
 - Se `ABACATEPAY_WEBHOOK_SIGNATURE_KEY`/`ABACATEPAY_PUBLIC_KEY` nao estiver configurada, o webhook valida apenas o secret (modo compatibilidade).
 - O webhook aplica rate limit por IP e pode restringir origem com allowlist (`ABACATEPAY_WEBHOOK_ALLOWED_IPS`).
