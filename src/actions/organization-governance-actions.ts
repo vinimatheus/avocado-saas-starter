@@ -41,7 +41,7 @@ const updateOrganizationSchema = z.object({
 });
 
 const organizationConfirmationSchema = z.object({
-  organizationName: z.string().trim().min(1, "Confirme o nome da empresa para continuar."),
+  organizationName: z.string().trim().min(1, "Confirme o nome da organizacao para continuar."),
 });
 
 function successState(
@@ -200,7 +200,7 @@ async function getGovernanceContext(): Promise<GovernanceContext> {
   }
 
   if (!tenantContext.organizationId || !tenantContext.organizationName) {
-    throw new Error("Nenhuma empresa ativa foi encontrada.");
+    throw new Error("Nenhuma organizacao ativa foi encontrada.");
   }
 
   const requestHeaders = await headers();
@@ -216,7 +216,7 @@ async function getGovernanceContext(): Promise<GovernanceContext> {
     (member) => member.userId === tenantContext.session!.user.id,
   );
   if (!currentMember) {
-    throw new Error("Nao foi possivel identificar seu vinculo com a empresa ativa.");
+    throw new Error("Nao foi possivel identificar seu vinculo com a organizacao ativa.");
   }
 
   const hasOwner = membersResult.members.some((member) => hasOrganizationRole(member.role, "owner"));
@@ -405,11 +405,11 @@ export async function leaveOrganizationSafelyAction(
       organizationName: String(formData.get("organizationName") ?? "").trim(),
     });
     if (!parsed.success) {
-      return errorState(parsed.error.issues[0]?.message ?? "Confirme o nome da empresa.");
+      return errorState(parsed.error.issues[0]?.message ?? "Confirme o nome da organizacao.");
     }
 
     if (!organizationNameMatches(parsed.data.organizationName, context.organizationName)) {
-      return errorState("O nome informado nao corresponde a empresa ativa.");
+      return errorState("O nome informado nao corresponde a organizacao ativa.");
     }
 
     if (context.currentIsOwner) {
@@ -446,11 +446,11 @@ export async function deleteOrganizationSafelyAction(
       organizationName: String(formData.get("organizationName") ?? "").trim(),
     });
     if (!parsed.success) {
-      return errorState(parsed.error.issues[0]?.message ?? "Confirme o nome da empresa.");
+      return errorState(parsed.error.issues[0]?.message ?? "Confirme o nome da organizacao.");
     }
 
     if (!organizationNameMatches(parsed.data.organizationName, context.organizationName)) {
-      return errorState("O nome informado nao corresponde a empresa ativa.");
+      return errorState("O nome informado nao corresponde a organizacao ativa.");
     }
 
     if (!context.canManageOwnership) {

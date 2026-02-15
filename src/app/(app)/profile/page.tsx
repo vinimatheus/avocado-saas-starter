@@ -115,9 +115,9 @@ export default async function ProfilePage() {
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="space-y-1">
-              <p className="text-muted-foreground text-xs">Empresa ativa</p>
+              <p className="text-muted-foreground text-xs">Organizacao ativa</p>
               <p className="text-sm font-medium">
-                {tenantContext.organizationName || "Empresa nao identificada"}
+                {tenantContext.organizationName || "Organizacao nao identificada"}
               </p>
             </div>
 
@@ -138,7 +138,7 @@ export default async function ProfilePage() {
             </div>
 
             <div className="space-y-1">
-              <p className="text-muted-foreground text-xs">ID da empresa</p>
+              <p className="text-muted-foreground text-xs">ID da organizacao</p>
               <code className="bg-muted/50 inline-flex w-full items-center gap-2 rounded-md border px-2 py-1 text-[0.625rem] font-medium">
                 <Building2Icon className="size-3" />
                 {tenantContext.organizationId}

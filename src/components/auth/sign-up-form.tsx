@@ -93,7 +93,7 @@ export function SignUpForm({
     resolver: zodResolver(signUpSchema),
     defaultValues: {
       ...defaultValues,
-      companyName: skipOrganizationCreation ? "Empresa convidada" : "",
+      companyName: skipOrganizationCreation ? "Organizacao convidada" : "",
       email: initialEmail,
     },
   });
@@ -145,13 +145,13 @@ export function SignUpForm({
         });
 
         if (organizationResult.error) {
-          toast.error("Conta criada, mas faltou vincular empresa. Complete na etapa inicial.");
+          toast.error("Conta criada, mas faltou vincular organizacao. Complete na etapa inicial.");
           router.replace("/onboarding/company");
           router.refresh();
           return;
         }
 
-        toast.success("Conta e empresa criadas com sucesso.");
+        toast.success("Conta e organizacao criadas com sucesso.");
         router.replace(callbackPath);
         router.refresh();
       });
@@ -173,8 +173,8 @@ export function SignUpForm({
         </CardTitle>
         <CardDescription>
           {skipOrganizationCreation
-            ? "Cadastre seus dados para aceitar o convite da empresa."
-            : "Cadastre nome, e-mail, senha e empresa."}
+            ? "Cadastre seus dados para aceitar o convite da organizacao."
+            : "Cadastre nome, e-mail, senha e organizacao."}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -214,7 +214,7 @@ export function SignUpForm({
 
                   return (
                     <FormItem>
-                      <FormLabel>Empresa</FormLabel>
+                      <FormLabel>Organizacao</FormLabel>
                       <FormControl>
                         <Input
                           {...fieldProps}
@@ -243,7 +243,7 @@ export function SignUpForm({
                       <Input
                         {...fieldProps}
                         type="email"
-                        placeholder="voce@empresa.com"
+                        placeholder="voce@organizacao.com"
                         autoComplete="email"
                       />
                     </FormControl>

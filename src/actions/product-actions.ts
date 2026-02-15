@@ -46,7 +46,7 @@ function errorState(message: string): ProductActionState {
 function parseActionError(error: unknown, fallbackMessage: string): string {
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     if (error.code === "P2002") {
-      return "Ja existe um produto com este SKU nesta empresa.";
+      return "Ja existe um produto com este SKU nesta organizacao.";
     }
 
     if (error.code === "P2021") {
@@ -60,7 +60,7 @@ function parseActionError(error: unknown, fallbackMessage: string): string {
         error.message.toLowerCase().includes("duplicate key value") ||
         error.message.includes("product_organization_id_sku_key"))
     ) {
-      return "Ja existe um produto com este SKU nesta empresa.";
+      return "Ja existe um produto com este SKU nesta organizacao.";
     }
 
     if (
@@ -170,7 +170,7 @@ async function getAdminProductContext(): Promise<{ organizationId: string }> {
   }
 
   if (!tenantContext.organizationId) {
-    throw new Error("Usuario sem empresa ativa.");
+    throw new Error("Usuario sem organizacao ativa.");
   }
 
   if (!isOrganizationAdminRole(tenantContext.role)) {

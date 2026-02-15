@@ -94,7 +94,7 @@ export default async function AcceptInvitationPage({
           <CardHeader>
             <CardTitle>Aceitar convite</CardTitle>
             <CardDescription>
-              Faca login ou crie sua conta para concluir a entrada na empresa.
+              Faca login ou crie sua conta para concluir a entrada na organizacao.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
@@ -182,7 +182,7 @@ export default async function AcceptInvitationPage({
         <CardHeader>
           <CardTitle>Confirmar convite</CardTitle>
           <CardDescription>
-            Revise os dados abaixo e confirme sua entrada na empresa.
+            Revise os dados abaixo e confirme sua entrada na organizacao.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -190,7 +190,7 @@ export default async function AcceptInvitationPage({
             <div className="rounded-md border p-3">
               <p className="text-muted-foreground mb-1 flex items-center gap-2 text-xs font-medium uppercase">
                 <Building2Icon className="size-3.5" />
-                Empresa
+                Organizacao
               </p>
               <p className="text-sm font-medium">{invitationResult.invitation.organizationName}</p>
             </div>

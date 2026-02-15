@@ -168,8 +168,8 @@ export function BillingPlansSection({
             </span>
           </div>
           <p className="text-muted-foreground text-center text-xs">
-            O ciclo anual aplica 20% de desconto e gera cobranca anual no pagamento. No ciclo mensal,
-            a cobranca permanece recorrente automatica no AbacatePay.
+            O ciclo anual aplica 20% de desconto e gera plano anual no pagamento. No ciclo mensal,
+            o plano permanece recorrente automatico no AbacatePay.
           </p>
         </div>
 
@@ -216,7 +216,7 @@ export function BillingPlansSection({
                       </p>
                     ) : (
                       <p className="text-muted-foreground text-xs">
-                        Cobranca recorrente automatica mensal.
+                        Plano recorrente automatico mensal.
                       </p>
                     )}
                   </div>
@@ -272,7 +272,7 @@ export function BillingPlansSection({
                 : "Finalizar escolha do plano"}
             </DialogTitle>
             <DialogDescription>
-              Confirme os dados de cobranca para concluir o ciclo escolhido no pagamento seguro.
+              Confirme os dados do plano para concluir o ciclo escolhido no pagamento seguro.
             </DialogDescription>
           </DialogHeader>
 
@@ -292,7 +292,7 @@ export function BillingPlansSection({
             ) : null}
 
             <div className="space-y-3">
-              <p className="text-sm font-medium">Dados de cobranca e pagamento</p>
+              <p className="text-sm font-medium">Dados do plano e pagamento</p>
               <p className="text-muted-foreground text-xs">
                 Preencha os campos abaixo e avance direto para o pagamento em um unico passo.
               </p>
@@ -322,7 +322,7 @@ export function BillingPlansSection({
             <p className="text-muted-foreground text-xs">
               {annualBillingPreview
                 ? "O pagamento mostra o valor anual com desconto e ativa cobertura por 12 meses."
-                : "O pagamento mostra os valores finais e ativa cobranca recorrente automatica mensal."}
+                : "O pagamento mostra os valores finais e ativa plano recorrente automatico mensal."}
             </p>
           </div>
         </DialogContent>

@@ -61,6 +61,6 @@ export function buildOrganizationSlug(companyName: string, email: string): strin
   const companyPart = normalizeSlugPart(companyName).slice(0, 40);
   const emailPart = normalizeSlugPart(email).slice(0, 24);
 
-  const segments = [companyPart || "empresa", emailPart || "conta"];
+  const segments = [companyPart || "organizacao", emailPart || "conta"];
   return segments.join("-").slice(0, 70);
 }

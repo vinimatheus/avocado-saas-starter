@@ -969,7 +969,7 @@ export function ProductsDataTable({ products, canManage }: ProductsDataTableProp
                 <SheetHeader>
                   <SheetTitle>Cadastrar produto</SheetTitle>
                   <SheetDescription>
-                    Preencha os dados para criar um produto na empresa atual.
+                    Preencha os dados para criar um produto na organizacao atual.
                   </SheetDescription>
                 </SheetHeader>
 

@@ -101,7 +101,7 @@ export function BillingProfileForm({
   defaultName,
   defaultCellphone,
   defaultTaxId,
-  submitLabel = "Salvar dados de cobranca",
+  submitLabel = "Salvar dados do plano",
   pendingLabel = "Salvando dados...",
   submitDisabled = false,
   submitClassName,

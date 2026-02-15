@@ -656,7 +656,7 @@ export function ProfileForm({
                             {...fieldProps}
                             type="email"
                             autoComplete="email"
-                            placeholder="novo-email@empresa.com"
+                            placeholder="novo-email@organizacao.com"
                           />
                         </FormControl>
                         <FormMessage />

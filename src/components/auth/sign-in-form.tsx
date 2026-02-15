@@ -429,7 +429,7 @@ export function SignInForm({
                           <Input
                             {...fieldProps}
                             type="email"
-                            placeholder="voce@empresa.com"
+                            placeholder="voce@organizacao.com"
                             autoComplete="email"
                           />
                         </FormControl>

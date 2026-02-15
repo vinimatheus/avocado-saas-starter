@@ -54,7 +54,7 @@ function normalizeInvitation(item: {
 }): UserInvitation {
   return {
     id: item.id,
-    organizationName: item.organizationName ?? item.organization?.name ?? "Empresa",
+    organizationName: item.organizationName ?? item.organization?.name ?? "Organizacao",
     role: item.role ?? "member",
     createdAt: item.createdAt ? new Date(item.createdAt).toISOString() : new Date().toISOString(),
     expiresAt: item.expiresAt ? new Date(item.expiresAt).toISOString() : new Date().toISOString(),

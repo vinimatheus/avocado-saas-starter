@@ -46,9 +46,9 @@ const themeInitScript = `
 
 const siteOrigin = resolveSiteOrigin();
 const siteName = "avocado SaaS Starter";
-const defaultTitle = "SaaS Starter em Next.js com autenticacao, multi-tenant e cobranca";
+const defaultTitle = "SaaS Starter em Next.js com autenticacao, multi-tenant e planos";
 const defaultDescription =
-  "Template SaaS pronto para producao com Next.js App Router, autenticacao, multi-tenant por organizacao, cobranca e painel.";
+  "Template SaaS pronto para producao com Next.js App Router, autenticacao, multi-tenant por organizacao, planos e painel.";
 const defaultSocialImage = `${siteOrigin}/img/social-card.png`;
 
 export const metadata: Metadata = {
@@ -64,7 +64,7 @@ export const metadata: Metadata = {
     "saas starter template",
     "next.js boilerplate",
     "multi-tenant saas",
-    "saas com cobranca",
+    "saas com planos",
     "better auth",
     "prisma postgresql",
   ],

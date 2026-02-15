@@ -9,8 +9,8 @@ const nameSchema = z
 const companyNameSchema = z
   .string()
   .trim()
-  .min(2, "Nome da empresa deve ter ao menos 2 caracteres.")
-  .max(120, "Nome da empresa deve ter no maximo 120 caracteres.");
+  .min(2, "Nome da organizacao deve ter ao menos 2 caracteres.")
+  .max(120, "Nome da organizacao deve ter no maximo 120 caracteres.");
 
 const emailSchema = z
   .string()

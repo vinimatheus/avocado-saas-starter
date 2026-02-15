@@ -23,7 +23,7 @@ export function BillingProfileDialog({
   defaultName,
   defaultCellphone,
   defaultTaxId,
-  triggerLabel = "Atualizar dados de cobranca",
+  triggerLabel = "Atualizar dados do plano",
 }: BillingProfileDialogProps) {
   return (
     <Dialog>
@@ -34,7 +34,7 @@ export function BillingProfileDialog({
       </DialogTrigger>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Dados de cobranca</DialogTitle>
+          <DialogTitle>Dados do plano</DialogTitle>
           <DialogDescription>
             Atualize os dados usados para pagamento e emissao de fatura.
           </DialogDescription>

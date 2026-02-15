@@ -148,7 +148,7 @@ export function OrganizationGovernancePanel({
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <ShieldAlertIcon className="size-4" />
-          Governanca da empresa
+          Governanca da organizacao
         </CardTitle>
         <CardDescription>
           Operacoes sensiveis de propriedade e ciclo de vida da organizacao.
@@ -242,7 +242,7 @@ export function OrganizationGovernancePanel({
           <div className="space-y-1">
             <p className="text-xs font-semibold">Excluir organizacao</p>
             <p className="text-muted-foreground text-xs">
-              Esta acao remove dados, membros e convites desta empresa de forma permanente.
+              Esta acao remove dados, membros e convites desta organizacao de forma permanente.
             </p>
           </div>
 

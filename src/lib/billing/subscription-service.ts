@@ -1417,7 +1417,7 @@ export async function reconcileCheckoutFromAbacate(input: {
   }
 
   if (!outcome) {
-    // Para cobranca recorrente, o billing pode seguir como ACTIVE mesmo apos um pagamento.
+    // Para assinatura recorrente, o billing pode seguir como ACTIVE mesmo apos um pagamento.
     // Nunca rebaixamos checkout finalizado para PENDING durante reconciliacao.
     if (isCheckoutFinalStatus(checkout.status)) {
       return false;

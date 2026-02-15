@@ -30,8 +30,8 @@ const companyOnboardingSchema = z.object({
   companyName: z
     .string()
     .trim()
-    .min(2, "Nome da empresa deve ter ao menos 2 caracteres.")
-    .max(120, "Nome da empresa deve ter no maximo 120 caracteres."),
+    .min(2, "Nome da organizacao deve ter ao menos 2 caracteres.")
+    .max(120, "Nome da organizacao deve ter no maximo 120 caracteres."),
 });
 
 type CompanyOnboardingValues = z.infer<typeof companyOnboardingSchema>;
@@ -52,7 +52,7 @@ function generateOrganizationSlugVariant(baseSlug: string): string {
     .slice(0, Math.max(1, ORGANIZATION_SLUG_MAX_LENGTH - suffix.length - 1))
     .replace(/-+$/g, "");
 
-  return `${base || "empresa"}-${suffix}`.slice(0, ORGANIZATION_SLUG_MAX_LENGTH);
+  return `${base || "organizacao"}-${suffix}`.slice(0, ORGANIZATION_SLUG_MAX_LENGTH);
 }
 
 export function CompanyOnboardingForm({
@@ -102,7 +102,7 @@ export function CompanyOnboardingForm({
             const organizationsResult = await authClient.organization.list();
             if (organizationsResult.error) {
               const message = localizeAuthErrorMessage(
-                organizationsResult.error.message ?? "Nao foi possivel verificar suas empresas.",
+                organizationsResult.error.message ?? "Nao foi possivel verificar suas organizacoes.",
               );
               setServerMessage(message);
               toast.error(message);
@@ -120,7 +120,7 @@ export function CompanyOnboardingForm({
 
                 if (activateResult.error) {
                   const message = localizeAuthErrorMessage(
-                    activateResult.error.message ?? "Nao foi possivel ativar a empresa.",
+                    activateResult.error.message ?? "Nao foi possivel ativar a organizacao.",
                   );
                   setServerMessage(message);
                   toast.error(message);
@@ -130,8 +130,8 @@ export function CompanyOnboardingForm({
 
               toast.success(
                 keepCurrentActiveOrganization
-                  ? "Empresa ja existe. Use o seletor do menu lateral para trocar de empresa."
-                  : "Empresa vinculada com sucesso.",
+                  ? "Organizacao ja existe. Use o seletor do menu lateral para trocar de organizacao."
+                  : "Organizacao vinculada com sucesso.",
               );
               router.replace(redirectPath);
               router.refresh();
@@ -148,8 +148,8 @@ export function CompanyOnboardingForm({
             if (!retryResult.error) {
               toast.success(
                 keepCurrentActiveOrganization
-                  ? "Empresa criada. Use o seletor do menu lateral para trocar de empresa."
-                  : "Empresa vinculada com sucesso.",
+                  ? "Organizacao criada. Use o seletor do menu lateral para trocar de organizacao."
+                  : "Organizacao vinculada com sucesso.",
               );
               router.replace(redirectPath);
               router.refresh();
@@ -157,7 +157,7 @@ export function CompanyOnboardingForm({
             }
 
             const message = localizeAuthErrorMessage(
-              retryResult.error.message ?? "Nao foi possivel criar a empresa.",
+              retryResult.error.message ?? "Nao foi possivel criar a organizacao.",
             );
             setServerMessage(message);
             toast.error(message);
@@ -165,7 +165,7 @@ export function CompanyOnboardingForm({
           }
 
           const message = localizeAuthErrorMessage(
-            organizationResult.error.message ?? "Nao foi possivel criar a empresa.",
+            organizationResult.error.message ?? "Nao foi possivel criar a organizacao.",
           );
           setServerMessage(message);
           toast.error(message);
@@ -174,8 +174,8 @@ export function CompanyOnboardingForm({
 
         toast.success(
           keepCurrentActiveOrganization
-            ? "Empresa criada. Use o seletor do menu lateral para trocar de empresa."
-            : "Empresa vinculada com sucesso.",
+            ? "Organizacao criada. Use o seletor do menu lateral para trocar de organizacao."
+            : "Organizacao vinculada com sucesso.",
         );
         router.replace(redirectPath);
         router.refresh();
@@ -194,14 +194,14 @@ export function CompanyOnboardingForm({
         <Logo size="md" className="mb-4" />
         <CardTitle className="flex items-center gap-2">
           <Building2Icon className="size-4" />
-          {mode === "create" ? "Nova Empresa" : "Vincular Empresa"}
+          {mode === "create" ? "Nova Organizacao" : "Vincular Organizacao"}
         </CardTitle>
         <CardDescription>
           {mode === "create"
-            ? "Cadastre uma nova empresa para seu usuario."
+            ? "Cadastre uma nova organizacao para seu usuario."
             : userName
-              ? `${userName}, informe a empresa para concluir o acesso.`
-              : "Informe sua empresa para concluir o acesso."}
+              ? `${userName}, informe a organizacao para concluir o acesso.`
+              : "Informe sua organizacao para concluir o acesso."}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -215,7 +215,7 @@ export function CompanyOnboardingForm({
 
                 return (
                   <FormItem>
-                    <FormLabel>Empresa</FormLabel>
+                    <FormLabel>Organizacao</FormLabel>
                     <FormControl>
                       <Input
                         {...fieldProps}
@@ -237,10 +237,10 @@ export function CompanyOnboardingForm({
             <Button type="submit" className="w-full" disabled={isPending}>
               {isPending
                 ? mode === "create"
-                  ? "Criando empresa..."
-                  : "Salvando empresa..."
+                  ? "Criando organizacao..."
+                  : "Salvando organizacao..."
                 : mode === "create"
-                  ? "Criar empresa"
+                  ? "Criar organizacao"
                   : "Concluir"}
             </Button>
           </form>

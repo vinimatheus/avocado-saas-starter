@@ -864,7 +864,7 @@ export function OrganizationUsersManager({
               <SheetHeader>
                 <SheetTitle>Convidar usuario</SheetTitle>
                 <SheetDescription>
-                  Convites sao enviados por e-mail e o acesso sera vinculado a esta empresa.
+                  Convites sao enviados por e-mail e o acesso sera vinculado a esta organizacao.
                 </SheetDescription>
               </SheetHeader>
 
@@ -886,7 +886,7 @@ export function OrganizationUsersManager({
                                   {...fieldProps}
                                   type="email"
                                   autoComplete="email"
-                                  placeholder="usuario@empresa.com"
+                                  placeholder="usuario@organizacao.com"
                                 />
                               </FormControl>
                               <FormMessage />

@@ -44,7 +44,7 @@ const showcaseCards: ShowcaseCard[] = [
     metrics: [
       { name: "Fluxo", value: "6 telas", hint: "login ate redefinicao" },
       { name: "Seguranca", value: "2FA", hint: "TOTP + codigo de backup" },
-      { name: "Primeiro acesso", value: "1 passo", hint: "empresa no primeiro acesso" },
+      { name: "Primeiro acesso", value: "1 passo", hint: "organizacao no primeiro acesso" },
     ],
     highlights: ["verificacao de e-mail", "login social", "2FA", "validacao de formulario"],
     flow: ["Cadastro", "Verificacao", "Login", "Primeiro acesso"],
@@ -53,29 +53,29 @@ const showcaseCards: ShowcaseCard[] = [
     title: "Multi-tenant com organizacoes",
     description:
       "Contexto por organizacao, alternador na sidebar, convites de equipe e papeis para controlar quem acessa cada modulo.",
-    label: "Contexto de empresa centralizado",
+    label: "Contexto de organizacao centralizado",
     metrics: [
       { name: "Papeis", value: "proprietario/admin/membro", hint: "acesso por permissao" },
       { name: "Convites", value: "status real", hint: "pendente, ativo, expirado" },
-      { name: "Espaco", value: "dinamico", hint: "troca de empresa imediata" },
+      { name: "Espaco", value: "dinamico", hint: "troca de organizacao imediata" },
     ],
     highlights: [
-      "alternador de empresa",
+      "alternador de organizacao",
       "convites de equipe",
       "controle de papeis",
-      "sincronizacao da empresa ativa",
+      "sincronizacao da organizacao ativa",
     ],
-    flow: ["Criar empresa", "Convidar", "Aceitar convite", "Operar em equipe"],
+    flow: ["Criar organizacao", "Convidar", "Aceitar convite", "Operar em equipe"],
   },
   {
-    title: "Cobranca integrada com AbacatePay",
+    title: "Planos integrados com AbacatePay",
     description:
       "Planos Gratuito/Starter/Pro/Scale, periodo de teste, upgrade/downgrade, dunning, webhook com assinatura HMAC e idempotencia.",
     label: "Assinaturas + governanca",
     metrics: [
       { name: "Planos", value: "4 niveis", hint: "R$0, R$50, R$100, R$400" },
       { name: "Webhook", value: "HMAC", hint: "segredo + assinatura" },
-      { name: "Cobranca", value: "mensal/anual", hint: "pagamento com redirecionamento seguro" },
+      { name: "Ciclo", value: "mensal/anual", hint: "pagamento com redirecionamento seguro" },
     ],
     highlights: ["periodo de teste", "periodo de graca", "direitos por plano", "limites de uso"],
     flow: ["Escolher plano", "Pagamento", "Webhook", "Permissao atualizada"],
@@ -109,7 +109,7 @@ const bentoFeatures = [
     bars: [40, 64, 52],
   },
   {
-    title: "Cobranca escalavel",
+    title: "Planos escalaveis",
     description:
       "Permissoes por plano, controle de limites, dunning e restricoes operacionais em caso de excedente ou atraso.",
     icon: CreditCardIcon,
@@ -155,7 +155,7 @@ const starterFit = [
   {
     title: "Fundadores",
     description:
-      "Lance um SaaS com autenticacao, cobranca e multi-tenant sem gastar semanas montando infraestrutura basica.",
+      "Lance um SaaS com autenticacao, planos e multi-tenant sem gastar semanas montando infraestrutura basica.",
   },
   {
     title: "Times de produto",
@@ -216,14 +216,14 @@ const faq = [
       "Cada usuario opera em uma organizacao ativa, com alternador, convites e papeis de acesso controlados no servidor.",
   },
   {
-    question: "Cobranca e webhook ja estao prontos?",
+    question: "Planos e webhook ja estao prontos?",
     answer:
-      "Sim. O modulo de cobranca contempla planos, periodo de teste, upgrade/downgrade e webhook AbacatePay com assinatura HMAC.",
+      "Sim. O modulo de planos contempla periodo de teste, upgrade/downgrade e webhook AbacatePay com assinatura HMAC.",
   },
   {
     question: "Posso usar esse starter como base para um SaaS real?",
     answer:
-      "Sim. A estrutura foi feita para producao e pode ser expandida com novos modulos mantendo a base de autenticacao, tenant e cobranca.",
+      "Sim. A estrutura foi feita para producao e pode ser expandida com novos modulos mantendo a base de autenticacao, tenant e gestao de planos.",
   },
 ];
 
@@ -443,7 +443,7 @@ export function MarketingLanding() {
               Next.js SaaS Starter pronto para sair do zero ao painel em horas
             </h1>
             <p className="text-muted-foreground mt-5 max-w-2xl text-balance text-sm font-medium leading-6 sm:text-lg sm:leading-8">
-              Base completa com Next.js, Better Auth, multi-tenant por organizacao e cobranca AbacatePay,
+              Base completa com Next.js, Better Auth, multi-tenant por organizacao e planos com AbacatePay,
               Prisma e PostgreSQL para voce focar no produto e nao na infra.
             </p>
 
@@ -638,7 +638,7 @@ export function MarketingLanding() {
           <div className="mx-auto max-w-2xl text-center">
             <Badge icon={<CircleDollarSignIcon className="size-3.5" />} text="Precos do projeto" />
             <h2 className="mt-4 text-2xl font-black tracking-tight sm:text-4xl">
-              Planos alinhados ao modulo de cobranca
+              Planos alinhados ao modulo de assinaturas
             </h2>
           </div>
 
@@ -712,7 +712,7 @@ export function MarketingLanding() {
             </h2>
             <p className="text-muted-foreground mx-auto mt-4 max-w-2xl text-sm leading-7 sm:text-base">
               Clone, configure variaveis, rode `db:setup` e comece a evoluir seu proprio produto com autenticacao,
-              multi-tenant e cobranca funcionando de ponta a ponta.
+              multi-tenant e modulo de planos funcionando de ponta a ponta.
             </p>
 
             <div className="mt-8 flex flex-wrap items-center justify-center gap-3">

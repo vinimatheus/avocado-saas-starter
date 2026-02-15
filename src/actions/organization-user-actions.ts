@@ -103,7 +103,7 @@ async function getAdminActionContext(): Promise<{
     throw new Error("Sessao invalida para gerenciar usuarios.");
   }
   if (!tenantContext.organizationId) {
-    throw new Error("Usuario sem empresa ativa.");
+    throw new Error("Usuario sem organizacao ativa.");
   }
   if (!isOrganizationAdminRole(tenantContext.role)) {
     throw new Error("Somente administradores podem gerenciar usuarios.");

@@ -34,7 +34,7 @@ function resolveCallbackPath(value: string): string {
 export const metadata: Metadata = {
   title: "Criar conta",
   description:
-    "Crie sua conta e inicie sua area no avocado SaaS Starter com autenticacao, cobranca e multi-tenant prontos.",
+    "Crie sua conta e inicie sua area no avocado SaaS Starter com autenticacao, planos e multi-tenant prontos.",
   alternates: {
     canonical: "/sign-up",
   },

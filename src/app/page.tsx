@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 const siteOrigin = resolveSiteOrigin();
 const homeTitle = "Next.js SaaS Starter pronto para producao";
 const homeDescription =
-  "Lance seu SaaS mais rapido com starter em Next.js com autenticacao, multi-tenant, cobranca e painel prontos.";
+  "Lance seu SaaS mais rapido com starter em Next.js com autenticacao, multi-tenant, planos e painel prontos.";
 const homeSocialImage = `${siteOrigin}/img/social-card.png`;
 
 const homeStructuredData = {
@@ -59,10 +59,10 @@ const homeStructuredData = {
         },
         {
           "@type": "Question",
-          name: "Cobranca e webhook ja estao prontos?",
+          name: "Planos e webhook ja estao prontos?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "Sim. O modulo de cobranca contempla planos, periodo de teste, upgrade e webhook AbacatePay com assinatura HMAC.",
+            text: "Sim. O modulo de planos contempla periodo de teste, upgrade e webhook AbacatePay com assinatura HMAC.",
           },
         },
       ],
@@ -76,7 +76,7 @@ export const metadata: Metadata = {
   keywords: [
     "nextjs saas starter",
     "next.js saas boilerplate",
-    "saas starter com cobranca",
+    "saas starter com planos",
     "template saas multi-tenant",
     "better auth nextjs",
   ],
