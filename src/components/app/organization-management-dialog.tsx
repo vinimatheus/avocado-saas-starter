@@ -10,7 +10,6 @@ import {
   SendIcon,
   ShieldCheckIcon,
   Trash2Icon,
-  UserPlusIcon,
   UsersIcon,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
@@ -89,7 +88,8 @@ type OrganizationManagementDialogProps = {
   pendingInvitations: OrganizationDialogInvitation[]
 }
 
-type OrganizationManagementSection = "organization" | "plan" | "invites" | "members" | "ownership"
+type OrganizationManagementSection = "organization" | "plan" | "access"
+type AccessPanel = "invites" | "members" | "ownership"
 type AssignableRole = "admin" | "user"
 
 function normalizeRoleLabel(role: string): string {
@@ -127,19 +127,11 @@ function sectionLabel(section: OrganizationManagementSection): string {
     return "Organizacao"
   }
 
-  if (section === "members") {
-    return "Membros"
-  }
-
   if (section === "plan") {
     return "Plano"
   }
 
-  if (section === "ownership") {
-    return "Transferencia"
-  }
-
-  return "Convites"
+  return "Acesso"
 }
 
 function toSlug(value: string): string {
@@ -171,6 +163,7 @@ export function OrganizationManagementDialog({
   const [inviteRole, setInviteRole] = React.useState<AssignableRole>("user")
   const [selectedSectionState, setSelectedSectionState] =
     React.useState<OrganizationManagementSection>("organization")
+  const [selectedAccessPanelState, setSelectedAccessPanelState] = React.useState<AccessPanel>("invites")
 
   const [organizationNameInput, setOrganizationNameInput] = React.useState(organizationName)
   const [organizationSlugInput, setOrganizationSlugInput] = React.useState(
@@ -222,19 +215,43 @@ export function OrganizationManagementDialog({
       icon: React.ComponentType<{ className?: string }>
     }> = [
       { id: "plan", label: "Plano", icon: CreditCardIcon },
-      { id: "invites", label: "Convites", icon: UserPlusIcon },
+      { id: "access", label: "Acesso", icon: UsersIcon },
     ]
 
     if (isOwner) {
       base.unshift({ id: "organization", label: "Organizacao", icon: Building2Icon })
-      base.push(
-        { id: "members", label: "Membros", icon: UsersIcon },
-        { id: "ownership", label: "Transferencia", icon: CrownIcon },
-      )
     }
 
     return base
   }, [isOwner])
+
+  const accessPanels = React.useMemo(
+    () =>
+      (
+        [
+          { id: "invites", label: "Convites", icon: MailIcon },
+          ...(isOwner
+            ? [
+                { id: "members", label: "Membros", icon: UsersIcon },
+                { id: "ownership", label: "Transferencia", icon: CrownIcon },
+              ]
+            : []),
+        ] as Array<{
+          id: AccessPanel
+          label: string
+          icon: React.ComponentType<{ className?: string }>
+        }>
+      ).filter(Boolean),
+    [isOwner],
+  )
+
+  const selectedAccessPanel = React.useMemo(() => {
+    if (accessPanels.some((panel) => panel.id === selectedAccessPanelState)) {
+      return selectedAccessPanelState
+    }
+
+    return accessPanels[0]?.id ?? "invites"
+  }, [accessPanels, selectedAccessPanelState])
 
   const selectedSection = React.useMemo(() => {
     if (sections.some((section) => section.id === selectedSectionState)) {
@@ -302,6 +319,7 @@ export function OrganizationManagementDialog({
     setOrganizationNameInput(organizationName)
     setOrganizationSlugInput(organizationSlug ?? toSlug(organizationName))
     setDeleteConfirmationName("")
+    setSelectedAccessPanelState("invites")
     setFailedOrganizationLogoSrc(null)
     organizationLogoFormRef.current?.reset()
   }, [open, organizationName, organizationSlug])
@@ -434,7 +452,7 @@ export function OrganizationManagementDialog({
       <DialogContent className="overflow-hidden p-0 sm:max-h-[calc(100vh-2rem)] sm:max-w-[calc(100vw-2rem)] md:h-[72vh] md:max-h-[72vh] md:min-h-0 md:w-[920px] md:max-w-[920px]">
         <DialogTitle className="sr-only">Gerenciar organizacao</DialogTitle>
         <DialogDescription className="sr-only">
-          Configure dados da organizacao, plano, convites, membros e propriedade da organizacao ativa.
+          Configure dados da organizacao, plano e acessos da organizacao ativa.
         </DialogDescription>
 
         <SidebarProvider
@@ -496,8 +514,8 @@ export function OrganizationManagementDialog({
                 </div>
                 <p className="text-muted-foreground text-xs">
                   {isOwner
-                    ? "Proprietario: gerencie organizacao, convites, membros e transferencia."
-                    : "Administrador: visualize plano e gerencie convites de membros."}
+                    ? "Proprietario: gerencie organizacao e todo o acesso de membros em um unico lugar."
+                    : "Administrador: visualize plano e gerencie convites em uma area unica de acesso."}
                 </p>
               </div>
 
@@ -655,7 +673,7 @@ export function OrganizationManagementDialog({
                 </div>
               ) : null}
 
-              {selectedSection === "invites" ? (
+              {selectedSection === "access" ? (
                 <div className="space-y-4">
                   <form
                     onSubmit={submitInvite}
@@ -688,117 +706,169 @@ export function OrganizationManagementDialog({
                     </Button>
                   </form>
 
-                  <div className="space-y-2 rounded-lg border p-3">
-                    <p className="text-xs font-medium">Convites pendentes</p>
-                    {pendingInvitations.length === 0 ? (
-                      <p className="text-muted-foreground text-xs">Nenhum convite pendente.</p>
-                    ) : (
-                      pendingInvitations.map((invitation) => (
-                        <div key={invitation.id} className="flex items-center justify-between gap-3 rounded-md border p-2">
-                          <div className="min-w-0">
-                            <p className="truncate text-xs font-medium">{invitation.email}</p>
-                            <p className="text-muted-foreground text-[11px]">
-                              {normalizeRoleLabel(invitation.role)} - Expira em {formatDate(invitation.expiresAt)}
-                            </p>
-                          </div>
-                          <MailIcon className="text-muted-foreground size-3.5 shrink-0" />
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              ) : null}
-
-              {selectedSection === "members" ? (
-                <div className="space-y-2 rounded-lg border p-3">
-                  <p className="text-xs font-medium">Membros da organizacao</p>
-                  {sortedMembers.map((member) => (
-                    <div key={member.id} className="flex items-center justify-between gap-3 rounded-md border p-2">
-                      <div className="min-w-0">
-                        <p className="truncate text-xs font-medium">{member.name}</p>
-                        <p className="text-muted-foreground truncate text-[11px]">{member.email}</p>
+                  <div className="space-y-3 rounded-lg border p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-xs font-medium">Acesso centralizado</p>
+                      <div className="flex flex-wrap gap-1">
+                        <Badge variant="outline" className="text-[11px]">
+                          {sortedMembers.length} membros
+                        </Badge>
+                        <Badge variant="outline" className="text-[11px]">
+                          {pendingInvitations.length} convites
+                        </Badge>
                       </div>
-                      <span className="text-muted-foreground shrink-0 text-[11px]">
-                        {normalizeRoleLabel(member.role)}
-                      </span>
-                      {member.role === "owner" ? (
-                        <span className="text-muted-foreground shrink-0 text-[11px]">
-                          Transfira a propriedade para alterar o proprietario
-                        </span>
-                      ) : (
-                        <div className="flex shrink-0 items-center gap-2">
-                          <select
-                            className="border-input bg-background h-7 rounded-md border px-2 text-xs"
-                            value={toAssignableRole(member.role)}
-                            disabled={isUpdateMemberRolePending || isRemoveMemberPending}
-                            onChange={(event) => {
-                              submitMemberRoleUpdate(
-                                member.id,
-                                event.target.value === "admin" ? "admin" : "user",
-                              )
-                            }}
-                          >
-                            <option value="user">Usuario</option>
-                            <option value="admin">Administrador</option>
-                          </select>
-                          <Button
-                            type="button"
-                            size="xs"
-                            variant="destructive"
-                            disabled={
-                              isUpdateMemberRolePending ||
-                              isRemoveMemberPending ||
-                              member.userId === currentUserId
-                            }
-                            onClick={() => {
-                              submitRemoveMember(member.id, member.userId)
-                            }}
-                          >
-                            Remover
-                          </Button>
+                    </div>
+
+                    <div className="bg-muted/40 inline-flex w-full flex-wrap gap-1 rounded-md p-1">
+                      {accessPanels.map((panel) => (
+                        <button
+                          key={panel.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedAccessPanelState(panel.id)
+                          }}
+                          className={`inline-flex h-7 items-center gap-1.5 rounded-sm px-2 text-xs transition-colors ${
+                            selectedAccessPanel === panel.id
+                              ? "bg-background text-foreground border border-border shadow-sm"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          <panel.icon className="size-3.5" />
+                          {panel.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {selectedAccessPanel === "invites" ? (
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium">Convites pendentes</p>
+                        {pendingInvitations.length === 0 ? (
+                          <p className="text-muted-foreground text-xs">Nenhum convite pendente.</p>
+                        ) : (
+                          <div className="max-h-56 space-y-1 overflow-y-auto pr-1">
+                            {pendingInvitations.map((invitation) => (
+                              <div
+                                key={invitation.id}
+                                className="flex items-center justify-between gap-3 rounded-md border p-2"
+                              >
+                                <div className="min-w-0">
+                                  <p className="truncate text-xs font-medium">{invitation.email}</p>
+                                  <p className="text-muted-foreground text-[11px]">
+                                    {normalizeRoleLabel(invitation.role)} - Expira em{" "}
+                                    {formatDate(invitation.expiresAt)}
+                                  </p>
+                                </div>
+                                <MailIcon className="text-muted-foreground size-3.5 shrink-0" />
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ) : null}
+
+                    {selectedAccessPanel === "members" ? (
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium">Membros da organizacao</p>
+                        <div className="max-h-64 space-y-1 overflow-y-auto pr-1">
+                          {sortedMembers.map((member) => (
+                            <div
+                              key={member.id}
+                              className="flex flex-col gap-2 rounded-md border p-2 sm:flex-row sm:items-center sm:justify-between"
+                            >
+                              <div className="min-w-0">
+                                <p className="truncate text-xs font-medium">{member.name}</p>
+                                <p className="text-muted-foreground truncate text-[11px]">{member.email}</p>
+                              </div>
+
+                              {isOwner ? (
+                                member.role === "owner" ? (
+                                  <span className="text-muted-foreground shrink-0 text-[11px]">
+                                    Proprietario atual
+                                  </span>
+                                ) : (
+                                  <div className="flex shrink-0 items-center gap-2">
+                                    <select
+                                      className="border-input bg-background h-7 rounded-md border px-2 text-xs"
+                                      value={toAssignableRole(member.role)}
+                                      disabled={isUpdateMemberRolePending || isRemoveMemberPending}
+                                      onChange={(event) => {
+                                        submitMemberRoleUpdate(
+                                          member.id,
+                                          event.target.value === "admin" ? "admin" : "user",
+                                        )
+                                      }}
+                                    >
+                                      <option value="user">Usuario</option>
+                                      <option value="admin">Administrador</option>
+                                    </select>
+                                    <Button
+                                      type="button"
+                                      size="xs"
+                                      variant="destructive"
+                                      disabled={
+                                        isUpdateMemberRolePending ||
+                                        isRemoveMemberPending ||
+                                        member.userId === currentUserId
+                                      }
+                                      onClick={() => {
+                                        submitRemoveMember(member.id, member.userId)
+                                      }}
+                                    >
+                                      Remover
+                                    </Button>
+                                  </div>
+                                )
+                              ) : (
+                                <span className="text-muted-foreground shrink-0 text-[11px]">
+                                  {normalizeRoleLabel(member.role)}
+                                </span>
+                              )}
+                            </div>
+                          ))}
                         </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ) : null}
+                      </div>
+                    ) : null}
 
-              {selectedSection === "ownership" ? (
-                <div className="space-y-3 rounded-lg border p-3">
-                  <p className="text-xs font-medium">Transferencia de organizacao</p>
-                  <p className="text-muted-foreground text-xs">Selecione o novo proprietario da organizacao.</p>
-
-                  {transferCandidates.length === 0 ? (
-                    <p className="text-muted-foreground text-xs">
-                      Convide ao menos mais um membro para transferir propriedade.
-                    </p>
-                  ) : (
-                    <div className="flex flex-col gap-2 sm:flex-row">
-                      <select
-                        className="border-input bg-background h-7 flex-1 rounded-md border px-2 text-xs"
-                        value={transferTargetMemberId}
-                        onChange={(event) => {
-                          setTransferTargetMemberIdState(event.target.value)
-                        }}
-                      >
-                        {transferCandidates.map((member) => (
-                          <option key={member.id} value={member.id}>
-                            {member.name} ({member.email})
-                          </option>
-                        ))}
-                      </select>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={submitOwnershipTransfer}
-                        disabled={isTransferPending || !transferTargetMemberId}
-                      >
-                        <ShieldCheckIcon data-icon="inline-start" />
-                        {isTransferPending ? "Transferindo..." : "Transferir propriedade"}
-                      </Button>
-                    </div>
-                  )}
+                    {selectedAccessPanel === "ownership" ? (
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium">Transferencia de propriedade</p>
+                        <p className="text-muted-foreground text-xs">
+                          Selecione o novo proprietario da organizacao.
+                        </p>
+                        {transferCandidates.length === 0 ? (
+                          <p className="text-muted-foreground text-xs">
+                            Convide ao menos mais um membro para transferir propriedade.
+                          </p>
+                        ) : (
+                          <div className="flex flex-col gap-2 sm:flex-row">
+                            <select
+                              className="border-input bg-background h-7 flex-1 rounded-md border px-2 text-xs"
+                              value={transferTargetMemberId}
+                              onChange={(event) => {
+                                setTransferTargetMemberIdState(event.target.value)
+                              }}
+                            >
+                              {transferCandidates.map((member) => (
+                                <option key={member.id} value={member.id}>
+                                  {member.name} ({member.email})
+                                </option>
+                              ))}
+                            </select>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={submitOwnershipTransfer}
+                              disabled={isTransferPending || !transferTargetMemberId}
+                            >
+                              <ShieldCheckIcon data-icon="inline-start" />
+                              {isTransferPending ? "Transferindo..." : "Transferir propriedade"}
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
               ) : null}
 
