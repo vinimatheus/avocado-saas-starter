@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { syncInvoicesAction } from "@/actions/billing-actions";
 import { AppPageContainer } from "@/components/app/app-page-container";
+import { AppPageHighlightCard } from "@/components/app/app-page-highlight-card";
 import { BillingPlansSection } from "@/components/billing/billing-plans-section";
 import { BillingProfileDialog } from "@/components/billing/billing-profile-dialog";
 import { CancelSubscriptionDialog } from "@/components/billing/cancel-subscription-dialog";
@@ -251,13 +252,7 @@ export default async function BillingPage({
   };
 
   return (
-    <AppPageContainer className="gap-6">
-      <section className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Plano</h1>
-        <p className="text-muted-foreground text-sm sm:text-base">
-          Escolha um plano para a sua organizacao e escale usuarios sem perder controle.
-        </p>
-      </section>
+    <AppPageContainer className="gap-4">
 
       {successMessage ? (
         <Card className="border-emerald-500/40 bg-emerald-500/10">
@@ -303,44 +298,25 @@ export default async function BillingPage({
         </Card>
       ) : null}
 
-      <Card className="overflow-hidden border-primary/30 bg-gradient-to-br from-background via-background to-primary/10">
-        <CardContent className="p-0">
-          <div className="grid items-center gap-4 md:grid-cols-[1.2fr_0.8fr]">
-            <div className="space-y-2 px-5 py-5 sm:px-6">
-              <div className="mb-1 inline-flex items-center justify-center rounded-full border border-primary/20 bg-card/80 px-3 py-1.5 shadow-sm">
-                <Image
-                  src="/img/abacate%20pay.png"
-                  alt="AbacatePay"
-                  width={98}
-                  height={28}
-                  className="h-auto w-auto object-contain"
-                  priority
-                />
-              </div>
-              <p className="text-muted-foreground text-[11px] font-semibold uppercase tracking-[0.12em]">
-                Financeiro estrategico
-              </p>
-              <h2 className="text-xl font-semibold tracking-tight">
-                Controle financeiro com visao clara para crescer com seguranca
-              </h2>
-              <p className="text-muted-foreground text-sm">
-                Gerencie assinatura, recorrencia e status dos planos em um fluxo unico e objetivo.
-              </p>
-            </div>
-
-            <div className="relative h-48 w-full md:h-full md:min-h-[220px]">
-              <Image
-                src="/img/financeiro.png"
-                alt="Avocato controlando pagamentos no computador"
-                fill
-                priority
-                sizes="(max-width: 768px) 100vw, 34vw"
-                className="object-cover object-center md:object-[58%_center]"
-              />
-            </div>
+      <AppPageHighlightCard
+        eyebrow="Plano"
+        title="Controle financeiro com visao clara para crescer com seguranca"
+        description="Gerencie assinatura, recorrencia e status dos planos em um fluxo unico e objetivo."
+        imageSrc="/img/financeiro.png"
+        imageAlt="Avocato controlando pagamentos no computador"
+        beforeTitle={
+          <div className="mb-0.5 inline-flex items-center justify-center rounded-full border border-primary/20 bg-card/80 px-2.5 py-1 shadow-sm">
+            <Image
+              src="/img/abacate%20pay.png"
+              alt="AbacatePay"
+              width={98}
+              height={28}
+              className="h-auto w-auto object-contain"
+              priority
+            />
           </div>
-        </CardContent>
-      </Card>
+        }
+      />
 
       {isPastDueInGrace ? (
         <Card className="border-amber-500/40 bg-amber-500/10">

@@ -6,12 +6,12 @@ import {
   UserCheck2Icon,
   UsersIcon,
 } from "lucide-react";
-import Image from "next/image";
 
 import { AppPageContainer } from "@/components/app/app-page-container";
+import { AppPageHighlightCard } from "@/components/app/app-page-highlight-card";
 import { DashboardAreaCharts } from "@/components/dashboard/dashboard-area-charts";
 import { StatusBanner } from "@/components/app/status-banner";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getDashboardInsights } from "@/lib/dashboard/analytics";
 import { getTenantContext } from "@/lib/organization/tenant-context";
 
@@ -36,45 +36,16 @@ export default async function DashboardPage() {
   const insights = await getDashboardInsights(tenantContext.organizationId!);
 
   return (
-    <AppPageContainer className="gap-6">
-      <section className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Painel</h1>
-        <p className="text-muted-foreground text-sm sm:text-base">
-          Acompanhe tendencia mensal de usuarios, equipe e produtos em um unico painel.
-        </p>
-      </section>
-
+    <AppPageContainer className="gap-4">
       <StatusBanner message={insights.errorMessage} />
 
-      <Card className="overflow-hidden border-primary/30 bg-gradient-to-br from-background via-background to-primary/10">
-        <CardContent className="p-0">
-          <div className="grid items-center gap-4 md:grid-cols-[1.2fr_0.8fr]">
-            <div className="space-y-2 px-5 py-5 sm:px-6">
-              <p className="text-muted-foreground text-[11px] font-semibold uppercase tracking-[0.12em]">
-                avocado no controle
-              </p>
-              <h2 className="text-xl font-semibold tracking-tight">
-                Seu painel com visao clara para decidir mais rapido
-              </h2>
-              <p className="text-muted-foreground text-sm">
-                Acompanhe usuarios, time e produtos em um unico lugar e mantenha sua operacao
-                evoluindo com previsibilidade.
-              </p>
-            </div>
-
-            <div className="relative h-48 w-full md:h-full md:min-h-[220px]">
-              <Image
-                src="/img/dashboard.png"
-                alt="avocado mexendo no computador"
-                fill
-                priority
-                sizes="(max-width: 768px) 100vw, 34vw"
-                className="object-cover object-center md:object-[58%_center]"
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <AppPageHighlightCard
+        eyebrow="Painel"
+        title="Seu painel com visao clara para decidir mais rapido"
+        description="Acompanhe usuarios, time e produtos em um unico lugar e mantenha sua operacao evoluindo com previsibilidade."
+        imageSrc="/img/dashboard.png"
+        imageAlt="avocado mexendo no computador"
+      />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Card>
