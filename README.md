@@ -17,6 +17,19 @@ Template SaaS com:
 - Docker + Docker Compose
 - Git
 
+### Docker (se ainda nao tiver instalado)
+
+1. Instale o Docker:
+- macOS/Windows: Docker Desktop
+- Linux: Docker Engine + Docker Compose Plugin
+2. Inicie o Docker (o daemon precisa estar ativo).
+3. Valide no terminal:
+
+```bash
+docker --version
+docker compose version
+```
+
 ### 2) Clonar e instalar dependencias
 
 ```bash
@@ -79,6 +92,14 @@ Esse comando faz:
 1. `docker compose up -d postgres`
 2. `prisma generate`
 3. `prisma db push`
+
+Comandos Docker uteis para o banco:
+
+```bash
+pnpm run db:up
+pnpm run db:logs
+pnpm run db:down
+```
 
 ### 6) Rodar o projeto
 
