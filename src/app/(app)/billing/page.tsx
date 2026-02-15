@@ -151,9 +151,9 @@ function resolveInvoiceLink(input: {
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
-  title: "Pagamentos",
+  title: "Plano",
   description:
-    "Gestao interna de assinatura, planos, renovacao e cobranca da area no avocado SaaS Starter.",
+    "Gestao interna de assinatura, planos e renovacao da area no avocado SaaS Starter.",
   alternates: {
     canonical: "/billing",
   },
@@ -253,7 +253,7 @@ export default async function BillingPage({
   return (
     <AppPageContainer className="gap-6">
       <section className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Pagamentos</h1>
+        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Plano</h1>
         <p className="text-muted-foreground text-sm sm:text-base">
           Escolha um plano para a sua organizacao e escale usuarios sem perder controle.
         </p>
@@ -324,7 +324,7 @@ export default async function BillingPage({
                 Controle financeiro com visao clara para crescer com seguranca
               </h2>
               <p className="text-muted-foreground text-sm">
-                Gerencie assinatura, recorrencia e status de cobranca em um fluxo unico e objetivo.
+                Gerencie assinatura, recorrencia e status dos planos em um fluxo unico e objetivo.
               </p>
             </div>
 
@@ -391,7 +391,7 @@ export default async function BillingPage({
           <CardHeader>
             <CardTitle>Voce ja esta no maior plano publicado</CardTitle>
             <CardDescription>
-              Mantenha seus dados de cobranca em dia e fale com comercial se precisar de capacidade extra.
+              Mantenha os dados do plano em dia e fale com comercial se precisar de capacidade extra.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -400,7 +400,7 @@ export default async function BillingPage({
       <Card>
         <CardHeader>
           <CardTitle>Resumo da assinatura</CardTitle>
-          <CardDescription>Informacoes essenciais do plano atual e status da cobranca.</CardDescription>
+          <CardDescription>Informacoes essenciais do plano atual e status dos planos.</CardDescription>
           <CardAction>
             <BillingProfileDialog
               defaultName={billingDefaults.name}
@@ -475,7 +475,7 @@ export default async function BillingPage({
         <CardContent className="space-y-3">
           {paidInvoices.length === 0 ? (
             <p className="text-muted-foreground text-sm">
-              Nenhum pagamento confirmado ainda. Quando houver cobrancas pagas, os recibos aparecerao aqui.
+              Nenhum pagamento confirmado ainda. Quando houver planos pagos, os recibos aparecerao aqui.
             </p>
           ) : (
             <Table>

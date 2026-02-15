@@ -2,12 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  CreditCardIcon,
-  LayoutDashboardIcon,
-  PackageSearchIcon,
-  UserRoundIcon,
-} from "lucide-react";
+import { LayoutDashboardIcon, PackageSearchIcon } from "lucide-react";
 
 import { Logo } from "@/components/shared/logo";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
@@ -45,6 +40,8 @@ type AppShellProps = {
     name: string;
     slug: string;
     logo: string | null;
+    planCode: "FREE" | "STARTER_50" | "PRO_100" | "SCALE_400";
+    planName: string;
     isPremium: boolean;
   }>;
   pendingInvitations: UserInvitation[];
@@ -72,18 +69,6 @@ const NAV_ITEMS: NavItem[] = [
     label: "Produtos",
     href: "/produtos",
     icon: PackageSearchIcon,
-    showWhen: () => true,
-  },
-  {
-    label: "Cobranca",
-    href: "/billing",
-    icon: CreditCardIcon,
-    showWhen: () => true,
-  },
-  {
-    label: "Perfil",
-    href: "/profile",
-    icon: UserRoundIcon,
     showWhen: () => true,
   },
 ];

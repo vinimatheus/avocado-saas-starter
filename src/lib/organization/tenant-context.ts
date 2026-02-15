@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 import { cache } from "react";
 
 import { auth } from "@/lib/auth/server";
-import { isPaidPlan } from "@/lib/billing/plans";
+import { getPlanDefinition, isPaidPlan } from "@/lib/billing/plans";
 import { normalizeOrganizationRole, type OrganizationUserRole } from "@/lib/organization/helpers";
 import { prisma } from "@/lib/db/prisma";
 
@@ -15,6 +15,8 @@ export type TenantContext = {
     name: string;
     slug: string;
     logo: string | null;
+    planCode: "FREE" | "STARTER_50" | "PRO_100" | "SCALE_400";
+    planName: string;
     isPremium: boolean;
   }>;
   role: OrganizationUserRole | null;
@@ -69,11 +71,11 @@ type OrganizationBillingSnapshot = {
   currentPeriodEnd: Date | null;
 };
 
-function isPremiumOrganization(
+function resolveOrganizationPlanCode(
   subscription: OrganizationBillingSnapshot | null | undefined,
-): boolean {
+): OrganizationBillingSnapshot["planCode"] {
   if (!subscription) {
-    return false;
+    return "FREE";
   }
 
   const now = new Date();
@@ -83,7 +85,7 @@ function isPremiumOrganization(
     subscription.trialEndsAt &&
     subscription.trialEndsAt > now
   ) {
-    return isPaidPlan(subscription.trialPlanCode);
+    return subscription.trialPlanCode;
   }
 
   if (
@@ -91,10 +93,10 @@ function isPremiumOrganization(
     subscription.currentPeriodEnd &&
     subscription.currentPeriodEnd > now
   ) {
-    return isPaidPlan(subscription.planCode);
+    return subscription.planCode;
   }
 
-  return false;
+  return "FREE";
 }
 
 async function ensureOrganizationRolesNormalized(organizationId: string): Promise<void> {
@@ -224,15 +226,22 @@ async function resolveTenantContext(): Promise<TenantContext> {
   const subscriptionByOrganizationId = new Map(
     organizationSubscriptions.map((subscription) => [subscription.organizationId, subscription]),
   );
-  const organizationsWithBillingState = organizations.map((organization) => ({
-    id: organization.id,
-    name: organization.name,
-    slug: organization.slug,
-    logo: normalizeOrganizationLogo((organization as { logo?: unknown }).logo),
-    isPremium: isPremiumOrganization(
-      subscriptionByOrganizationId.get(organization.id) as OrganizationBillingSnapshot | undefined,
-    ),
-  }));
+  const organizationsWithBillingState = organizations.map((organization) => {
+    const subscription = subscriptionByOrganizationId.get(
+      organization.id,
+    ) as OrganizationBillingSnapshot | undefined;
+    const planCode = resolveOrganizationPlanCode(subscription);
+
+    return {
+      id: organization.id,
+      name: organization.name,
+      slug: organization.slug,
+      logo: normalizeOrganizationLogo((organization as { logo?: unknown }).logo),
+      planCode,
+      planName: getPlanDefinition(planCode).name,
+      isPremium: isPaidPlan(planCode),
+    };
+  });
 
   const activeOrganizationId = session.session.activeOrganizationId ?? null;
   const activeOrganization = organizations.find((organization) => organization.id === activeOrganizationId);

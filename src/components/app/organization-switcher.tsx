@@ -7,7 +7,6 @@ import {
   Building2Icon,
   CheckIcon,
   ChevronsUpDownIcon,
-  CrownIcon,
   LogOutIcon,
   PlusIcon,
   SettingsIcon,
@@ -36,6 +35,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Badge } from "@/components/ui/badge";
 import { SidebarMenuButton } from "@/components/ui/sidebar";
 import { authClient } from "@/lib/auth/client";
 import {
@@ -50,6 +50,8 @@ type OrganizationSwitcherItem = {
   name: string;
   slug: string;
   logo: string | null;
+  planCode: "FREE" | "STARTER_50" | "PRO_100" | "SCALE_400";
+  planName: string;
   isPremium: boolean;
 };
 
@@ -66,6 +68,8 @@ function toOrganizationItems(
     name: string;
     slug: string;
     logo?: string | null;
+    planCode?: "FREE" | "STARTER_50" | "PRO_100" | "SCALE_400";
+    planName?: string;
     isPremium?: boolean;
   }> | null | undefined,
 ): OrganizationSwitcherItem[] {
@@ -78,8 +82,26 @@ function toOrganizationItems(
     name: organization.name,
     slug: organization.slug,
     logo: organization.logo ?? null,
+    planCode: organization.planCode ?? "FREE",
+    planName: organization.planName ?? "Gratuito",
     isPremium: organization.isPremium ?? false,
   }));
+}
+
+function planBadgeLabel(planCode: OrganizationSwitcherItem["planCode"]): string {
+  if (planCode === "STARTER_50") {
+    return "R$ 50";
+  }
+
+  if (planCode === "PRO_100") {
+    return "R$ 100";
+  }
+
+  if (planCode === "SCALE_400") {
+    return "R$ 400";
+  }
+
+  return "Gratis";
 }
 
 function mapMemberRole(value: string): string {
@@ -126,9 +148,18 @@ export function OrganizationSwitcher({
   const activeOrganizationQuery = authClient.useActiveOrganization();
   const activeMemberQuery = authClient.useActiveMember();
   const sessionQuery = authClient.useSession();
-  const premiumByOrganizationId = useMemo(
+  const billingByOrganizationId = useMemo(
     () =>
-      new Map(initialOrganizations.map((organization) => [organization.id, organization.isPremium])),
+      new Map(
+        initialOrganizations.map((organization) => [
+          organization.id,
+          {
+            planCode: organization.planCode,
+            planName: organization.planName,
+            isPremium: organization.isPremium,
+          },
+        ]),
+      ),
     [initialOrganizations],
   );
 
@@ -136,12 +167,17 @@ export function OrganizationSwitcher({
     if (listOrganizationsQuery.data && listOrganizationsQuery.data.length > 0) {
       return toOrganizationItems(listOrganizationsQuery.data).map((organization) => ({
         ...organization,
-        isPremium: premiumByOrganizationId.get(organization.id) ?? organization.isPremium,
+        planCode:
+          billingByOrganizationId.get(organization.id)?.planCode ?? organization.planCode,
+        planName:
+          billingByOrganizationId.get(organization.id)?.planName ?? organization.planName,
+        isPremium:
+          billingByOrganizationId.get(organization.id)?.isPremium ?? organization.isPremium,
       }));
     }
 
     return initialOrganizations;
-  }, [initialOrganizations, listOrganizationsQuery.data, premiumByOrganizationId]);
+  }, [billingByOrganizationId, initialOrganizations, listOrganizationsQuery.data]);
 
   const resolvedActiveOrganizationId =
     activeOrganizationQuery.data?.id ??
@@ -162,8 +198,10 @@ export function OrganizationSwitcher({
     organizations.find((organization) => organization.id === resolvedActiveOrganizationId)?.logo ??
     activeOrganizationQuery.data?.logo ??
     null;
-  const activeOrganizationIsPremium =
-    organizations.find((organization) => organization.id === resolvedActiveOrganizationId)?.isPremium ?? false;
+  const activeOrganizationPlanCode =
+    organizations.find((organization) => organization.id === resolvedActiveOrganizationId)?.planCode ?? "FREE";
+  const activeOrganizationPlanName =
+    organizations.find((organization) => organization.id === resolvedActiveOrganizationId)?.planName ?? "Gratuito";
 
   const activeMemberRole = activeMemberQuery.data?.role ?? "";
   const isOwner = hasOrganizationRole(activeMemberRole, "owner");
@@ -216,11 +254,11 @@ export function OrganizationSwitcher({
       });
 
       if (result.error) {
-        toast.error(localizeAuthErrorMessage(result.error.message ?? "Nao foi possivel trocar a empresa ativa."));
+        toast.error(localizeAuthErrorMessage(result.error.message ?? "Nao foi possivel trocar a organizacao ativa."));
         return;
       }
 
-      toast.success(`Empresa ativa: ${organizationName}.`);
+      toast.success(`Organizacao ativa: ${organizationName}.`);
       router.replace("/dashboard");
       router.refresh();
     });
@@ -248,7 +286,7 @@ export function OrganizationSwitcher({
           <SidebarMenuButton
             size="lg"
             className="group-data-[collapsible=icon]:justify-center"
-            tooltip="Trocar empresa"
+            tooltip="Trocar organizacao"
             disabled={isSwitchingOrganization}
           >
             <div className="bg-sidebar-primary text-sidebar-primary-foreground flex size-8 items-center justify-center rounded-md">
@@ -256,12 +294,12 @@ export function OrganizationSwitcher({
             </div>
 
             <div className="grid flex-1 text-left text-xs leading-tight group-data-[collapsible=icon]:hidden">
-              <span className="truncate font-semibold">Empresas</span>
+              <span className="truncate font-semibold">Organizacoes</span>
               <span className="text-muted-foreground flex items-center gap-1 truncate text-[0.7rem]">
                 <span className="truncate">{activeOrganizationName}</span>
-                {activeOrganizationIsPremium ? (
-                  <CrownIcon className="size-3 shrink-0 text-amber-500" />
-                ) : null}
+                <Badge variant="outline" className="h-4 px-1.5 text-[0.6rem] font-medium">
+                  {planBadgeLabel(activeOrganizationPlanCode)}
+                </Badge>
               </span>
             </div>
 
@@ -270,10 +308,10 @@ export function OrganizationSwitcher({
         </DropdownMenuTrigger>
 
         <DropdownMenuContent align="start">
-          <DropdownMenuLabel>Trocar empresa</DropdownMenuLabel>
+          <DropdownMenuLabel>Trocar organizacao</DropdownMenuLabel>
 
           {organizations.length === 0 ? (
-            <DropdownMenuItem disabled>Nenhuma empresa encontrada.</DropdownMenuItem>
+            <DropdownMenuItem disabled>Nenhuma organizacao encontrada.</DropdownMenuItem>
           ) : (
             organizations.map((organization) => (
               <DropdownMenuItem
@@ -285,9 +323,9 @@ export function OrganizationSwitcher({
               >
                 <span className="flex min-w-0 items-center gap-1.5">
                   <span className="truncate">{organization.name}</span>
-                  {organization.isPremium ? (
-                    <CrownIcon className="size-3.5 shrink-0 text-amber-500" />
-                  ) : null}
+                  <Badge variant="outline" className="h-4 px-1.5 text-[0.6rem] font-medium">
+                    {planBadgeLabel(organization.planCode)}
+                  </Badge>
                 </span>
                 {organization.id === resolvedActiveOrganizationId ? (
                   <CheckIcon className="ml-auto size-3.5" />
@@ -325,7 +363,7 @@ export function OrganizationSwitcher({
           <DropdownMenuItem asChild>
             <Link href="/empresa/nova" className="flex items-center gap-2">
               <PlusIcon className="size-3.5" />
-              Criar nova empresa
+              Criar nova organizacao
             </Link>
           </DropdownMenuItem>
         </DropdownMenuContent>
@@ -337,6 +375,8 @@ export function OrganizationSwitcher({
         organizationName={activeOrganizationName}
         organizationSlug={activeOrganizationSlug}
         organizationLogo={activeOrganizationLogo}
+        planCode={activeOrganizationPlanCode}
+        planName={activeOrganizationPlanName}
         currentUserId={currentUserId}
         isOwner={isOwner}
         isAdmin={isAdmin}

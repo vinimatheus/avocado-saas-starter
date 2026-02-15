@@ -16,10 +16,10 @@ import {
 const SEGMENT_LABELS: Record<string, string> = {
   dashboard: "Painel",
   produtos: "Produtos",
-  billing: "Cobranca",
+  billing: "Plano",
   profile: "Perfil",
   onboarding: "Primeiros passos",
-  company: "Empresa",
+  company: "Organizacao",
   sign: "Acesso",
 };
 

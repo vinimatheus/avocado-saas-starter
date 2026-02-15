@@ -3,6 +3,7 @@
 import * as React from "react"
 import {
   Building2Icon,
+  CreditCardIcon,
   CrownIcon,
   ImageUpIcon,
   MailIcon,
@@ -37,6 +38,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import {
   Dialog,
   DialogContent,
@@ -78,6 +80,8 @@ type OrganizationManagementDialogProps = {
   organizationName: string
   organizationSlug: string | null
   organizationLogo: string | null
+  planCode: "FREE" | "STARTER_50" | "PRO_100" | "SCALE_400"
+  planName: string
   currentUserId: string | null
   isOwner: boolean
   isAdmin: boolean
@@ -85,7 +89,7 @@ type OrganizationManagementDialogProps = {
   pendingInvitations: OrganizationDialogInvitation[]
 }
 
-type OrganizationManagementSection = "organization" | "invites" | "members" | "ownership"
+type OrganizationManagementSection = "organization" | "plan" | "invites" | "members" | "ownership"
 type AssignableRole = "admin" | "user"
 
 function normalizeRoleLabel(role: string): string {
@@ -127,6 +131,10 @@ function sectionLabel(section: OrganizationManagementSection): string {
     return "Membros"
   }
 
+  if (section === "plan") {
+    return "Plano"
+  }
+
   if (section === "ownership") {
     return "Transferencia"
   }
@@ -150,6 +158,8 @@ export function OrganizationManagementDialog({
   organizationName,
   organizationSlug,
   organizationLogo,
+  planCode,
+  planName,
   currentUserId,
   isOwner,
   isAdmin,
@@ -211,6 +221,7 @@ export function OrganizationManagementDialog({
       label: string
       icon: React.ComponentType<{ className?: string }>
     }> = [
+      { id: "plan", label: "Plano", icon: CreditCardIcon },
       { id: "invites", label: "Convites", icon: UserPlusIcon },
     ]
 
@@ -423,7 +434,7 @@ export function OrganizationManagementDialog({
       <DialogContent className="overflow-hidden p-0 sm:max-h-[calc(100vh-2rem)] sm:max-w-[calc(100vw-2rem)] md:h-[72vh] md:max-h-[72vh] md:min-h-0 md:w-[920px] md:max-w-[920px]">
         <DialogTitle className="sr-only">Gerenciar organizacao</DialogTitle>
         <DialogDescription className="sr-only">
-          Configure dados da organizacao, convites, membros e propriedade da organizacao ativa.
+          Configure dados da organizacao, plano, convites, membros e propriedade da organizacao ativa.
         </DialogDescription>
 
         <SidebarProvider
@@ -479,13 +490,50 @@ export function OrganizationManagementDialog({
               style={{ scrollbarGutter: "stable" }}
             >
               <div className="space-y-1">
-                <p className="text-sm font-medium">{organizationName}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-medium">{organizationName}</p>
+                  <Badge variant={planCode === "FREE" ? "secondary" : "default"}>{planName}</Badge>
+                </div>
                 <p className="text-muted-foreground text-xs">
                   {isOwner
                     ? "Proprietario: gerencie organizacao, convites, membros e transferencia."
-                    : "Administrador: apenas convites de membros."}
+                    : "Administrador: visualize plano e gerencie convites de membros."}
                 </p>
               </div>
+
+              {selectedSection === "plan" ? (
+                <div className="space-y-4">
+                  <div className="space-y-2 rounded-lg border p-3">
+                    <p className="text-xs font-medium">Plano atual</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant={planCode === "FREE" ? "secondary" : "default"}>{planName}</Badge>
+                      <p className="text-muted-foreground text-xs">Plano vinculado a esta organizacao.</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 rounded-lg border p-3">
+                    <p className="text-xs font-medium">Gerenciar plano</p>
+                    <p className="text-muted-foreground text-xs">
+                      {isOwner
+                        ? "Abra a pagina de plano para upgrade, downgrade e historico de pagamentos."
+                        : "Somente o proprietario pode gerenciar alteracoes de plano."}
+                    </p>
+                    {isOwner ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => {
+                          onOpenChange(false)
+                          router.push("/billing")
+                        }}
+                      >
+                        <CreditCardIcon data-icon="inline-start" />
+                        Abrir pagina de plano
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
 
               {selectedSection === "organization" ? (
                 <div className="space-y-4">
@@ -519,7 +567,7 @@ export function OrganizationManagementDialog({
                               setOrganizationSlugInput(toSlug(value))
                             }
                           }}
-                          placeholder="Nome da empresa"
+                          placeholder="Nome da organizacao"
                           required
                         />
                         <Input
@@ -527,7 +575,7 @@ export function OrganizationManagementDialog({
                           onChange={(event) => {
                             setOrganizationSlugInput(toSlug(event.target.value))
                           }}
-                          placeholder="slug-da-empresa"
+                          placeholder="slug-da-organizacao"
                           required
                         />
                         <Button type="submit" size="sm" disabled={isUpdateOrganizationPending}>
@@ -541,7 +589,7 @@ export function OrganizationManagementDialog({
                         onSubmit={submitOrganizationLogoUpdate}
                         className="space-y-3 rounded-lg border p-3"
                       >
-                        <p className="text-xs font-medium">Imagem da empresa</p>
+                        <p className="text-xs font-medium">Imagem da organizacao</p>
                         <div className="flex items-center gap-3">
                           <div className="bg-muted text-muted-foreground flex size-12 items-center justify-center overflow-hidden rounded-md border">
                             {showOrganizationLogo && normalizedOrganizationLogo ? (
@@ -619,7 +667,7 @@ export function OrganizationManagementDialog({
                         setInviteEmail(event.target.value)
                       }}
                       type="email"
-                      placeholder="novo-membro@empresa.com"
+                      placeholder="novo-membro@organizacao.com"
                       required
                     />
                     {isOwner ? (
@@ -718,7 +766,7 @@ export function OrganizationManagementDialog({
               {selectedSection === "ownership" ? (
                 <div className="space-y-3 rounded-lg border p-3">
                   <p className="text-xs font-medium">Transferencia de organizacao</p>
-                  <p className="text-muted-foreground text-xs">Selecione o novo proprietario da empresa.</p>
+                  <p className="text-muted-foreground text-xs">Selecione o novo proprietario da organizacao.</p>
 
                   {transferCandidates.length === 0 ? (
                     <p className="text-muted-foreground text-xs">
