@@ -179,7 +179,7 @@ const plans = [
     highlight: false,
   },
   {
-    name: "Plano R$ 50",
+    name: "Starter",
     price: "R$ 50",
     subtitle: "mensal",
     description: "Para equipes pequenas que estao saindo do piloto.",
@@ -187,7 +187,7 @@ const plans = [
     highlight: false,
   },
   {
-    name: "Plano R$ 100",
+    name: "Pro",
     price: "R$ 100",
     subtitle: "mensal",
     description: "Escala com analytics e API para integrar operacao.",
@@ -195,7 +195,7 @@ const plans = [
     highlight: true,
   },
   {
-    name: "Plano R$ 400",
+    name: "Scale",
     price: "R$ 400",
     subtitle: "mensal",
     description: "Operacao sem limites com suporte prioritario.",

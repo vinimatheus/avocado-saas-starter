@@ -90,15 +90,15 @@ function toOrganizationItems(
 
 function planBadgeLabel(planCode: OrganizationSwitcherItem["planCode"]): string {
   if (planCode === "STARTER_50") {
-    return "R$ 50";
+    return "Starter";
   }
 
   if (planCode === "PRO_100") {
-    return "R$ 100";
+    return "Pro";
   }
 
   if (planCode === "SCALE_400") {
-    return "R$ 400";
+    return "Scale";
   }
 
   return "Gratis";
