@@ -8,9 +8,31 @@ Template SaaS com:
 - Convites e gestao de equipe
 - Prisma + PostgreSQL
 
-## Preview
+## Screenshots
 
-![Dashboard do avocado SaaS Starter](./public/img/readme-dashboard.png)
+### Telas publicas
+
+| Home | Login |
+| --- | --- |
+| ![Home](./public/img/screenshots/01-home.png) | ![Login](./public/img/screenshots/02-sign-in.png) |
+
+| Cadastro | Esqueci a senha |
+| --- | --- |
+| ![Cadastro](./public/img/screenshots/03-sign-up.png) | ![Esqueci a senha](./public/img/screenshots/04-forgot-password.png) |
+
+### Telas internas (logado)
+
+| Dashboard | Produtos |
+| --- | --- |
+| ![Dashboard](./public/img/screenshots/05-dashboard.png) | ![Produtos](./public/img/screenshots/06-produtos.png) |
+
+| Billing | Profile |
+| --- | --- |
+| ![Billing](./public/img/screenshots/07-billing.png) | ![Profile](./public/img/screenshots/08-profile.png) |
+
+| Nova empresa |
+| --- |
+| ![Nova empresa](./public/img/screenshots/09-empresa-nova.png) |
 
 ## Setup local (ativar no computador)
 
