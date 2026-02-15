@@ -4,7 +4,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition, type FormEvent, type SVGProps } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { LogInIcon } from "lucide-react";
+import {
+  ArrowRightIcon,
+  BadgeCheckIcon,
+  KeyRoundIcon,
+  LogInIcon,
+  MailIcon,
+  ShieldCheckIcon,
+} from "lucide-react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -300,23 +307,51 @@ export function SignInForm({
   };
 
   return (
-    <Card className="mx-auto w-full max-w-md rounded-2xl border border-border/70 bg-card/90 shadow-[0_36px_90px_-58px_rgba(59,47,47,0.95)] backdrop-blur-xl">
-      <CardHeader>
-        <Logo size="md" className="mb-4" />
-        <CardTitle className="flex items-center gap-2">
-          <LogInIcon className="size-4" />
-          Entrar
-        </CardTitle>
-        <CardDescription>Acesse sua area com e-mail e senha.</CardDescription>
+    <Card className="mx-auto w-full max-w-md overflow-hidden rounded-[1.8rem] border border-border/75 bg-card/96 shadow-[0_45px_110px_-70px_rgba(17,34,20,0.92)] backdrop-blur-xl">
+      <div aria-hidden className="h-1 w-full bg-gradient-to-r from-primary to-accent" />
+
+      <CardHeader className="space-y-4 px-6 pt-6">
+        <div className="flex items-center justify-between gap-3">
+          <Logo size="md" />
+          <span className="border-border/70 bg-background/70 text-muted-foreground inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[0.6rem] font-semibold tracking-[0.1em] uppercase">
+            <ShieldCheckIcon className="text-primary size-3.5" />
+            Acesso seguro
+          </span>
+        </div>
+
+        <div className="space-y-2">
+          <CardTitle className="text-foreground flex items-center gap-2 text-[1.72rem] font-black tracking-tight">
+            <LogInIcon className="text-primary size-[1.1rem]" />
+            Acesse sua conta
+          </CardTitle>
+          <CardDescription className="text-muted-foreground text-sm leading-relaxed">
+            Entre para continuar com faturamento, usuarios e operacao do seu SaaS.
+          </CardDescription>
+        </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+
+      <CardContent className="space-y-5 px-6 pb-6">
         {requiresTwoFactor ? (
-          <form onSubmit={onTwoFactorSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-2 rounded-md border p-1">
+          <form
+            onSubmit={onTwoFactorSubmit}
+            className="border-border/70 bg-background/55 space-y-4 rounded-2xl border p-4"
+          >
+            <div className="flex items-center gap-2">
+              <span className="bg-primary/12 text-primary inline-flex size-8 items-center justify-center rounded-lg">
+                <BadgeCheckIcon className="size-4" />
+              </span>
+              <div>
+                <p className="text-sm font-semibold">Verificacao em duas etapas</p>
+                <p className="text-muted-foreground text-xs">Confirme para concluir o acesso.</p>
+              </div>
+            </div>
+
+            <div className="border-border/70 bg-background/60 grid grid-cols-2 gap-1 rounded-xl border p-1">
               <Button
                 type="button"
                 size="sm"
                 variant={twoFactorMethod === "totp" ? "default" : "ghost"}
+                className="h-8 rounded-lg text-[0.72rem] font-semibold"
                 onClick={() => {
                   setTwoFactorMethod("totp");
                   setTwoFactorCode("");
@@ -329,6 +364,7 @@ export function SignInForm({
                 type="button"
                 size="sm"
                 variant={twoFactorMethod === "backup" ? "default" : "ghost"}
+                className="h-8 rounded-lg text-[0.72rem] font-semibold"
                 onClick={() => {
                   setTwoFactorMethod("backup");
                   setTwoFactorCode("");
@@ -339,8 +375,11 @@ export function SignInForm({
               </Button>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="two-factor-code">
+            <div className="space-y-2.5">
+              <Label
+                htmlFor="two-factor-code"
+                className="text-[0.72rem] font-semibold tracking-[0.08em] uppercase"
+              >
                 {twoFactorMethod === "totp" ? "Codigo do app autenticador" : "Codigo de backup"}
               </Label>
               <Input
@@ -352,6 +391,7 @@ export function SignInForm({
                 placeholder={twoFactorMethod === "totp" ? "000000" : "codigo-reserva"}
                 autoComplete="one-time-code"
                 inputMode={twoFactorMethod === "totp" ? "numeric" : "text"}
+                className="h-10 rounded-xl border-border/80 bg-background/85 px-3 text-sm"
               />
               <p className="text-muted-foreground text-xs">
                 {twoFactorMethod === "totp"
@@ -360,27 +400,30 @@ export function SignInForm({
               </p>
             </div>
 
-            <label className="flex items-center gap-2 text-sm">
+            <label className="text-muted-foreground flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
                 checked={trustDevice}
                 onChange={(event) => {
                   setTrustDevice(event.target.checked);
                 }}
-                className="size-4"
+                className="text-primary focus-visible:ring-ring/40 size-4 rounded border-border"
                 disabled={isPending}
               />
               Confiar neste dispositivo por 30 dias
             </label>
 
             {serverMessage ? (
-              <p className="text-destructive text-sm font-medium">{serverMessage}</p>
+              <p className="bg-destructive/10 text-destructive rounded-xl border border-destructive/35 px-3 py-2 text-sm font-medium">
+                {serverMessage}
+              </p>
             ) : null}
 
             <div className="grid grid-cols-2 gap-2">
               <Button
                 type="button"
                 variant="outline"
+                className="h-10 rounded-xl"
                 onClick={() => {
                   setRequiresTwoFactor(false);
                   setTwoFactorCode("");
@@ -390,7 +433,7 @@ export function SignInForm({
               >
                 Voltar
               </Button>
-              <Button type="submit" disabled={isPending}>
+              <Button type="submit" className="h-10 rounded-xl font-semibold" disabled={isPending}>
                 {isPending ? "Validando..." : "Validar e entrar"}
               </Button>
             </div>
@@ -400,7 +443,7 @@ export function SignInForm({
             <Button
               type="button"
               variant="outline"
-              className="w-full"
+              className="border-border/80 bg-background/65 hover:bg-background h-10 w-full rounded-xl text-sm font-semibold"
               onClick={onGoogleSignIn}
               disabled={isPending}
             >
@@ -408,10 +451,12 @@ export function SignInForm({
               {isPending ? "Redirecionando..." : "Continuar com Google"}
             </Button>
 
-            <div className="flex items-center gap-2">
-              <span className="bg-border h-px w-full" />
-              <span className="text-muted-foreground text-xs uppercase">ou</span>
-              <span className="bg-border h-px w-full" />
+            <div className="flex items-center gap-3">
+              <span className="bg-border/80 h-px w-full" />
+              <span className="text-muted-foreground px-1 text-[0.62rem] font-semibold tracking-[0.14em] uppercase">
+                ou
+              </span>
+              <span className="bg-border/80 h-px w-full" />
             </div>
 
             <Form {...form}>
@@ -424,14 +469,20 @@ export function SignInForm({
 
                     return (
                       <FormItem>
-                        <FormLabel>E-mail</FormLabel>
+                        <FormLabel className="text-[0.72rem] font-semibold tracking-[0.08em] uppercase">
+                          E-mail
+                        </FormLabel>
                         <FormControl>
-                          <Input
-                            {...fieldProps}
-                            type="email"
-                            placeholder="voce@organizacao.com"
-                            autoComplete="email"
-                          />
+                          <div className="relative">
+                            <MailIcon className="text-muted-foreground pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2" />
+                            <Input
+                              {...fieldProps}
+                              type="email"
+                              placeholder="voce@organizacao.com"
+                              autoComplete="email"
+                              className="h-10 rounded-xl border-border/80 bg-background/80 pl-10 text-sm"
+                            />
+                          </div>
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -447,14 +498,28 @@ export function SignInForm({
 
                     return (
                       <FormItem>
-                        <FormLabel>Senha</FormLabel>
+                        <div className="flex items-center justify-between gap-3">
+                          <FormLabel className="text-[0.72rem] font-semibold tracking-[0.08em] uppercase">
+                            Senha
+                          </FormLabel>
+                          <Link
+                            href={forgotPasswordHref}
+                            className="text-muted-foreground text-[0.68rem] font-medium underline underline-offset-4"
+                          >
+                            Esqueci minha senha
+                          </Link>
+                        </div>
                         <FormControl>
-                          <Input
-                            {...fieldProps}
-                            type="password"
-                            placeholder="********"
-                            autoComplete="current-password"
-                          />
+                          <div className="relative">
+                            <KeyRoundIcon className="text-muted-foreground pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2" />
+                            <Input
+                              {...fieldProps}
+                              type="password"
+                              placeholder="********"
+                              autoComplete="current-password"
+                              className="h-10 rounded-xl border-border/80 bg-background/80 pl-10 text-sm"
+                            />
+                          </div>
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -462,27 +527,24 @@ export function SignInForm({
                   }}
                 />
 
-                <div className="flex justify-end">
-                  <Link
-                    href={forgotPasswordHref}
-                    className="text-muted-foreground text-xs underline underline-offset-4"
-                  >
-                    Esqueci minha senha
-                  </Link>
-                </div>
-
                 {serverMessage ? (
-                  <p className="text-destructive text-sm font-medium">{serverMessage}</p>
+                  <p className="bg-destructive/10 text-destructive rounded-xl border border-destructive/40 px-3 py-2 text-sm font-medium">
+                    {serverMessage}
+                  </p>
                 ) : null}
 
                 {requiresEmailVerification ? (
-                  <div className="space-y-2 rounded-md border p-3 text-sm">
-                    <p className="text-muted-foreground">
-                      Seu e-mail ainda nao foi verificado. Use o botao abaixo para reenviar o link.
-                    </p>
+                  <div className="border-primary/35 bg-primary/10 space-y-3 rounded-2xl border p-3 text-sm">
+                    <div className="flex items-start gap-2">
+                      <BadgeCheckIcon className="text-primary mt-0.5 size-4 shrink-0" />
+                      <p className="text-muted-foreground">
+                        Seu e-mail ainda nao foi verificado. Use o botao abaixo para reenviar o link.
+                      </p>
+                    </div>
                     <Button
                       type="button"
                       variant="outline"
+                      className="h-9 rounded-lg border-primary/40 bg-background/70 text-xs font-semibold"
                       onClick={sendVerificationEmail}
                       disabled={isResendPending || isPending}
                     >
@@ -491,17 +553,28 @@ export function SignInForm({
                   </div>
                 ) : null}
 
-                <Button type="submit" className="w-full" disabled={isPending}>
-                  {isPending ? "Entrando..." : "Entrar"}
+                <Button
+                  type="submit"
+                  className="h-11 w-full rounded-xl text-sm font-semibold shadow-[0_14px_30px_-20px_rgba(76,175,80,0.85)]"
+                  disabled={isPending}
+                >
+                  {isPending ? (
+                    "Entrando..."
+                  ) : (
+                    <>
+                      Entrar na plataforma
+                      <ArrowRightIcon className="size-4" />
+                    </>
+                  )}
                 </Button>
               </form>
             </Form>
           </>
         )}
 
-        <p className="text-muted-foreground text-sm">
+        <p className="text-muted-foreground text-center text-sm">
           Nao possui conta?{" "}
-          <Link href={signUpHref} className="text-foreground underline underline-offset-4">
+          <Link href={signUpHref} className="text-foreground font-semibold underline underline-offset-4">
             Criar conta
           </Link>
         </p>

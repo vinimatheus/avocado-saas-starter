@@ -4,7 +4,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { UserPlusIcon } from "lucide-react";
+import {
+  ArrowRightIcon,
+  Building2Icon,
+  KeyRoundIcon,
+  MailIcon,
+  ShieldCheckIcon,
+  UserIcon,
+  UserPlusIcon,
+} from "lucide-react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -164,20 +172,32 @@ export function SignUpForm({
   );
 
   return (
-    <Card className="mx-auto w-full max-w-md rounded-2xl border border-border/70 bg-card/90 shadow-[0_36px_90px_-58px_rgba(59,47,47,0.95)] backdrop-blur-xl">
-      <CardHeader>
-        <Logo size="md" className="mb-4" />
-        <CardTitle className="flex items-center gap-2">
-          <UserPlusIcon className="size-4" />
-          Criar Conta
-        </CardTitle>
-        <CardDescription>
-          {skipOrganizationCreation
-            ? "Cadastre seus dados para aceitar o convite da organizacao."
-            : "Cadastre nome, e-mail, senha e organizacao."}
-        </CardDescription>
+    <Card className="mx-auto w-full max-w-md overflow-hidden rounded-[1.8rem] border border-border/75 bg-card/96 shadow-[0_45px_110px_-70px_rgba(17,34,20,0.92)] backdrop-blur-xl">
+      <div aria-hidden className="h-1 w-full bg-gradient-to-r from-primary to-accent" />
+
+      <CardHeader className="space-y-4 px-6 pt-6">
+        <div className="flex items-center justify-between gap-3">
+          <Logo size="md" />
+          <span className="border-border/70 bg-background/70 text-muted-foreground inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[0.6rem] font-semibold tracking-[0.1em] uppercase">
+            <ShieldCheckIcon className="text-primary size-3.5" />
+            Cadastro seguro
+          </span>
+        </div>
+
+        <div className="space-y-2">
+          <CardTitle className="text-foreground flex items-center gap-2 text-[1.72rem] font-black tracking-tight">
+            <UserPlusIcon className="text-primary size-[1.1rem]" />
+            Criar conta
+          </CardTitle>
+          <CardDescription className="text-muted-foreground text-sm leading-relaxed">
+            {skipOrganizationCreation
+              ? "Cadastre seus dados para aceitar o convite da organizacao."
+              : "Cadastre seus dados para ativar sua area de trabalho."}
+          </CardDescription>
+        </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+
+      <CardContent className="space-y-5 px-6 pb-6">
         <Form {...form}>
           <form onSubmit={onSubmit} className="space-y-4">
             <FormField
@@ -188,14 +208,20 @@ export function SignUpForm({
 
                 return (
                   <FormItem>
-                    <FormLabel>Nome</FormLabel>
+                    <FormLabel className="text-[0.72rem] font-semibold tracking-[0.08em] uppercase">
+                      Nome
+                    </FormLabel>
                     <FormControl>
-                      <Input
-                        {...fieldProps}
-                        type="text"
-                        placeholder="Joao Silva"
-                        autoComplete="name"
-                      />
+                      <div className="relative">
+                        <UserIcon className="text-muted-foreground pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2" />
+                        <Input
+                          {...fieldProps}
+                          type="text"
+                          placeholder="Joao Silva"
+                          autoComplete="name"
+                          className="h-10 rounded-xl border-border/80 bg-background/80 pl-10 text-sm"
+                        />
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -214,14 +240,20 @@ export function SignUpForm({
 
                   return (
                     <FormItem>
-                      <FormLabel>Organizacao</FormLabel>
+                      <FormLabel className="text-[0.72rem] font-semibold tracking-[0.08em] uppercase">
+                        Organizacao
+                      </FormLabel>
                       <FormControl>
-                        <Input
-                          {...fieldProps}
-                          type="text"
-                          placeholder="Acme SaaS"
-                          autoComplete="organization"
-                        />
+                        <div className="relative">
+                          <Building2Icon className="text-muted-foreground pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2" />
+                          <Input
+                            {...fieldProps}
+                            type="text"
+                            placeholder="Acme SaaS"
+                            autoComplete="organization"
+                            className="h-10 rounded-xl border-border/80 bg-background/80 pl-10 text-sm"
+                          />
+                        </div>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -238,14 +270,20 @@ export function SignUpForm({
 
                 return (
                   <FormItem>
-                    <FormLabel>E-mail</FormLabel>
+                    <FormLabel className="text-[0.72rem] font-semibold tracking-[0.08em] uppercase">
+                      E-mail
+                    </FormLabel>
                     <FormControl>
-                      <Input
-                        {...fieldProps}
-                        type="email"
-                        placeholder="voce@organizacao.com"
-                        autoComplete="email"
-                      />
+                      <div className="relative">
+                        <MailIcon className="text-muted-foreground pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2" />
+                        <Input
+                          {...fieldProps}
+                          type="email"
+                          placeholder="voce@organizacao.com"
+                          autoComplete="email"
+                          className="h-10 rounded-xl border-border/80 bg-background/80 pl-10 text-sm"
+                        />
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -261,14 +299,20 @@ export function SignUpForm({
 
                 return (
                   <FormItem>
-                    <FormLabel>Senha</FormLabel>
+                    <FormLabel className="text-[0.72rem] font-semibold tracking-[0.08em] uppercase">
+                      Senha
+                    </FormLabel>
                     <FormControl>
-                      <Input
-                        {...fieldProps}
-                        type="password"
-                        placeholder="********"
-                        autoComplete="new-password"
-                      />
+                      <div className="relative">
+                        <KeyRoundIcon className="text-muted-foreground pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2" />
+                        <Input
+                          {...fieldProps}
+                          type="password"
+                          placeholder="********"
+                          autoComplete="new-password"
+                          className="h-10 rounded-xl border-border/80 bg-background/80 pl-10 text-sm"
+                        />
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -284,14 +328,20 @@ export function SignUpForm({
 
                 return (
                   <FormItem>
-                    <FormLabel>Confirmar senha</FormLabel>
+                    <FormLabel className="text-[0.72rem] font-semibold tracking-[0.08em] uppercase">
+                      Confirmar senha
+                    </FormLabel>
                     <FormControl>
-                      <Input
-                        {...fieldProps}
-                        type="password"
-                        placeholder="********"
-                        autoComplete="new-password"
-                      />
+                      <div className="relative">
+                        <KeyRoundIcon className="text-muted-foreground pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2" />
+                        <Input
+                          {...fieldProps}
+                          type="password"
+                          placeholder="********"
+                          autoComplete="new-password"
+                          className="h-10 rounded-xl border-border/80 bg-background/80 pl-10 text-sm"
+                        />
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -300,18 +350,31 @@ export function SignUpForm({
             />
 
             {serverMessage ? (
-              <p className="text-destructive text-sm font-medium">{serverMessage}</p>
+              <p className="bg-destructive/10 text-destructive rounded-xl border border-destructive/35 px-3 py-2 text-sm font-medium">
+                {serverMessage}
+              </p>
             ) : null}
 
-            <Button type="submit" className="w-full" disabled={isPending}>
-              {isPending ? "Criando conta..." : "Criar conta"}
+            <Button
+              type="submit"
+              className="h-11 w-full rounded-xl text-sm font-semibold shadow-[0_14px_30px_-20px_rgba(76,175,80,0.85)]"
+              disabled={isPending}
+            >
+              {isPending ? (
+                "Criando conta..."
+              ) : (
+                <>
+                  Criar conta
+                  <ArrowRightIcon className="size-4" />
+                </>
+              )}
             </Button>
           </form>
         </Form>
 
-        <p className="text-muted-foreground text-sm">
+        <p className="text-muted-foreground text-center text-sm">
           Ja possui conta?{" "}
-          <Link href={signInHref} className="text-foreground underline underline-offset-4">
+          <Link href={signInHref} className="text-foreground font-semibold underline underline-offset-4">
             Entrar
           </Link>
         </p>
