@@ -1,7 +1,29 @@
 {
   "name": "avocado-saas-starter",
   "version": "0.1.0",
+  "description": "Next.js multi-tenant SaaS starter kit with Better Auth, Prisma, PostgreSQL, team invitations, and billing integration.",
   "private": true,
+  "keywords": [
+    "nextjs",
+    "saas",
+    "starter",
+    "boilerplate",
+    "multi-tenant",
+    "better-auth",
+    "prisma",
+    "postgresql",
+    "typescript",
+    "billing",
+    "dashboard"
+  ],
+  "homepage": "https://github.com/vinimatheus/avocado-saas-starter",
+  "bugs": {
+    "url": "https://github.com/vinimatheus/avocado-saas-starter/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vinimatheus/avocado-saas-starter.git"
+  },
   "packageManager": "pnpm@9.0.6",
   "scripts": {
     "predev": "prisma generate",

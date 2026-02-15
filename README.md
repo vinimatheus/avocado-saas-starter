@@ -1,12 +1,33 @@
-# avocado SaaS Starter
+# Avocado SaaS Starter | Next.js Multi-tenant SaaS Boilerplate
 
-Template SaaS com:
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6)](https://www.typescriptlang.org/)
+[![Prisma](https://img.shields.io/badge/Prisma-ORM-2D3748)](https://www.prisma.io/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1)](https://www.postgresql.org/)
+[![Stars](https://img.shields.io/github/stars/vinimatheus/avocado-saas-starter?style=social)](https://github.com/vinimatheus/avocado-saas-starter/stargazers)
 
-- Next.js (App Router)
-- Better Auth (email/senha)
-- Multi-tenant por organizacao
-- Convites e gestao de equipe
-- Prisma + PostgreSQL
+Starter kit SaaS (boilerplate) para acelerar produtos B2B com **Next.js**, **Better Auth**, **Prisma** e **PostgreSQL**. Inclui autenticacao, multi-tenant por organizacao, convites de equipe, billing e dashboard administrativo.
+
+## O que este projeto entrega
+
+- Base SaaS com Next.js App Router e TypeScript
+- Autenticacao completa (email/senha + Google opcional + 2FA)
+- Multi-tenant por organizacao com onboarding
+- Gestao de membros, convites e permissoes
+- Billing com AbacatePay e webhooks
+- Dashboard de usuarios, produtos e assinatura
+
+## Palavras-chave (SEO)
+
+- nextjs saas starter
+- saas boilerplate
+- multi tenant nextjs
+- better auth example
+- prisma postgresql starter
+- b2b saas template
+- nextjs billing integration
+- painel administrativo saas
 
 ## Screenshots
 
@@ -220,3 +241,18 @@ pnpm run prisma:migrate:deploy
 - Se `ABACATEPAY_WEBHOOK_SIGNATURE_KEY`/`ABACATEPAY_PUBLIC_KEY` nao estiver configurada, o webhook valida apenas o secret (modo compatibilidade).
 - O webhook aplica rate limit por IP e pode restringir origem com allowlist (`ABACATEPAY_WEBHOOK_ALLOWED_IPS`).
 - O checkout so aceita redirecionamento para hosts confiaveis (default `*.abacatepay.com`), configuraveis por `ABACATEPAY_ALLOWED_CHECKOUT_HOSTS`.
+
+## SEO no GitHub (configuracao do repositorio)
+
+Para aumentar alcance organico, ajuste tambem no GitHub (Settings):
+
+1. Description recomendada:
+`Next.js multi-tenant SaaS starter kit with Better Auth, Prisma, PostgreSQL, team invitations and billing integration.`
+2. Website:
+URL da demo publica (quando tiver deploy em producao).
+3. Topics recomendados:
+`nextjs`, `saas`, `starter`, `boilerplate`, `multi-tenant`, `better-auth`, `prisma`, `postgresql`, `typescript`, `billing`, `dashboard`.
+4. Social preview:
+Use a imagem `public/img/social-card.png`.
+5. Readme em ingles e portugues:
+manter termos em PT-BR e EN melhora descobribilidade global.
