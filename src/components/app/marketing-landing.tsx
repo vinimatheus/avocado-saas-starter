@@ -23,6 +23,7 @@ import {
   WorkflowIcon,
 } from "lucide-react";
 
+import { GitHubCreditLink } from "@/components/shared/github-credit-link";
 import { Logo } from "@/components/shared/logo";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 
@@ -420,6 +421,7 @@ export function MarketingLanding() {
 
           <div className="flex items-center gap-2">
             <ThemeToggle />
+            <GitHubCreditLink />
             <Link
               href="/sign-in"
               className="border-border bg-card text-foreground rounded-full border px-4 py-2 text-xs font-semibold transition hover:bg-primary/5 sm:text-sm"

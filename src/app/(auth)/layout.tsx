@@ -1,6 +1,8 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 import { BarChart3Icon, Building2Icon, ShieldCheckIcon } from "lucide-react";
 
+import { GitHubCreditLink } from "@/components/shared/github-credit-link";
 import { Logo } from "@/components/shared/logo";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 
@@ -38,9 +40,17 @@ export default function AuthLayout({
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-background">
-      <div className="absolute right-6 top-6 z-40">
-        <ThemeToggle />
-      </div>
+      <header className="absolute left-0 right-0 top-0 z-40">
+        <div className="mx-auto flex w-full max-w-[1180px] items-center justify-between px-6 py-5 lg:px-10">
+          <Link href="/" className="rounded-full px-1 py-1 transition hover:bg-primary/5">
+            <Logo size="sm" showGlow={false} />
+          </Link>
+          <div className="flex items-center gap-2">
+            <GitHubCreditLink />
+            <ThemeToggle />
+          </div>
+        </div>
+      </header>
 
       <div
         aria-hidden
@@ -51,7 +61,7 @@ export default function AuthLayout({
         className="pointer-events-none absolute -bottom-28 -right-28 size-[34rem] rounded-full bg-accent/20 blur-[120px]"
       />
 
-      <div className="relative mx-auto grid min-h-screen w-full max-w-[1180px] items-center gap-8 px-6 py-10 lg:grid-cols-[1fr_420px] lg:px-10">
+      <div className="relative mx-auto grid min-h-screen w-full max-w-[1180px] items-center gap-8 px-6 pb-10 pt-24 lg:grid-cols-[1fr_420px] lg:px-10">
         <section className="hidden lg:block">
           <div className="rounded-[2rem] border border-border/65 bg-card/70 p-12 shadow-[0_40px_120px_-80px_rgba(17,35,22,0.55)] backdrop-blur-sm">
             <Logo size="lg" />

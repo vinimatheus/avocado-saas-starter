@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ArrowUpRightIcon, LayoutDashboardIcon, PackageSearchIcon, SparklesIcon } from "lucide-react";
 
+import { GitHubCreditLink } from "@/components/shared/github-credit-link";
 import { Logo } from "@/components/shared/logo";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { AppBreadcrumb } from "@/components/app/app-breadcrumb";
@@ -220,6 +221,7 @@ export function AppShell({
               <AppBreadcrumb />
             </div>
             <div className="ml-auto flex items-center gap-2">
+              <GitHubCreditLink />
               <ThemeToggle />
               <InvitationNotificationMenu initialInvitations={pendingInvitations} />
             </div>
