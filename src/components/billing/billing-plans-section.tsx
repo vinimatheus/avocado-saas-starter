@@ -3,8 +3,9 @@
 import { useMemo, useState } from "react";
 import { CheckIcon, InfoIcon } from "lucide-react";
 
-import { createPlanCheckoutAction } from "@/actions/billing-actions";
+import { createPlanCheckoutAction, simulateCheckoutPaymentAction } from "@/actions/billing-actions";
 import { BillingProfileForm } from "@/components/billing/billing-profile-form";
+import { FormSubmitButton } from "@/components/shared/form-submit-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,6 +45,8 @@ type BillingPlansSectionProps = {
   currentIsPaidPlan: boolean;
   canRenewCurrentPlan: boolean;
   checkoutInProgress?: boolean;
+  pendingCheckoutId?: string | null;
+  enablePaymentSimulation?: boolean;
   billingDefaults: {
     name: string;
     cellphone: string;
@@ -81,6 +84,8 @@ export function BillingPlansSection({
   currentIsPaidPlan,
   canRenewCurrentPlan,
   checkoutInProgress = false,
+  pendingCheckoutId = null,
+  enablePaymentSimulation = false,
   billingDefaults,
 }: BillingPlansSectionProps) {
   const [annualBillingPreview, setAnnualBillingPreview] = useState(false);
@@ -246,15 +251,32 @@ export function BillingPlansSection({
                 </CardContent>
 
                 <CardFooter className="pt-1">
-                  <Button
-                    type="button"
-                    className="w-full"
-                    variant={isFeatured ? "default" : "outline"}
-                    onClick={() => openBillingDialog(plan.code)}
-                    disabled={checkoutInProgress}
-                  >
-                    {resolveButtonLabel(plan.code)}
-                  </Button>
+                  <div className="w-full space-y-2">
+                    <Button
+                      type="button"
+                      className="w-full"
+                      variant={isFeatured ? "default" : "outline"}
+                      onClick={() => openBillingDialog(plan.code)}
+                      disabled={checkoutInProgress}
+                    >
+                      {resolveButtonLabel(plan.code)}
+                    </Button>
+
+                    {enablePaymentSimulation ? (
+                      <form action={simulateCheckoutPaymentAction} className="w-full">
+                        <input type="hidden" name="checkoutId" value={pendingCheckoutId ?? ""} />
+                        <FormSubmitButton
+                          type="submit"
+                          variant="ghost"
+                          className="w-full"
+                          pendingLabel="Simulando pagamento..."
+                          disabled={!pendingCheckoutId}
+                        >
+                          Simular pagamento
+                        </FormSubmitButton>
+                      </form>
+                    ) : null}
+                  </div>
                 </CardFooter>
               </Card>
             );
