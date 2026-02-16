@@ -267,7 +267,8 @@ export function BillingPlansSection({
                         <input type="hidden" name="checkoutId" value={pendingCheckoutId ?? ""} />
                         <FormSubmitButton
                           type="submit"
-                          variant="ghost"
+                          variant="outline"
+                          size="sm"
                           className="w-full"
                           pendingLabel="Simulando pagamento..."
                           disabled={!pendingCheckoutId}
