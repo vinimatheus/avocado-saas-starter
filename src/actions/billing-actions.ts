@@ -484,13 +484,6 @@ export async function reactivateSubscriptionAction(): Promise<void> {
 export async function simulateCheckoutPaymentAction(formData: FormData): Promise<void> {
   const { organizationId } = await getAuthenticatedBillingContext();
 
-  if (process.env.NODE_ENV === "production") {
-    redirectWithMessage(
-      "error",
-      "Simulacao de pagamento disponivel apenas em ambiente de desenvolvimento.",
-    );
-  }
-
   const parsed = simulateCheckoutSchema.safeParse({
     checkoutId: String(formData.get("checkoutId") ?? ""),
   });

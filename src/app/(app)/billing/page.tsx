@@ -218,7 +218,7 @@ export default async function BillingPage({
         checkoutState.status === "CANCELED" ||
         checkoutState.status === "CHARGEBACK"),
   );
-  const canSimulateCheckoutPayment = process.env.NODE_ENV !== "production";
+  const canSimulateCheckoutPayment = true;
   const pendingCheckoutId = checkoutState?.status === "PENDING" ? checkoutState.id : null;
   const restrictionHints = [
     restriction.exceededUsers > 0 ? `${restriction.exceededUsers} usuario(s) acima do limite` : null,
