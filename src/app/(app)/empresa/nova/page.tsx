@@ -31,7 +31,7 @@ export default async function NewOrganizationPage() {
         userName={tenantContext.session.user.name}
         mode="create"
         redirectPath="/dashboard"
-        keepCurrentActiveOrganization
+        keepCurrentActiveOrganization={false}
       />
     </AppPageContainer>
   );

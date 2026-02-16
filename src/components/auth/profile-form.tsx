@@ -9,7 +9,7 @@ import {
   type FormEvent,
 } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CameraIcon, Link2Icon, MailIcon, ShieldCheckIcon, UserRoundIcon } from "lucide-react";
+import { CameraIcon, Link2Icon, MailIcon, ShieldCheckIcon, Trash2Icon, UserRoundIcon } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
@@ -18,6 +18,7 @@ import { toast } from "sonner";
 
 import {
   changeProfileEmailAction,
+  removeProfileImageAction,
   setProfilePasswordAction,
   updateProfileAction,
   updateProfileImageAction,
@@ -115,6 +116,7 @@ export function ProfileForm({
   const router = useRouter();
   const [isProfilePending, startProfileTransition] = useTransition();
   const [isProfileImagePending, startProfileImageTransition] = useTransition();
+  const [isRemoveProfileImagePending, startRemoveProfileImageTransition] = useTransition();
   const [isChangeEmailPending, startChangeEmailTransition] = useTransition();
   const [isChangePasswordPending, startChangePasswordTransition] = useTransition();
   const [isLinkGooglePending, startLinkGoogleTransition] = useTransition();
@@ -122,6 +124,7 @@ export function ProfileForm({
 
   const hasRefreshedAfterProfileSuccess = useRef(false);
   const hasRefreshedAfterProfileImageSuccess = useRef(false);
+  const hasRefreshedAfterProfileImageRemovalSuccess = useRef(false);
 
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(initialTwoFactorEnabled);
   const [hasGoogleAccount, setHasGoogleAccount] = useState(initialHasGoogleAccount);
@@ -141,6 +144,10 @@ export function ProfileForm({
   );
   const [profileImageState, profileImageAction] = useActionState(
     updateProfileImageAction,
+    initialProfileActionState,
+  );
+  const [removeProfileImageState, removeProfileImageActionState] = useActionState(
+    removeProfileImageAction,
     initialProfileActionState,
   );
   const [changeEmailState, changeEmailAction] = useActionState(
@@ -223,6 +230,13 @@ export function ProfileForm({
     const payload = new FormData(event.currentTarget);
     startProfileImageTransition(() => {
       profileImageAction(payload);
+    });
+  };
+
+  const onRemoveProfileImage = () => {
+    const payload = new FormData();
+    startRemoveProfileImageTransition(() => {
+      removeProfileImageActionState(payload);
     });
   };
 
@@ -355,6 +369,20 @@ export function ProfileForm({
     hasRefreshedAfterProfileImageSuccess.current = true;
     router.refresh();
   }, [profileImageState.status, router]);
+
+  useEffect(() => {
+    if (removeProfileImageState.status !== "success") {
+      hasRefreshedAfterProfileImageRemovalSuccess.current = false;
+      return;
+    }
+
+    if (hasRefreshedAfterProfileImageRemovalSuccess.current) {
+      return;
+    }
+
+    hasRefreshedAfterProfileImageRemovalSuccess.current = true;
+    router.refresh();
+  }, [removeProfileImageState.status, router]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -583,11 +611,22 @@ export function ProfileForm({
                     {isProfileImagePending ? "Salvando foto..." : "Atualizar foto"}
                   </Button>
                 </form>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={onRemoveProfileImage}
+                  disabled={isRemoveProfileImagePending || isProfileImagePending || !initialImage}
+                >
+                  <Trash2Icon data-icon="inline-start" />
+                  {isRemoveProfileImagePending ? "Removendo..." : "Remover foto"}
+                </Button>
               </div>
             </div>
           </div>
 
           <FormFeedback state={profileImageState} showInline={false} />
+          <FormFeedback state={removeProfileImageState} showInline={false} />
 
           <Form {...form}>
             <form id={profileIdentityFormId} onSubmit={onSubmit} className="space-y-4">

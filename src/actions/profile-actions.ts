@@ -314,3 +314,30 @@ export async function updateProfileImageAction(
     return errorState(parseActionError(error, "Falha ao salvar foto de perfil."));
   }
 }
+
+export async function removeProfileImageAction(
+  previousState: ProfileActionState,
+  formData: FormData,
+): Promise<ProfileActionState> {
+  try {
+    void previousState;
+    void formData;
+
+    const tenantContext = await getTenantContext();
+    if (!tenantContext.session?.user) {
+      return errorState("Sessao invalida. Faca login novamente.");
+    }
+
+    await auth.api.updateUser({
+      headers: await headers(),
+      body: {
+        image: null,
+      },
+    });
+
+    revalidateProfilePaths();
+    return successState("Foto de perfil removida com sucesso.");
+  } catch (error) {
+    return errorState(parseActionError(error, "Falha ao remover foto de perfil."));
+  }
+}

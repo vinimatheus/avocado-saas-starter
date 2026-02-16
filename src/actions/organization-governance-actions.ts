@@ -7,6 +7,7 @@ import { z } from "zod";
 
 import type { OrganizationUserActionState } from "@/actions/organization-user-action-state";
 import { auth } from "@/lib/auth/server";
+import { prisma } from "@/lib/db/prisma";
 import {
   hasOrganizationRole,
   isOrganizationAdminRole,
@@ -358,6 +359,35 @@ export async function updateOrganizationLogoAction(
     return successState("Imagem da organizacao atualizada com sucesso.", null, imageUrl);
   } catch (error) {
     return errorState(parseActionError(error, "Falha ao atualizar imagem da organizacao."));
+  }
+}
+
+export async function removeOrganizationLogoAction(
+  previousState: OrganizationUserActionState,
+  formData: FormData,
+): Promise<OrganizationUserActionState> {
+  try {
+    void previousState;
+    void formData;
+
+    const context = await getGovernanceContext();
+    if (!context.currentIsOwner) {
+      return errorState("Somente o proprietario pode remover a imagem da organizacao.");
+    }
+
+    await prisma.organization.update({
+      where: {
+        id: context.organizationId,
+      },
+      data: {
+        logo: null,
+      },
+    });
+
+    revalidateOrganizationGovernancePaths();
+    return successState("Imagem da organizacao removida com sucesso.");
+  } catch (error) {
+    return errorState(parseActionError(error, "Falha ao remover imagem da organizacao."));
   }
 }
 

@@ -16,6 +16,7 @@ import { useRouter } from "next/navigation"
 
 import {
   deleteOrganizationSafelyAction,
+  removeOrganizationLogoAction,
   transferOrganizationOwnershipAction,
   updateOrganizationDetailsAction,
   updateOrganizationLogoAction,
@@ -76,7 +77,7 @@ type OrganizationDialogInvitation = {
 type OrganizationManagementDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onOrganizationLogoUpdated?: (logoUrl: string) => void
+  onOrganizationLogoUpdated?: (logoUrl: string | null) => void
   organizationName: string
   organizationSlug: string | null
   organizationLogo: string | null
@@ -177,6 +178,7 @@ export function OrganizationManagementDialog({
   const [isTransferPending, startTransferTransition] = React.useTransition()
   const [isUpdateOrganizationPending, startUpdateOrganizationTransition] = React.useTransition()
   const [isUpdateOrganizationLogoPending, startUpdateOrganizationLogoTransition] = React.useTransition()
+  const [isRemoveOrganizationLogoPending, startRemoveOrganizationLogoTransition] = React.useTransition()
   const [isDeletePending, startDeleteTransition] = React.useTransition()
   const [isUpdateMemberRolePending, startUpdateMemberRoleTransition] = React.useTransition()
   const [isRemoveMemberPending, startRemoveMemberTransition] = React.useTransition()
@@ -195,6 +197,10 @@ export function OrganizationManagementDialog({
   )
   const [updateOrganizationLogoState, updateOrganizationLogoActionState] = React.useActionState(
     updateOrganizationLogoAction,
+    initialOrganizationUserActionState,
+  )
+  const [removeOrganizationLogoState, removeOrganizationLogoActionState] = React.useActionState(
+    removeOrganizationLogoAction,
     initialOrganizationUserActionState,
   )
   const [deleteState, deleteAction] = React.useActionState(
@@ -339,6 +345,7 @@ export function OrganizationManagementDialog({
       transferState.status === "success" ||
       updateOrganizationState.status === "success" ||
       updateOrganizationLogoState.status === "success" ||
+      removeOrganizationLogoState.status === "success" ||
       deleteState.status === "success" ||
       updateMemberRoleState.status === "success" ||
       removeMemberState.status === "success"
@@ -359,11 +366,18 @@ export function OrganizationManagementDialog({
         onOrganizationLogoUpdated?.(updatedLogoUrl)
       }
     }
+
+    if (removeOrganizationLogoState.status === "success") {
+      organizationLogoFormRef.current?.reset()
+      setFailedOrganizationLogoSrc(null)
+      onOrganizationLogoUpdated?.(null)
+    }
   }, [
     deleteState.redirectTo,
     deleteState.status,
     inviteState.status,
     onOpenChange,
+    removeOrganizationLogoState.status,
     removeMemberState.status,
     router,
     transferState.status,
@@ -417,6 +431,13 @@ export function OrganizationManagementDialog({
     const payload = new FormData(event.currentTarget)
     startUpdateOrganizationLogoTransition(() => {
       updateOrganizationLogoActionState(payload)
+    })
+  }
+
+  function submitOrganizationLogoRemoval(): void {
+    const payload = new FormData()
+    startRemoveOrganizationLogoTransition(() => {
+      removeOrganizationLogoActionState(payload)
     })
   }
 
@@ -639,10 +660,30 @@ export function OrganizationManagementDialog({
                           </p>
                         </div>
                         <Input name="image" type="file" accept="image/*" required />
-                        <Button type="submit" size="sm" disabled={isUpdateOrganizationLogoPending}>
-                          <ImageUpIcon data-icon="inline-start" />
-                          {isUpdateOrganizationLogoPending ? "Enviando..." : "Salvar imagem"}
-                        </Button>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="submit"
+                            size="sm"
+                            disabled={isUpdateOrganizationLogoPending || isRemoveOrganizationLogoPending}
+                          >
+                            <ImageUpIcon data-icon="inline-start" />
+                            {isUpdateOrganizationLogoPending ? "Enviando..." : "Salvar imagem"}
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={submitOrganizationLogoRemoval}
+                            disabled={
+                              isUpdateOrganizationLogoPending ||
+                              isRemoveOrganizationLogoPending ||
+                              !normalizedOrganizationLogo
+                            }
+                          >
+                            <Trash2Icon data-icon="inline-start" />
+                            {isRemoveOrganizationLogoPending ? "Removendo..." : "Remover imagem"}
+                          </Button>
+                        </div>
                       </form>
                     </>
                   ) : (
@@ -887,6 +928,7 @@ export function OrganizationManagementDialog({
                 <FormFeedback state={transferState} showInline={false} />
                 <FormFeedback state={updateOrganizationState} showInline={false} />
                 <FormFeedback state={updateOrganizationLogoState} showInline={false} />
+                <FormFeedback state={removeOrganizationLogoState} showInline={false} />
                 <FormFeedback state={deleteState} showInline={false} />
                 <FormFeedback state={updateMemberRoleState} showInline={false} />
                 <FormFeedback state={removeMemberState} showInline={false} />
