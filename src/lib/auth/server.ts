@@ -20,6 +20,7 @@ import {
 } from "@/lib/env/app-base-url";
 
 const INVITATION_ACCEPT_PATH = "/convites/aceitar";
+const SIGN_UP_EMAIL_PATH = "/sign-up/email";
 const DEFAULT_APP_NAME = "avocado SaaS";
 const RESEND_TIMEOUT_MS = 10_000;
 
@@ -119,6 +120,10 @@ function getTwoFactorIssuer(): string {
     return configuredIssuer;
   }
 
+  return getAppName();
+}
+
+function getAppName(): string {
   const configuredAppName = process.env.NEXT_PUBLIC_APP_NAME?.trim();
   if (configuredAppName) {
     return configuredAppName;
@@ -285,6 +290,13 @@ type ResetPasswordEmailPayload = {
   url: string;
 };
 
+type WelcomeEmailPayload = {
+  user: {
+    name?: string | null;
+    email: string;
+  };
+};
+
 type TransactionalEmailPayload = {
   to: string;
   subject: string;
@@ -378,7 +390,7 @@ function getBrandedEmailAssetUrl(assetPath: string, request?: Request): string {
 }
 
 function renderBrandedEmailHtml(payload: BrandedEmailTemplatePayload): string {
-  const appName = escapeHtml(process.env.NEXT_PUBLIC_APP_NAME?.trim() || DEFAULT_APP_NAME);
+  const appName = escapeHtml(getAppName());
   const escapedSubject = escapeHtml(payload.subject);
   const escapedTitle = escapeHtml(payload.title);
   const escapedCtaLabel = escapeHtml(payload.ctaLabel);
@@ -522,6 +534,33 @@ async function sendResetPasswordEmail(payload: ResetPasswordEmailPayload): Promi
   });
 }
 
+async function sendSignUpThankYouEmail(payload: WelcomeEmailPayload, request?: Request): Promise<void> {
+  const appName = getAppName();
+  const recipientName = payload.user.name?.trim() || payload.user.email;
+  const escapedRecipientName = escapeHtml(recipientName);
+  const escapedAppName = escapeHtml(appName);
+  const onboardingUrl = new URL("/onboarding/company", resolveAppBaseUrl(request)).toString();
+
+  const subject = `Cadastro confirmado no ${appName}`;
+  const text = `${recipientName}, seu cadastro no ${appName} foi concluido com sucesso.\n\nAgora e so acessar sua conta e concluir a configuracao inicial: ${onboardingUrl}\n\nObrigado por escolher o ${appName}.`;
+  const html = renderBrandedEmailHtml({
+    request,
+    subject,
+    title: "Cadastro confirmado",
+    messageHtml: `Ola, <strong>${escapedRecipientName}</strong>. Obrigado por se cadastrar no <strong>${escapedAppName}</strong>. Sua conta ja esta pronta para voce comecar.`,
+    ctaLabel: "Acessar minha conta",
+    ctaUrl: onboardingUrl,
+    footerHtml: `Precisa de ajuda para dar os primeiros passos? Responda este e-mail e o time do ${escapedAppName} ajuda voce.`,
+  });
+
+  await sendTransactionalEmail({
+    to: payload.user.email,
+    subject,
+    text,
+    html,
+  });
+}
+
 export const auth = betterAuth({
   baseURL: getPrimaryAppBaseUrl(),
   secret: getAuthSecret(),
@@ -560,6 +599,38 @@ export const auth = betterAuth({
   database: prismaAdapter(prisma, {
     provider: "postgresql",
   }),
+  databaseHooks: {
+    user: {
+      create: {
+        after: async (user, context) => {
+          if (!context || context.path !== SIGN_UP_EMAIL_PATH) {
+            return;
+          }
+
+          const userEmail = typeof user.email === "string" ? user.email.trim() : "";
+          if (!userEmail) {
+            return;
+          }
+
+          const userName = typeof user.name === "string" ? user.name : null;
+
+          try {
+            await sendSignUpThankYouEmail(
+              {
+                user: {
+                  name: userName,
+                  email: userEmail,
+                },
+              },
+              context.request,
+            );
+          } catch (error) {
+            console.error("Failed to send sign-up thank-you email.", error);
+          }
+        },
+      },
+    },
+  },
   emailVerification: {
     sendOnSignUp: true,
     sendOnSignIn: true,

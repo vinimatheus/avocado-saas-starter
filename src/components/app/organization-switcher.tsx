@@ -148,60 +148,74 @@ export function OrganizationSwitcher({
   const activeOrganizationQuery = authClient.useActiveOrganization();
   const activeMemberQuery = authClient.useActiveMember();
   const sessionQuery = authClient.useSession();
-  const billingByOrganizationId = useMemo(
+  const organizationDetailsById = useMemo(
     () =>
       new Map(
-        initialOrganizations.map((organization) => [
+        toOrganizationItems(listOrganizationsQuery.data).map((organization) => [
           organization.id,
-          {
-            planCode: organization.planCode,
-            planName: organization.planName,
-            isPremium: organization.isPremium,
-          },
+          organization,
         ]),
       ),
-    [initialOrganizations],
+    [listOrganizationsQuery.data],
   );
 
   const organizations = useMemo(() => {
-    if (listOrganizationsQuery.data && listOrganizationsQuery.data.length > 0) {
-      return toOrganizationItems(listOrganizationsQuery.data).map((organization) => ({
-        ...organization,
-        planCode:
-          billingByOrganizationId.get(organization.id)?.planCode ?? organization.planCode,
-        planName:
-          billingByOrganizationId.get(organization.id)?.planName ?? organization.planName,
-        isPremium:
-          billingByOrganizationId.get(organization.id)?.isPremium ?? organization.isPremium,
-      }));
+    if (initialOrganizations.length === 0) {
+      return Array.from(organizationDetailsById.values());
     }
 
-    return initialOrganizations;
-  }, [billingByOrganizationId, initialOrganizations, listOrganizationsQuery.data]);
+    return initialOrganizations.map((organization) => {
+      const details = organizationDetailsById.get(organization.id);
+      if (!details) {
+        return organization;
+      }
+
+      return {
+        ...organization,
+        name: details.name,
+        slug: details.slug,
+        logo: details.logo,
+      };
+    });
+  }, [initialOrganizations, organizationDetailsById]);
+
+  const organizationIds = useMemo(
+    () => new Set(organizations.map((organization) => organization.id)),
+    [organizations],
+  );
+
+  const activeOrganizationIdFromServer =
+    activeOrganizationId && organizationIds.has(activeOrganizationId) ? activeOrganizationId : null;
+  const activeOrganizationIdFromClient =
+    activeOrganizationQuery.data?.id && organizationIds.has(activeOrganizationQuery.data.id)
+      ? activeOrganizationQuery.data.id
+      : null;
 
   const resolvedActiveOrganizationId =
-    activeOrganizationQuery.data?.id ??
-    activeOrganizationId ??
+    activeOrganizationIdFromServer ??
+    activeOrganizationIdFromClient ??
     organizations[0]?.id ??
     null;
+  const resolvedActiveOrganization =
+    organizations.find((organization) => organization.id === resolvedActiveOrganizationId) ?? null;
+  const activeOrganizationQueryData =
+    activeOrganizationQuery.data?.id === resolvedActiveOrganizationId ? activeOrganizationQuery.data : null;
 
   const activeOrganizationName =
-    organizations.find((organization) => organization.id === resolvedActiveOrganizationId)?.name ??
-    activeOrganizationQuery.data?.name ??
+    resolvedActiveOrganization?.name ??
+    activeOrganizationQueryData?.name ??
     fallbackOrganizationName ??
     "Espaco de trabalho";
   const activeOrganizationSlug =
-    organizations.find((organization) => organization.id === resolvedActiveOrganizationId)?.slug ??
-    activeOrganizationQuery.data?.slug ??
+    resolvedActiveOrganization?.slug ??
+    activeOrganizationQueryData?.slug ??
     null;
   const activeOrganizationLogo =
-    organizations.find((organization) => organization.id === resolvedActiveOrganizationId)?.logo ??
-    activeOrganizationQuery.data?.logo ??
+    resolvedActiveOrganization?.logo ??
+    activeOrganizationQueryData?.logo ??
     null;
-  const activeOrganizationPlanCode =
-    organizations.find((organization) => organization.id === resolvedActiveOrganizationId)?.planCode ?? "FREE";
-  const activeOrganizationPlanName =
-    organizations.find((organization) => organization.id === resolvedActiveOrganizationId)?.planName ?? "Gratuito";
+  const activeOrganizationPlanCode = resolvedActiveOrganization?.planCode ?? "FREE";
+  const activeOrganizationPlanName = resolvedActiveOrganization?.planName ?? "Gratuito";
 
   const activeMemberRole = activeMemberQuery.data?.role ?? "";
   const isOwner = hasOrganizationRole(activeMemberRole, "owner");
@@ -210,19 +224,19 @@ export function OrganizationSwitcher({
 
   const dialogMembers = useMemo(
     () =>
-      (activeOrganizationQuery.data?.members ?? []).map((member) => ({
+      (activeOrganizationQueryData?.members ?? []).map((member) => ({
         id: member.id,
         userId: member.userId,
         name: member.user?.name?.trim() || "Sem nome",
         email: member.user?.email || "Sem e-mail",
         role: mapMemberRole(member.role),
       })),
-    [activeOrganizationQuery.data?.members],
+    [activeOrganizationQueryData?.members],
   );
 
   const dialogPendingInvitations = useMemo(
     () =>
-      (activeOrganizationQuery.data?.invitations ?? [])
+      (activeOrganizationQueryData?.invitations ?? [])
         .filter((invitation) => invitation.status === "pending")
         .map((invitation) => ({
           id: invitation.id,
@@ -231,7 +245,7 @@ export function OrganizationSwitcher({
           createdAt: new Date(invitation.createdAt).toISOString(),
           expiresAt: new Date(invitation.expiresAt).toISOString(),
         })),
-    [activeOrganizationQuery.data?.invitations],
+    [activeOrganizationQueryData?.invitations],
   );
 
   useEffect(() => {
