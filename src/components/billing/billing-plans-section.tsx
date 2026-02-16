@@ -265,13 +265,28 @@ export function BillingPlansSection({
                     {enablePaymentSimulation ? (
                       <form action={simulateCheckoutPaymentAction} className="w-full">
                         <input type="hidden" name="checkoutId" value={pendingCheckoutId ?? ""} />
+                        <input type="hidden" name="planCode" value={plan.code} />
+                        <input
+                          type="hidden"
+                          name="billingCycle"
+                          value={annualBillingPreview ? "ANNUAL" : "MONTHLY"}
+                        />
+                        <input
+                          type="hidden"
+                          name="forceCheckout"
+                          value={
+                            canRenewCurrentPlan && plan.code === effectivePlanCode ? "true" : "false"
+                          }
+                        />
+                        <input type="hidden" name="billingName" value={billingDefaults.name} />
+                        <input type="hidden" name="billingCellphone" value={billingDefaults.cellphone} />
+                        <input type="hidden" name="billingTaxId" value={billingDefaults.taxId} />
                         <FormSubmitButton
                           type="submit"
                           variant="outline"
                           size="sm"
                           className="w-full"
                           pendingLabel="Simulando pagamento..."
-                          disabled={!pendingCheckoutId}
                         >
                           Simular pagamento
                         </FormSubmitButton>

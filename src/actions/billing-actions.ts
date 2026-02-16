@@ -164,10 +164,6 @@ const trialSchema = z.object({
   trialPlanCode: z.nativeEnum(BillingPlanCode),
 });
 
-const simulateCheckoutSchema = z.object({
-  checkoutId: z.string().trim().min(1, "Checkout invalido."),
-});
-
 const cancelSubscriptionSchema = z
   .object({
   immediate: z
@@ -251,6 +247,44 @@ function isNextRedirectError(error: unknown): boolean {
   return typeof digest === "string" && digest.startsWith("NEXT_REDIRECT");
 }
 
+async function applyBillingPayloadFromFormData(input: {
+  organizationId: string;
+  formData: FormData;
+  checkoutErrorMessage: string;
+}): Promise<void> {
+  const rawBillingName = String(input.formData.get("billingName") ?? "").trim();
+  const rawBillingCellphone = String(input.formData.get("billingCellphone") ?? "").trim();
+  const rawBillingTaxId = String(input.formData.get("billingTaxId") ?? "").trim();
+  const hasBillingPayload = Boolean(rawBillingName || rawBillingCellphone || rawBillingTaxId);
+
+  if (!hasBillingPayload) {
+    return;
+  }
+
+  const parsedBillingProfile = billingProfileSchema.safeParse({
+    billingName: rawBillingName,
+    billingCellphone: rawBillingCellphone,
+    billingTaxId: rawBillingTaxId,
+  });
+
+  if (!parsedBillingProfile.success) {
+    redirectWithMessage(
+      "error",
+      parsedBillingProfile.error.issues[0]?.message ?? "Dados de faturamento inválidos.",
+    );
+  }
+
+  try {
+    await updateOwnerBillingProfile(input.organizationId, parsedBillingProfile.data);
+  } catch (error) {
+    if (isNextRedirectError(error)) {
+      throw error;
+    }
+
+    redirectWithMessage("error", parseActionError(error, input.checkoutErrorMessage));
+  }
+}
+
 export async function saveBillingProfileAction(formData: FormData): Promise<void> {
   const { organizationId } = await getAuthenticatedBillingContext();
 
@@ -290,38 +324,11 @@ export async function createPlanCheckoutAction(formData: FormData): Promise<void
     redirectWithMessage("error", parsed.error.issues[0]?.message ?? "Plano inválido.");
   }
 
-  const rawBillingName = String(formData.get("billingName") ?? "").trim();
-  const rawBillingCellphone = String(formData.get("billingCellphone") ?? "").trim();
-  const rawBillingTaxId = String(formData.get("billingTaxId") ?? "").trim();
-  const hasBillingPayload = Boolean(rawBillingName || rawBillingCellphone || rawBillingTaxId);
-
-  if (hasBillingPayload) {
-    const parsedBillingProfile = billingProfileSchema.safeParse({
-      billingName: rawBillingName,
-      billingCellphone: rawBillingCellphone,
-      billingTaxId: rawBillingTaxId,
-    });
-
-    if (!parsedBillingProfile.success) {
-      redirectWithMessage(
-        "error",
-        parsedBillingProfile.error.issues[0]?.message ?? "Dados de faturamento inválidos.",
-      );
-    }
-
-    try {
-      await updateOwnerBillingProfile(organizationId, parsedBillingProfile.data);
-    } catch (error) {
-      if (isNextRedirectError(error)) {
-        throw error;
-      }
-
-      redirectWithMessage(
-        "error",
-        parseActionError(error, "Falha ao salvar dados de faturamento para checkout."),
-      );
-    }
-  }
+  await applyBillingPayloadFromFormData({
+    organizationId,
+    formData,
+    checkoutErrorMessage: "Falha ao salvar dados de faturamento para checkout.",
+  });
 
   try {
     if (parsed.data.planCode === BillingPlanCode.FREE) {
@@ -483,22 +490,48 @@ export async function reactivateSubscriptionAction(): Promise<void> {
 
 export async function simulateCheckoutPaymentAction(formData: FormData): Promise<void> {
   const { organizationId } = await getAuthenticatedBillingContext();
-
-  const parsed = simulateCheckoutSchema.safeParse({
-    checkoutId: String(formData.get("checkoutId") ?? ""),
-  });
-
-  if (!parsed.success) {
-    redirectWithMessage("error", parsed.error.issues[0]?.message ?? "Checkout invalido.");
-  }
+  const checkoutId = String(formData.get("checkoutId") ?? "").trim();
 
   try {
+    if (checkoutId) {
+      await simulateOwnerCheckoutPayment({
+        organizationId,
+        checkoutId,
+      });
+      revalidatePath("/billing");
+      redirectWithMessage("success", "Simulacao de pagamento enviada com sucesso.");
+    }
+
+    const parsedPlan = planSchema.safeParse({
+      planCode: String(formData.get("planCode") ?? ""),
+      billingCycle: String(formData.get("billingCycle") ?? ""),
+      forceCheckout: String(formData.get("forceCheckout") ?? ""),
+    });
+
+    if (!parsedPlan.success) {
+      redirectWithMessage("error", parsedPlan.error.issues[0]?.message ?? "Plano invalido.");
+    }
+
+    await applyBillingPayloadFromFormData({
+      organizationId,
+      formData,
+      checkoutErrorMessage: "Falha ao salvar dados de faturamento para simular checkout.",
+    });
+
+    const checkoutResult = await createPlanCheckoutSession({
+      organizationId,
+      targetPlanCode: parsedPlan.data.planCode,
+      billingCycle: parsedPlan.data.billingCycle,
+      allowSamePlan: parsedPlan.data.forceCheckout,
+    });
+
     await simulateOwnerCheckoutPayment({
       organizationId,
-      checkoutId: parsed.data.checkoutId,
+      checkoutId: checkoutResult.checkoutId,
     });
+
     revalidatePath("/billing");
-    redirectWithMessage("success", "Simulacao de pagamento enviada com sucesso.");
+    redirectWithMessage("success", "Pagamento simulado com sucesso.");
   } catch (error) {
     if (isNextRedirectError(error)) {
       throw error;
