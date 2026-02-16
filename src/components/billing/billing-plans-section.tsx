@@ -3,9 +3,8 @@
 import { useMemo, useState } from "react";
 import { CheckIcon, InfoIcon } from "lucide-react";
 
-import { createPlanCheckoutAction, simulateCheckoutPaymentAction } from "@/actions/billing-actions";
+import { createPlanCheckoutAction } from "@/actions/billing-actions";
 import { BillingProfileForm } from "@/components/billing/billing-profile-form";
-import { FormSubmitButton } from "@/components/shared/form-submit-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -45,8 +44,6 @@ type BillingPlansSectionProps = {
   currentIsPaidPlan: boolean;
   canRenewCurrentPlan: boolean;
   checkoutInProgress?: boolean;
-  pendingCheckoutId?: string | null;
-  enablePaymentSimulation?: boolean;
   billingDefaults: {
     name: string;
     cellphone: string;
@@ -84,8 +81,6 @@ export function BillingPlansSection({
   currentIsPaidPlan,
   canRenewCurrentPlan,
   checkoutInProgress = false,
-  pendingCheckoutId = null,
-  enablePaymentSimulation = false,
   billingDefaults,
 }: BillingPlansSectionProps) {
   const [annualBillingPreview, setAnnualBillingPreview] = useState(false);
@@ -251,48 +246,15 @@ export function BillingPlansSection({
                 </CardContent>
 
                 <CardFooter className="pt-1">
-                  <div className="w-full space-y-2">
-                    <Button
-                      type="button"
-                      className="w-full"
-                      variant={isFeatured ? "default" : "outline"}
-                      onClick={() => openBillingDialog(plan.code)}
-                      disabled={checkoutInProgress}
-                    >
-                      {resolveButtonLabel(plan.code)}
-                    </Button>
-
-                    {enablePaymentSimulation ? (
-                      <form action={simulateCheckoutPaymentAction} className="w-full">
-                        <input type="hidden" name="checkoutId" value={pendingCheckoutId ?? ""} />
-                        <input type="hidden" name="planCode" value={plan.code} />
-                        <input
-                          type="hidden"
-                          name="billingCycle"
-                          value={annualBillingPreview ? "ANNUAL" : "MONTHLY"}
-                        />
-                        <input
-                          type="hidden"
-                          name="forceCheckout"
-                          value={
-                            canRenewCurrentPlan && plan.code === effectivePlanCode ? "true" : "false"
-                          }
-                        />
-                        <input type="hidden" name="billingName" value={billingDefaults.name} />
-                        <input type="hidden" name="billingCellphone" value={billingDefaults.cellphone} />
-                        <input type="hidden" name="billingTaxId" value={billingDefaults.taxId} />
-                        <FormSubmitButton
-                          type="submit"
-                          variant="outline"
-                          size="sm"
-                          className="w-full"
-                          pendingLabel="Simulando pagamento..."
-                        >
-                          Simular pagamento
-                        </FormSubmitButton>
-                      </form>
-                    ) : null}
-                  </div>
+                  <Button
+                    type="button"
+                    className="w-full"
+                    variant={isFeatured ? "default" : "outline"}
+                    onClick={() => openBillingDialog(plan.code)}
+                    disabled={checkoutInProgress}
+                  >
+                    {resolveButtonLabel(plan.code)}
+                  </Button>
                 </CardFooter>
               </Card>
             );

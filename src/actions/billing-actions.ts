@@ -12,7 +12,6 @@ import {
   ensureOwnerSubscription,
   getOwnerEntitlements,
   reactivateOwnerSubscription,
-  simulateOwnerCheckoutPayment,
   startOwnerTrial,
   syncOwnerInvoicesFromAbacate,
   updateOwnerBillingProfile,
@@ -485,59 +484,6 @@ export async function reactivateSubscriptionAction(): Promise<void> {
     }
 
     redirectWithMessage("error", parseActionError(error, "Falha ao reativar assinatura."));
-  }
-}
-
-export async function simulateCheckoutPaymentAction(formData: FormData): Promise<void> {
-  const { organizationId } = await getAuthenticatedBillingContext();
-  const checkoutId = String(formData.get("checkoutId") ?? "").trim();
-
-  try {
-    if (checkoutId) {
-      await simulateOwnerCheckoutPayment({
-        organizationId,
-        checkoutId,
-      });
-      revalidatePath("/billing");
-      redirectWithMessage("success", "Simulacao de pagamento enviada com sucesso.");
-    }
-
-    const parsedPlan = planSchema.safeParse({
-      planCode: String(formData.get("planCode") ?? ""),
-      billingCycle: String(formData.get("billingCycle") ?? ""),
-      forceCheckout: String(formData.get("forceCheckout") ?? ""),
-    });
-
-    if (!parsedPlan.success) {
-      redirectWithMessage("error", parsedPlan.error.issues[0]?.message ?? "Plano invalido.");
-    }
-
-    await applyBillingPayloadFromFormData({
-      organizationId,
-      formData,
-      checkoutErrorMessage: "Falha ao salvar dados de faturamento para simular checkout.",
-    });
-
-    const checkoutResult = await createPlanCheckoutSession({
-      organizationId,
-      targetPlanCode: parsedPlan.data.planCode,
-      billingCycle: parsedPlan.data.billingCycle,
-      allowSamePlan: parsedPlan.data.forceCheckout,
-    });
-
-    await simulateOwnerCheckoutPayment({
-      organizationId,
-      checkoutId: checkoutResult.checkoutId,
-    });
-
-    revalidatePath("/billing");
-    redirectWithMessage("success", "Pagamento simulado com sucesso.");
-  } catch (error) {
-    if (isNextRedirectError(error)) {
-      throw error;
-    }
-
-    redirectWithMessage("error", parseActionError(error, "Falha ao simular pagamento."));
   }
 }
 

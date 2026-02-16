@@ -218,8 +218,6 @@ export default async function BillingPage({
         checkoutState.status === "CANCELED" ||
         checkoutState.status === "CHARGEBACK"),
   );
-  const canSimulateCheckoutPayment = true;
-  const pendingCheckoutId = checkoutState?.status === "PENDING" ? checkoutState.id : null;
   const restrictionHints = [
     restriction.exceededUsers > 0 ? `${restriction.exceededUsers} usuario(s) acima do limite` : null,
   ].filter((value): value is string => Boolean(value));
@@ -362,8 +360,6 @@ export default async function BillingPage({
           currentIsPaidPlan={currentIsPaidPlan}
           canRenewCurrentPlan={canRenewCurrentPlan}
           checkoutInProgress={isCheckoutProcessing}
-          pendingCheckoutId={pendingCheckoutId}
-          enablePaymentSimulation={canSimulateCheckoutPayment}
           billingDefaults={billingDefaults}
         />
       ) : (
