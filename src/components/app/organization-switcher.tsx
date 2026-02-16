@@ -128,6 +128,11 @@ function mapInvitationRole(value: string): "owner" | "admin" | "user" {
   return "user";
 }
 
+function normalizeOrganizationLogo(value: string | null | undefined): string | null {
+  const normalized = value?.trim() ?? "";
+  return normalized || null;
+}
+
 export function OrganizationSwitcher({
   activeOrganizationId,
   fallbackOrganizationName = null,
@@ -139,6 +144,7 @@ export function OrganizationSwitcher({
   const [isManagementOpen, setIsManagementOpen] = useState(false);
   const [isLeaveDialogOpen, setIsLeaveDialogOpen] = useState(false);
   const [isLeavingPending, startLeaveTransition] = useTransition();
+  const [failedOrganizationLogos, setFailedOrganizationLogos] = useState<Record<string, true>>({});
   const [leaveState, leaveAction] = useActionState(
     leaveOrganizationSafelyAction,
     initialOrganizationUserActionState,
@@ -207,6 +213,10 @@ export function OrganizationSwitcher({
   const isOwner = hasOrganizationRole(activeMemberRole, "owner");
   const isAdmin = isOrganizationAdminRole(role) || hasOrganizationRole(activeMemberRole, "admin") || isOwner;
   const currentUserId = sessionQuery.data?.user.id ?? activeMemberQuery.data?.userId ?? null;
+  const normalizedActiveOrganizationLogo = normalizeOrganizationLogo(activeOrganizationLogo);
+  const showActiveOrganizationLogo =
+    Boolean(normalizedActiveOrganizationLogo) &&
+    !failedOrganizationLogos[normalizedActiveOrganizationLogo];
 
   const dialogMembers = useMemo(
     () =>
@@ -279,6 +289,19 @@ export function OrganizationSwitcher({
     });
   }
 
+  function markOrganizationLogoAsFailed(logo: string): void {
+    setFailedOrganizationLogos((current) => {
+      if (current[logo]) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [logo]: true,
+      };
+    });
+  }
+
   return (
     <>
       <DropdownMenu>
@@ -289,8 +312,20 @@ export function OrganizationSwitcher({
             tooltip="Trocar organizacao"
             disabled={isSwitchingOrganization}
           >
-            <div className="bg-sidebar-primary text-sidebar-primary-foreground flex size-8 items-center justify-center rounded-md">
-              <Building2Icon className="size-4" />
+            <div className="bg-sidebar-primary text-sidebar-primary-foreground flex size-8 items-center justify-center overflow-hidden rounded-md">
+              {showActiveOrganizationLogo && normalizedActiveOrganizationLogo ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={normalizedActiveOrganizationLogo}
+                  alt={`Logo de ${activeOrganizationName}`}
+                  className="size-full object-cover"
+                  onError={() => {
+                    markOrganizationLogoAsFailed(normalizedActiveOrganizationLogo);
+                  }}
+                />
+              ) : (
+                <Building2Icon className="size-4" />
+              )}
             </div>
 
             <div className="grid flex-1 text-left text-xs leading-tight group-data-[collapsible=icon]:hidden">
@@ -313,25 +348,49 @@ export function OrganizationSwitcher({
           {organizations.length === 0 ? (
             <DropdownMenuItem disabled>Nenhuma organizacao encontrada.</DropdownMenuItem>
           ) : (
-            organizations.map((organization) => (
-              <DropdownMenuItem
-                key={organization.id}
-                onSelect={() => {
-                  switchOrganization(organization.id, organization.name);
-                }}
-                disabled={isSwitchingOrganization}
-              >
-                <span className="flex min-w-0 items-center gap-1.5">
-                  <span className="truncate">{organization.name}</span>
-                  <Badge variant="outline" className="h-4 px-1.5 text-[0.6rem] font-medium">
-                    {planBadgeLabel(organization.planCode)}
-                  </Badge>
-                </span>
-                {organization.id === resolvedActiveOrganizationId ? (
-                  <CheckIcon className="ml-auto size-3.5" />
-                ) : null}
-              </DropdownMenuItem>
-            ))
+            organizations.map((organization) => {
+              const normalizedOrganizationLogo = normalizeOrganizationLogo(organization.logo);
+              const showOrganizationLogo =
+                Boolean(normalizedOrganizationLogo) &&
+                !failedOrganizationLogos[normalizedOrganizationLogo];
+
+              return (
+                <DropdownMenuItem
+                  key={organization.id}
+                  onSelect={() => {
+                    switchOrganization(organization.id, organization.name);
+                  }}
+                  disabled={isSwitchingOrganization}
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="bg-muted text-muted-foreground flex size-5 items-center justify-center overflow-hidden rounded-sm border">
+                      {showOrganizationLogo && normalizedOrganizationLogo ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={normalizedOrganizationLogo}
+                          alt={`Logo de ${organization.name}`}
+                          className="size-full object-cover"
+                          onError={() => {
+                            markOrganizationLogoAsFailed(normalizedOrganizationLogo);
+                          }}
+                        />
+                      ) : (
+                        <Building2Icon className="size-3" />
+                      )}
+                    </span>
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span className="truncate">{organization.name}</span>
+                      <Badge variant="outline" className="h-4 px-1.5 text-[0.6rem] font-medium">
+                        {planBadgeLabel(organization.planCode)}
+                      </Badge>
+                    </span>
+                  </span>
+                  {organization.id === resolvedActiveOrganizationId ? (
+                    <CheckIcon className="ml-auto size-3.5" />
+                  ) : null}
+                </DropdownMenuItem>
+              );
+            })
           )}
 
           <DropdownMenuSeparator />

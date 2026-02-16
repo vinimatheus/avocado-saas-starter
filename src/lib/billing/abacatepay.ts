@@ -42,6 +42,18 @@ export type AbacateBilling = {
   updatedAt?: string;
 };
 
+export type AbacatePixQrCode = {
+  id: string;
+  amount?: number;
+  status?: AbacateBillingStatus;
+  currency?: string;
+  brCode?: string;
+  brCodeBase64?: string;
+  expiresAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 type AbacateCreateBillingPayload = {
   frequency: "ONE_TIME" | "MULTIPLE_PAYMENTS";
   methods: Array<"PIX" | "CARD">;
@@ -267,4 +279,24 @@ export async function listAbacateBillings(): Promise<AbacateBilling[]> {
   }
 
   return [];
+}
+
+export async function simulateAbacatePixQrCodePayment(input: {
+  id: string;
+  metadata?: Record<string, unknown>;
+}): Promise<AbacatePixQrCode> {
+  const pixQrCodeId = input.id.trim();
+  if (!pixQrCodeId) {
+    throw new Error("ID do QRCode Pix invalido para simulacao.");
+  }
+
+  return requestAbacate<AbacatePixQrCode>(
+    `/pixQrCode/simulate-payment?id=${encodeURIComponent(pixQrCodeId)}`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        metadata: input.metadata ?? {},
+      }),
+    },
+  );
 }

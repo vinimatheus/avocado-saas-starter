@@ -12,6 +12,7 @@ import {
   ensureOwnerSubscription,
   getOwnerEntitlements,
   reactivateOwnerSubscription,
+  simulateOwnerCheckoutPayment,
   startOwnerTrial,
   syncOwnerInvoicesFromAbacate,
   updateOwnerBillingProfile,
@@ -161,6 +162,10 @@ const planSchema = z.object({
 
 const trialSchema = z.object({
   trialPlanCode: z.nativeEnum(BillingPlanCode),
+});
+
+const simulateCheckoutSchema = z.object({
+  checkoutId: z.string().trim().min(1, "Checkout invalido."),
 });
 
 const cancelSubscriptionSchema = z
@@ -473,6 +478,40 @@ export async function reactivateSubscriptionAction(): Promise<void> {
     }
 
     redirectWithMessage("error", parseActionError(error, "Falha ao reativar assinatura."));
+  }
+}
+
+export async function simulateCheckoutPaymentAction(formData: FormData): Promise<void> {
+  const { organizationId } = await getAuthenticatedBillingContext();
+
+  if (process.env.NODE_ENV === "production") {
+    redirectWithMessage(
+      "error",
+      "Simulacao de pagamento disponivel apenas em ambiente de desenvolvimento.",
+    );
+  }
+
+  const parsed = simulateCheckoutSchema.safeParse({
+    checkoutId: String(formData.get("checkoutId") ?? ""),
+  });
+
+  if (!parsed.success) {
+    redirectWithMessage("error", parsed.error.issues[0]?.message ?? "Checkout invalido.");
+  }
+
+  try {
+    await simulateOwnerCheckoutPayment({
+      organizationId,
+      checkoutId: parsed.data.checkoutId,
+    });
+    revalidatePath("/billing");
+    redirectWithMessage("success", "Simulacao de pagamento enviada com sucesso.");
+  } catch (error) {
+    if (isNextRedirectError(error)) {
+      throw error;
+    }
+
+    redirectWithMessage("error", parseActionError(error, "Falha ao simular pagamento."));
   }
 }
 

@@ -3,7 +3,7 @@ import { BoxesIcon, UsersIcon } from "lucide-react";
 import Image from "next/image";
 import { redirect } from "next/navigation";
 
-import { syncInvoicesAction } from "@/actions/billing-actions";
+import { simulateCheckoutPaymentAction, syncInvoicesAction } from "@/actions/billing-actions";
 import { AppPageContainer } from "@/components/app/app-page-container";
 import { AppPageHighlightCard } from "@/components/app/app-page-highlight-card";
 import { BillingPlansSection } from "@/components/billing/billing-plans-section";
@@ -218,6 +218,8 @@ export default async function BillingPage({
         checkoutState.status === "CANCELED" ||
         checkoutState.status === "CHARGEBACK"),
   );
+  const canSimulateCheckoutPayment =
+    process.env.NODE_ENV !== "production" && Boolean(checkoutState?.id);
   const restrictionHints = [
     restriction.exceededUsers > 0 ? `${restriction.exceededUsers} usuario(s) acima do limite` : null,
   ].filter((value): value is string => Boolean(value));
@@ -278,6 +280,18 @@ export default async function BillingPage({
               Assim que o webhook for processado, seu plano sera atualizado. Pagamento:{" "}
               <code>{checkoutState?.id}</code>.
             </p>
+            {canSimulateCheckoutPayment ? (
+              <form action={simulateCheckoutPaymentAction} className="pt-2">
+                <input type="hidden" name="checkoutId" value={checkoutState?.id ?? ""} />
+                <FormSubmitButton
+                  size="sm"
+                  variant="outline"
+                  pendingLabel="Simulando pagamento..."
+                >
+                  Simular pagamento
+                </FormSubmitButton>
+              </form>
+            ) : null}
           </CardContent>
         </Card>
       ) : null}

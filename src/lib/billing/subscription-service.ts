@@ -16,6 +16,7 @@ import {
   isAbacatePayConfigured,
   isTrustedAbacateCheckoutUrl,
   listAbacateBillings,
+  simulateAbacatePixQrCodePayment,
 } from "@/lib/billing/abacatepay";
 import {
   BILLING_PLAN_SEQUENCE,
@@ -1432,6 +1433,34 @@ async function findAbacateBillingForCheckout(
   return byExternalId ?? null;
 }
 
+function resolveCheckoutPixSimulationId(input: {
+  abacateBillingId: string | null;
+  abacateBillingUrl: string | null;
+}): string | null {
+  const billingId = input.abacateBillingId?.trim() ?? "";
+  if (billingId) {
+    return billingId;
+  }
+
+  const billingUrl = input.abacateBillingUrl?.trim() ?? "";
+  if (!billingUrl) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(billingUrl);
+    const segment = parsed.pathname.split("/").filter(Boolean).pop();
+    if (!segment) {
+      return null;
+    }
+
+    const decoded = decodeURIComponent(segment).trim();
+    return decoded || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function reconcileCheckoutFromAbacate(input: {
   organizationId: string;
   checkoutId: string;
@@ -1521,6 +1550,65 @@ export async function reconcileCheckoutFromAbacate(input: {
 
   await applyWebhookOutcome(checkout, syntheticPayload, outcome, "reconcile");
   return true;
+}
+
+export async function simulateOwnerCheckoutPayment(input: {
+  organizationId: string;
+  checkoutId: string;
+}): Promise<void> {
+  if (!isAbacatePayConfigured()) {
+    throw new Error("ABACATEPAY_API_KEY nao configurada para simular pagamento.");
+  }
+
+  const checkout = await prisma.billingCheckoutSession.findFirst({
+    where: {
+      id: input.checkoutId,
+      organizationId: input.organizationId,
+    },
+    select: {
+      id: true,
+      status: true,
+      abacateBillingId: true,
+      abacateBillingUrl: true,
+    },
+  });
+
+  if (!checkout) {
+    throw new Error("Checkout nao encontrado para esta organizacao.");
+  }
+
+  if (checkout.status !== CheckoutStatus.PENDING) {
+    throw new Error("A simulacao so pode ser executada em checkout pendente.");
+  }
+
+  const pixQrCodeId = resolveCheckoutPixSimulationId({
+    abacateBillingId: checkout.abacateBillingId,
+    abacateBillingUrl: checkout.abacateBillingUrl,
+  });
+
+  if (!pixQrCodeId) {
+    throw new Error("Checkout sem identificador de cobranca para simulacao.");
+  }
+
+  await simulateAbacatePixQrCodePayment({
+    id: pixQrCodeId,
+    metadata: {
+      source: "billing_page",
+      organizationId: input.organizationId,
+      checkoutId: checkout.id,
+    },
+  });
+
+  try {
+    await reconcileCheckoutFromAbacate({
+      organizationId: input.organizationId,
+      checkoutId: checkout.id,
+    });
+  } catch (error) {
+    if (!isTimeoutError(error)) {
+      throw error;
+    }
+  }
 }
 
 function bucketForRollout(seed: string, subjectKey: string): number {
