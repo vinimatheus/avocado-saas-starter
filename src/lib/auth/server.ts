@@ -21,6 +21,9 @@ import {
 
 const INVITATION_ACCEPT_PATH = "/convites/aceitar";
 const SIGN_UP_EMAIL_PATH = "/sign-up/email";
+const SIGN_IN_SOCIAL_PATH = "/sign-in/social";
+const OAUTH_CALLBACK_ROUTE_PATH = "/callback/:id";
+const OAUTH_CALLBACK_PATH_PREFIX = "/callback/";
 const DEFAULT_APP_NAME = "avocado SaaS";
 const RESEND_TIMEOUT_MS = 10_000;
 
@@ -186,6 +189,15 @@ function toErrorMessage(error: unknown, fallbackMessage: string): string {
   }
 
   return fallbackMessage;
+}
+
+function shouldSendWelcomeEmailForUserCreate(path: string): boolean {
+  return (
+    path === SIGN_UP_EMAIL_PATH ||
+    path === SIGN_IN_SOCIAL_PATH ||
+    path === OAUTH_CALLBACK_ROUTE_PATH ||
+    path.startsWith(OAUTH_CALLBACK_PATH_PREFIX)
+  );
 }
 
 async function dedupeCredentialAccountsForEmail(rawEmail: unknown): Promise<void> {
@@ -603,7 +615,7 @@ export const auth = betterAuth({
     user: {
       create: {
         after: async (user, context) => {
-          if (!context || context.path !== SIGN_UP_EMAIL_PATH) {
+          if (!context || !shouldSendWelcomeEmailForUserCreate(context.path)) {
             return;
           }
 
