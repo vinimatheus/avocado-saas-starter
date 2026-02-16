@@ -215,7 +215,7 @@ export function OrganizationSwitcher({
   const currentUserId = sessionQuery.data?.user.id ?? activeMemberQuery.data?.userId ?? null;
   const normalizedActiveOrganizationLogo = normalizeOrganizationLogo(activeOrganizationLogo);
   const showActiveOrganizationLogo =
-    Boolean(normalizedActiveOrganizationLogo) &&
+    normalizedActiveOrganizationLogo !== null &&
     !failedOrganizationLogos[normalizedActiveOrganizationLogo];
 
   const dialogMembers = useMemo(
@@ -351,7 +351,7 @@ export function OrganizationSwitcher({
             organizations.map((organization) => {
               const normalizedOrganizationLogo = normalizeOrganizationLogo(organization.logo);
               const showOrganizationLogo =
-                Boolean(normalizedOrganizationLogo) &&
+                normalizedOrganizationLogo !== null &&
                 !failedOrganizationLogos[normalizedOrganizationLogo];
 
               return (
