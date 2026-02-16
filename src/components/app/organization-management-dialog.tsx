@@ -76,6 +76,7 @@ type OrganizationDialogInvitation = {
 type OrganizationManagementDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
+  onOrganizationLogoUpdated?: (logoUrl: string) => void
   organizationName: string
   organizationSlug: string | null
   organizationLogo: string | null
@@ -147,6 +148,7 @@ function toSlug(value: string): string {
 export function OrganizationManagementDialog({
   open,
   onOpenChange,
+  onOrganizationLogoUpdated,
   organizationName,
   organizationSlug,
   organizationLogo,
@@ -350,6 +352,12 @@ export function OrganizationManagementDialog({
 
     if (updateOrganizationLogoState.status === "success") {
       organizationLogoFormRef.current?.reset()
+
+      const updatedLogoUrl = updateOrganizationLogoState.organizationLogoUrl?.trim() ?? ""
+      if (updatedLogoUrl) {
+        setFailedOrganizationLogoSrc(null)
+        onOrganizationLogoUpdated?.(updatedLogoUrl)
+      }
     }
   }, [
     deleteState.redirectTo,
@@ -360,8 +368,10 @@ export function OrganizationManagementDialog({
     router,
     transferState.status,
     updateMemberRoleState.status,
+    updateOrganizationLogoState.organizationLogoUrl,
     updateOrganizationLogoState.status,
     updateOrganizationState.status,
+    onOrganizationLogoUpdated,
   ])
 
   function submitInvite(event: React.FormEvent<HTMLFormElement>): void {

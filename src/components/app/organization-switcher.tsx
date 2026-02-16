@@ -145,6 +145,7 @@ export function OrganizationSwitcher({
   const [isLeaveDialogOpen, setIsLeaveDialogOpen] = useState(false);
   const [isLeavingPending, startLeaveTransition] = useTransition();
   const [failedOrganizationLogos, setFailedOrganizationLogos] = useState<Record<string, true>>({});
+  const [organizationLogoOverrides, setOrganizationLogoOverrides] = useState<Record<string, string>>({});
   const [leaveState, leaveAction] = useActionState(
     leaveOrganizationSafelyAction,
     initialOrganizationUserActionState,
@@ -170,44 +171,56 @@ export function OrganizationSwitcher({
   );
 
   const organizations = useMemo(() => {
-    if (listOrganizationsQuery.data && listOrganizationsQuery.data.length > 0) {
-      return toOrganizationItems(listOrganizationsQuery.data).map((organization) => ({
-        ...organization,
-        planCode:
-          billingByOrganizationId.get(organization.id)?.planCode ?? organization.planCode,
-        planName:
-          billingByOrganizationId.get(organization.id)?.planName ?? organization.planName,
-        isPremium:
-          billingByOrganizationId.get(organization.id)?.isPremium ?? organization.isPremium,
-      }));
-    }
+    const sourceOrganizations =
+      listOrganizationsQuery.data && listOrganizationsQuery.data.length > 0
+        ? toOrganizationItems(listOrganizationsQuery.data)
+        : initialOrganizations;
 
-    return initialOrganizations;
-  }, [billingByOrganizationId, initialOrganizations, listOrganizationsQuery.data]);
+    return sourceOrganizations.map((organization) => ({
+      ...organization,
+      logo: organizationLogoOverrides[organization.id] ?? organization.logo,
+      planCode:
+        billingByOrganizationId.get(organization.id)?.planCode ?? organization.planCode,
+      planName:
+        billingByOrganizationId.get(organization.id)?.planName ?? organization.planName,
+      isPremium:
+        billingByOrganizationId.get(organization.id)?.isPremium ?? organization.isPremium,
+    }));
+  }, [billingByOrganizationId, initialOrganizations, listOrganizationsQuery.data, organizationLogoOverrides]);
 
   const resolvedActiveOrganizationId =
     activeOrganizationQuery.data?.id ??
     activeOrganizationId ??
     organizations[0]?.id ??
     null;
+  const activeOrganizationFromList =
+    organizations.find((organization) => organization.id === resolvedActiveOrganizationId) ?? null;
+  const activeOrganizationFromQuery =
+    activeOrganizationQuery.data?.id === resolvedActiveOrganizationId
+      ? activeOrganizationQuery.data
+      : null;
+  const overriddenActiveOrganizationLogo =
+    resolvedActiveOrganizationId !== null
+      ? organizationLogoOverrides[resolvedActiveOrganizationId] ?? null
+      : null;
 
   const activeOrganizationName =
-    organizations.find((organization) => organization.id === resolvedActiveOrganizationId)?.name ??
-    activeOrganizationQuery.data?.name ??
+    activeOrganizationFromQuery?.name ??
+    activeOrganizationFromList?.name ??
     fallbackOrganizationName ??
     "Espaco de trabalho";
   const activeOrganizationSlug =
-    organizations.find((organization) => organization.id === resolvedActiveOrganizationId)?.slug ??
-    activeOrganizationQuery.data?.slug ??
+    activeOrganizationFromQuery?.slug ??
+    activeOrganizationFromList?.slug ??
     null;
   const activeOrganizationLogo =
-    organizations.find((organization) => organization.id === resolvedActiveOrganizationId)?.logo ??
+    overriddenActiveOrganizationLogo ??
+    activeOrganizationFromQuery?.logo ??
+    activeOrganizationFromList?.logo ??
     activeOrganizationQuery.data?.logo ??
     null;
-  const activeOrganizationPlanCode =
-    organizations.find((organization) => organization.id === resolvedActiveOrganizationId)?.planCode ?? "FREE";
-  const activeOrganizationPlanName =
-    organizations.find((organization) => organization.id === resolvedActiveOrganizationId)?.planName ?? "Gratuito";
+  const activeOrganizationPlanCode = activeOrganizationFromList?.planCode ?? "FREE";
+  const activeOrganizationPlanName = activeOrganizationFromList?.planName ?? "Gratuito";
 
   const activeMemberRole = activeMemberQuery.data?.role ?? "";
   const isOwner = hasOrganizationRole(activeMemberRole, "owner");
@@ -300,6 +313,39 @@ export function OrganizationSwitcher({
         [logo]: true,
       };
     });
+  }
+
+  function handleOrganizationLogoUpdated(logoUrl: string): void {
+    const organizationId = resolvedActiveOrganizationId;
+    if (!organizationId) {
+      return;
+    }
+
+    setOrganizationLogoOverrides((current) => {
+      if (current[organizationId] === logoUrl) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [organizationId]: logoUrl,
+      };
+    });
+
+    setFailedOrganizationLogos((current) => {
+      if (!current[logoUrl]) {
+        return current;
+      }
+
+      const next = { ...current };
+      delete next[logoUrl];
+      return next;
+    });
+
+    for (const query of [listOrganizationsQuery, activeOrganizationQuery, activeMemberQuery, sessionQuery]) {
+      const candidate = query as { refetch?: () => Promise<unknown> | unknown };
+      void candidate.refetch?.();
+    }
   }
 
   return (
@@ -431,6 +477,7 @@ export function OrganizationSwitcher({
       <OrganizationManagementDialog
         open={isManagementOpen}
         onOpenChange={setIsManagementOpen}
+        onOrganizationLogoUpdated={handleOrganizationLogoUpdated}
         organizationName={activeOrganizationName}
         organizationSlug={activeOrganizationSlug}
         organizationLogo={activeOrganizationLogo}

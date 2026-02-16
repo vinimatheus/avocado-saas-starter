@@ -48,11 +48,13 @@ const organizationConfirmationSchema = z.object({
 function successState(
   message: string,
   redirectTo: string | null = null,
+  organizationLogoUrl: string | null = null,
 ): OrganizationUserActionState {
   return {
     status: "success",
     message,
     redirectTo,
+    organizationLogoUrl,
   };
 }
 
@@ -61,6 +63,7 @@ function errorState(message: string): OrganizationUserActionState {
     status: "error",
     message,
     redirectTo: null,
+    organizationLogoUrl: null,
   };
 }
 
@@ -352,7 +355,7 @@ export async function updateOrganizationLogoAction(
     });
 
     revalidateOrganizationGovernancePaths();
-    return successState("Imagem da organizacao atualizada com sucesso.");
+    return successState("Imagem da organizacao atualizada com sucesso.", null, imageUrl);
   } catch (error) {
     return errorState(parseActionError(error, "Falha ao atualizar imagem da organizacao."));
   }
