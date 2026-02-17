@@ -32,7 +32,7 @@ function resolveCallbackPath(value: string): string {
 export const metadata: Metadata = {
   title: "Redefinir senha",
   description:
-    "Defina uma nova senha com seguranca para recuperar o acesso a sua area no avocado SaaS Starter.",
+    "Defina uma nova senha com seguranca para recuperar o acesso a sua area no Avocado SaaS Starter.",
   alternates: {
     canonical: "/reset-password",
   },

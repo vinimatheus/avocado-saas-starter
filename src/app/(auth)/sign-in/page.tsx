@@ -39,12 +39,12 @@ function parseBooleanSearchParam(value: string): boolean {
 export const metadata: Metadata = {
   title: "Entrar",
   description:
-    "Entre na sua conta para acessar painel, planos e gerenciamento do seu SaaS no avocado SaaS Starter.",
+    "Entre na sua conta para acessar painel, planos e gerenciamento do seu SaaS no Avocado SaaS Starter.",
   alternates: {
     canonical: "/sign-in",
   },
   openGraph: {
-    title: "Entrar no avocado SaaS Starter",
+    title: "Entrar no Avocado SaaS Starter",
     description:
       "Acesse sua conta para continuar a gestao do seu produto com autenticacao, organizacoes e planos.",
     url: "/sign-in",
@@ -52,7 +52,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary",
-    title: "Entrar no avocado SaaS Starter",
+    title: "Entrar no Avocado SaaS Starter",
     description:
       "Acesse sua conta para continuar a gestao do seu produto com autenticacao, organizacoes e planos.",
   },

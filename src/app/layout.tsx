@@ -45,7 +45,7 @@ const themeInitScript = `
 `;
 
 const siteOrigin = resolveSiteOrigin();
-const siteName = "avocado SaaS Starter";
+const siteName = "Avocado SaaS Starter";
 const defaultTitle = "SaaS Starter em Next.js com autenticacao, multi-tenant e planos";
 const defaultDescription =
   "Template SaaS pronto para producao com Next.js App Router, autenticacao, multi-tenant por organizacao, planos e painel.";
@@ -56,7 +56,7 @@ export const metadata: Metadata = {
   applicationName: siteName,
   title: {
     default: defaultTitle,
-    template: "%s | avocado SaaS Starter",
+    template: "%s | Avocado SaaS Starter",
   },
   description: defaultDescription,
   keywords: [
@@ -83,7 +83,7 @@ export const metadata: Metadata = {
         url: defaultSocialImage,
         width: 1200,
         height: 630,
-        alt: "Logo do avocado SaaS Starter em fundo branco",
+        alt: "Logo do Avocado SaaS Starter em fundo branco",
       },
     ],
   },

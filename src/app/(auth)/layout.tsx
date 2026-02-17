@@ -9,9 +9,9 @@ import { ThemeToggle } from "@/components/shared/theme-toggle";
 export const metadata: Metadata = {
   title: {
     default: "Autenticacao",
-    template: "%s | avocado SaaS Starter",
+    template: "%s | Avocado SaaS Starter",
   },
-  description: "Acesse sua conta e gerencie sua area no avocado SaaS Starter.",
+  description: "Acesse sua conta e gerencie sua area no Avocado SaaS Starter.",
   robots: {
     index: false,
     follow: false,

@@ -154,7 +154,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Plano",
   description:
-    "Gestao interna de assinatura, planos e renovacao da area no avocado SaaS Starter.",
+    "Gestao interna de assinatura, planos e renovacao da area no Avocado SaaS Starter.",
   alternates: {
     canonical: "/billing",
   },

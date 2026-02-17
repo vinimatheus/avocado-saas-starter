@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: {
     default: "Area interna",
-    template: "%s | Area interna | avocado SaaS Starter",
+    template: "%s | Area interna | Avocado SaaS Starter",
   },
   description:
     "Area interna do SaaS para operacao do produto com painel, equipe, faturamento, perfil e catalogo.",

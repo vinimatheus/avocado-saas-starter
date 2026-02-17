@@ -59,7 +59,7 @@ export default async function DashboardPage() {
         title="Seu painel com visao clara para decidir mais rapido"
         description={`Acompanhe usuarios, time e produtos da organizacao ${activeOrganizationName} em um unico lugar e mantenha sua operacao evoluindo com previsibilidade.`}
         imageSrc="/img/dashboard.png"
-        imageAlt="avocado mexendo no computador"
+        imageAlt="Avocado mexendo no computador"
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

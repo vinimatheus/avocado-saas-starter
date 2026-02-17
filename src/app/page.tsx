@@ -18,13 +18,13 @@ const homeStructuredData = {
   "@graph": [
     {
       "@type": "WebSite",
-      name: "avocado SaaS Starter",
+      name: "Avocado SaaS Starter",
       url: siteOrigin,
       inLanguage: "pt-BR",
     },
     {
       "@type": "SoftwareApplication",
-      name: "avocado SaaS Starter",
+      name: "Avocado SaaS Starter",
       applicationCategory: "BusinessApplication",
       operatingSystem: "Web",
       url: siteOrigin,
@@ -93,7 +93,7 @@ export const metadata: Metadata = {
         url: homeSocialImage,
         width: 1200,
         height: 630,
-        alt: "Logo do avocado SaaS Starter em fundo branco",
+        alt: "Logo do Avocado SaaS Starter em fundo branco",
       },
     ],
   },

@@ -30,7 +30,7 @@ export function Logo({
         )}
         <Image
           src="/img/logo.png"
-          alt="avocado SaaS"
+          alt="Avocado SaaS"
           width={img}
           height={img}
           className="relative object-contain"
@@ -40,7 +40,7 @@ export function Logo({
       {showText && (
         <div className="flex flex-col leading-tight">
           <span className={cn("text-muted-foreground font-bold tracking-[0.1em] uppercase", text)}>
-            avocado
+            Avocado
           </span>
           <span
             className={cn(

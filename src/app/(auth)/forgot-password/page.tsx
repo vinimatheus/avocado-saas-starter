@@ -34,7 +34,7 @@ function resolveCallbackPath(value: string): string {
 export const metadata: Metadata = {
   title: "Recuperar senha",
   description:
-    "Solicite o link de recuperacao de senha para voltar a acessar sua conta no avocado SaaS Starter.",
+    "Solicite o link de recuperacao de senha para voltar a acessar sua conta no Avocado SaaS Starter.",
   alternates: {
     canonical: "/forgot-password",
   },

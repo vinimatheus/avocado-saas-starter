@@ -51,7 +51,7 @@ function roleLabel(role: string): string {
 
 export const metadata: Metadata = {
   title: "Aceitar convite",
-  description: "Confirme o convite para entrar em uma organizacao no avocado SaaS Starter.",
+  description: "Confirme o convite para entrar em uma organizacao no Avocado SaaS Starter.",
   alternates: {
     canonical: "/convites/aceitar",
   },

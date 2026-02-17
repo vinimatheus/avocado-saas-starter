@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Perfil",
   description:
-    "Atualize dados da conta, seguranca e identidade do usuario na area do avocado SaaS Starter.",
+    "Atualize dados da conta, seguranca e identidade do usuario na area do Avocado SaaS Starter.",
   alternates: {
     canonical: "/profile",
   },
