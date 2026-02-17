@@ -38,21 +38,10 @@ export type OnboardingProfileActionState = {
   message: string;
 };
 
-export const initialOnboardingProfileActionState: OnboardingProfileActionState = {
-  status: "idle",
-  message: "",
-};
-
 export type OnboardingOrganizationActionState = {
   status: "idle" | "success" | "error";
   message: string;
   redirectTo: string | null;
-};
-
-export const initialOnboardingOrganizationActionState: OnboardingOrganizationActionState = {
-  status: "idle",
-  message: "",
-  redirectTo: null,
 };
 
 function successProfileState(message: string): OnboardingProfileActionState {

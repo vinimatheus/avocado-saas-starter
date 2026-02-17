@@ -11,8 +11,8 @@ import { useRouter } from "next/navigation";
 import {
   completeOnboardingOrganizationStepAction,
   completeOnboardingProfileStepAction,
-  initialOnboardingOrganizationActionState,
-  initialOnboardingProfileActionState,
+  type OnboardingOrganizationActionState,
+  type OnboardingProfileActionState,
 } from "@/actions/onboarding-actions";
 import { FormFeedback } from "@/components/shared/form-feedback";
 import { FormSubmitButton } from "@/components/shared/form-submit-button";
@@ -55,6 +55,15 @@ type CompanyOnboardingFormProps = {
 };
 
 const ORGANIZATION_SLUG_MAX_LENGTH = 70;
+const initialOnboardingProfileActionState: OnboardingProfileActionState = {
+  status: "idle",
+  message: "",
+};
+const initialOnboardingOrganizationActionState: OnboardingOrganizationActionState = {
+  status: "idle",
+  message: "",
+  redirectTo: null,
+};
 
 function generateOrganizationSlugVariant(baseSlug: string): string {
   const suffix = Math.random().toString(36).slice(2, 8);
