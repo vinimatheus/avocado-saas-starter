@@ -16,6 +16,19 @@ function getSingleSearchParam(value: string | string[] | undefined): string {
   return value ?? "";
 }
 
+function sanitizeRedirectPath(value: string): string {
+  const normalized = value.trim();
+  if (!normalized) {
+    return "/";
+  }
+
+  if (!normalized.startsWith("/") || normalized.startsWith("//")) {
+    return "/";
+  }
+
+  return normalized;
+}
+
 export const metadata: Metadata = {
   title: "Primeiros passos da organizacao",
   description: "Conclua a etapa inicial da sua organizacao para iniciar o uso da area.",
@@ -44,6 +57,7 @@ export default async function CompanyOnboardingPage({
 }) {
   const resolvedSearchParams = await Promise.resolve(searchParams ?? {});
   const initialCompanyName = getSingleSearchParam(resolvedSearchParams.company);
+  const redirectPath = sanitizeRedirectPath(getSingleSearchParam(resolvedSearchParams.next));
   const tenantContext = await getTenantContext();
 
   if (!tenantContext.session?.user) {
@@ -58,7 +72,9 @@ export default async function CompanyOnboardingPage({
     <main className="bg-muted/40 flex min-h-screen items-center justify-center px-4 py-10">
       <CompanyOnboardingForm
         userName={tenantContext.session.user.name}
+        userImage={(tenantContext.session.user as { image?: string | null }).image ?? null}
         initialCompanyName={initialCompanyName}
+        redirectPath={redirectPath}
       />
     </main>
   );

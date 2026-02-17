@@ -31,7 +31,6 @@ import { Logo } from "@/components/shared/logo";
 import { localizeAuthErrorMessage } from "@/lib/auth/error-messages";
 import { signUpSchema, type SignUpValues } from "@/lib/auth/schemas";
 import { authClient, signUp } from "@/lib/auth/client";
-import { buildOrganizationSlug } from "@/lib/organization/helpers";
 import { stripFieldRef } from "@/lib/forms/rhf";
 import { getFirstValidationErrorMessage } from "@/lib/forms/validation-toast";
 
@@ -69,11 +68,15 @@ function buildSignInHref(
   return queryString ? `/sign-in?${queryString}` : "/sign-in";
 }
 
-function buildOnboardingCallbackPath(companyName: string): string {
+function buildOnboardingCallbackPath(companyName: string, callbackPath: string): string {
   const params = new URLSearchParams();
   const normalizedCompanyName = companyName.trim();
   if (normalizedCompanyName) {
     params.set("company", normalizedCompanyName);
+  }
+
+  if (callbackPath !== "/") {
+    params.set("next", callbackPath);
   }
 
   const queryString = params.toString();
@@ -112,9 +115,10 @@ export function SignUpForm({
     (values) => {
       setServerMessage("");
       startTransition(async () => {
+        const onboardingCallbackPath = buildOnboardingCallbackPath(values.companyName, callbackPath);
         const verificationCallbackPath = skipOrganizationCreation
           ? callbackPath
-          : buildOnboardingCallbackPath(values.companyName);
+          : onboardingCallbackPath;
 
         const result = await signUp.email({
           name: values.name,
@@ -147,20 +151,8 @@ export function SignUpForm({
           return;
         }
 
-        const organizationResult = await authClient.organization.create({
-          name: values.companyName,
-          slug: buildOrganizationSlug(values.companyName, values.email),
-        });
-
-        if (organizationResult.error) {
-          toast.error("Conta criada, mas faltou vincular organizacao. Complete na etapa inicial.");
-          router.replace("/onboarding/company");
-          router.refresh();
-          return;
-        }
-
-        toast.success("Conta e organizacao criadas com sucesso.");
-        router.replace(callbackPath);
+        toast.success("Conta criada. Complete os primeiros passos para finalizar o acesso.");
+        router.replace(onboardingCallbackPath);
         router.refresh();
       });
     },
