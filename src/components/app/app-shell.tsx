@@ -9,6 +9,7 @@ import { GitHubCreditLink } from "@/components/shared/github-credit-link";
 import { Logo } from "@/components/shared/logo";
 import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { AppBreadcrumb } from "@/components/app/app-breadcrumb";
+import { AppCommandBar, AppCommandBarTrigger } from "@/components/app/app-command-bar";
 import {
   InvitationNotificationMenu,
   type UserInvitation,
@@ -34,6 +35,7 @@ import {
 } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { OrganizationUserRole } from "@/lib/organization/helpers";
+import type { OrganizationPermissions } from "@/lib/organization/permissions";
 
 type AppShellProps = {
   activeOrganizationId?: string | null;
@@ -46,6 +48,7 @@ type AppShellProps = {
     planCode: "FREE" | "STARTER_50" | "PRO_100" | "SCALE_400";
     planName: string;
     isPremium: boolean;
+    permissions: OrganizationPermissions;
   }>;
   pendingInvitations: UserInvitation[];
   role: OrganizationUserRole;
@@ -220,32 +223,35 @@ export function AppShell({
   children,
 }: AppShellProps) {
   return (
-    <TooltipProvider>
-      <SidebarProvider defaultOpen>
-        <AppSidebar
-          activeOrganizationId={activeOrganizationId}
-          organizationName={organizationName}
-          organizations={organizations}
-          role={role}
-          userName={userName}
-          userImage={userImage}
-        />
-        <SidebarInset>
-          <header className="bg-background/95 supports-backdrop-filter:bg-background/60 sticky top-0 z-20 flex h-14 items-center gap-2 border-b px-5 sm:px-6 backdrop-blur">
-            <SidebarTrigger />
-            <div className="min-w-0 flex-1">
-              <AppBreadcrumb />
-            </div>
-            <div className="ml-auto flex items-center gap-2">
-              <GitHubCreditLink />
-              <ThemeToggle />
-              <InvitationNotificationMenu initialInvitations={pendingInvitations} />
-            </div>
-          </header>
+    <AppCommandBar>
+      <TooltipProvider>
+        <SidebarProvider defaultOpen>
+          <AppSidebar
+            activeOrganizationId={activeOrganizationId}
+            organizationName={organizationName}
+            organizations={organizations}
+            role={role}
+            userName={userName}
+            userImage={userImage}
+          />
+          <SidebarInset>
+            <header className="bg-background/95 supports-backdrop-filter:bg-background/60 sticky top-0 z-20 flex h-14 items-center gap-2 border-b px-5 sm:px-6 backdrop-blur">
+              <SidebarTrigger />
+              <div className="min-w-0 flex-1">
+                <AppBreadcrumb />
+              </div>
+              <div className="ml-auto flex items-center gap-2">
+                <AppCommandBarTrigger />
+                <GitHubCreditLink />
+                <ThemeToggle />
+                <InvitationNotificationMenu initialInvitations={pendingInvitations} />
+              </div>
+            </header>
 
-          <div className="flex flex-1 flex-col">{children}</div>
-        </SidebarInset>
-      </SidebarProvider>
-    </TooltipProvider>
+            <div className="flex flex-1 flex-col">{children}</div>
+          </SidebarInset>
+        </SidebarProvider>
+      </TooltipProvider>
+    </AppCommandBar>
   );
 }

@@ -9,6 +9,7 @@ import { ProductsDataTable } from "@/components/templates/products-data-table";
 import { Card, CardContent } from "@/components/ui/card";
 import { getOrganizationBlockMessage } from "@/lib/billing/subscription-service";
 import { isOrganizationAdminRole } from "@/lib/organization/helpers";
+import { canRoleCreateProduct } from "@/lib/organization/permissions";
 import { listOrganizationProducts } from "@/lib/products/repository";
 import { productStatusSchema } from "@/lib/products/schemas";
 import { getTenantContext } from "@/lib/organization/tenant-context";
@@ -37,6 +38,18 @@ type ProductsResult = {
   }>;
   errorMessage: string | null;
 };
+
+type SearchParamsInput =
+  | Record<string, string | string[] | undefined>
+  | Promise<Record<string, string | string[] | undefined>>;
+
+function getSingleSearchParam(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) {
+    return value[0] ?? "";
+  }
+
+  return value ?? "";
+}
 
 async function listProducts(organizationId: string | null): Promise<ProductsResult> {
   if (!organizationId) {
@@ -84,7 +97,14 @@ async function listProducts(organizationId: string | null): Promise<ProductsResu
   }
 }
 
-export default async function ProductsPage() {
+export default async function ProductsPage({
+  searchParams,
+}: {
+  searchParams?: SearchParamsInput;
+}) {
+  const resolvedSearchParams = await Promise.resolve(searchParams ?? {});
+  const initialSearchQuery = getSingleSearchParam(resolvedSearchParams.busca).trim();
+
   const tenantContext = await getTenantContext();
   const organizationId = tenantContext.organizationId;
   if (organizationId) {
@@ -97,6 +117,7 @@ export default async function ProductsPage() {
   }
 
   const canManage = isOrganizationAdminRole(tenantContext.role);
+  const canCreate = canRoleCreateProduct(tenantContext.role, tenantContext.permissions);
   const productsResult = await listProducts(organizationId);
 
   return (
@@ -113,7 +134,12 @@ export default async function ProductsPage() {
 
       <Card>
         <CardContent className="pt-6">
-          <ProductsDataTable products={productsResult.items} canManage={canManage} />
+          <ProductsDataTable
+            products={productsResult.items}
+            canManage={canManage}
+            canCreate={canCreate}
+            initialSearchQuery={initialSearchQuery}
+          />
         </CardContent>
       </Card>
     </AppPageContainer>

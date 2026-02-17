@@ -19,6 +19,7 @@ import { detectImageMimeTypeBySignature } from "@/lib/uploads/image-signature";
 const ORGANIZATION_GOVERNANCE_PATHS = [
   "/",
   "/dashboard",
+  "/produtos",
   "/profile",
   "/onboarding/company",
 ] as const;
@@ -45,6 +46,11 @@ const updateOrganizationSchema = z.object({
 
 const organizationConfirmationSchema = z.object({
   organizationName: z.string().trim().min(1, "Confirme o nome da organizacao para continuar."),
+});
+
+const updateOrganizationPermissionsSchema = z.object({
+  allowMemberCreateProduct: z.enum(["true", "false"]),
+  allowMemberInviteUsers: z.enum(["true", "false"]),
 });
 
 function successState(
@@ -405,6 +411,42 @@ export async function updateOrganizationDetailsAction(
     return successState("Dados da organizacao atualizados com sucesso.");
   } catch (error) {
     return errorState(parseActionError(error, "Falha ao atualizar dados da organizacao."));
+  }
+}
+
+export async function updateOrganizationPermissionsAction(
+  _previousState: OrganizationUserActionState,
+  formData: FormData,
+): Promise<OrganizationUserActionState> {
+  try {
+    const context = await getGovernanceContext();
+    await assertGovernanceWritesAllowed(context.organizationId);
+    if (!context.currentIsOwner) {
+      return errorState("Somente o proprietario pode atualizar permissoes RBAC.");
+    }
+
+    const parsed = updateOrganizationPermissionsSchema.safeParse({
+      allowMemberCreateProduct: String(formData.get("allowMemberCreateProduct") ?? "").trim(),
+      allowMemberInviteUsers: String(formData.get("allowMemberInviteUsers") ?? "").trim(),
+    });
+    if (!parsed.success) {
+      return errorState(parsed.error.issues[0]?.message ?? "Permissoes RBAC invalidas.");
+    }
+
+    await prisma.organization.update({
+      where: {
+        id: context.organizationId,
+      },
+      data: {
+        allowMemberCreateProduct: parsed.data.allowMemberCreateProduct === "true",
+        allowMemberInviteUsers: parsed.data.allowMemberInviteUsers === "true",
+      },
+    });
+
+    revalidateOrganizationGovernancePaths();
+    return successState("Permissoes RBAC atualizadas com sucesso.");
+  } catch (error) {
+    return errorState(parseActionError(error, "Falha ao atualizar permissoes RBAC."));
   }
 }
 

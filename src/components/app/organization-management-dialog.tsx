@@ -20,6 +20,7 @@ import {
   transferOrganizationOwnershipAction,
   updateOrganizationDetailsAction,
   updateOrganizationLogoAction,
+  updateOrganizationPermissionsAction,
 } from "@/actions/organization-governance-actions"
 import {
   inviteOrganizationUserAction,
@@ -68,6 +69,8 @@ import {
   SidebarMenuItem,
   SidebarProvider,
 } from "@/components/ui/sidebar"
+import { Switch } from "@/components/ui/switch"
+import type { OrganizationPermissions } from "@/lib/organization/permissions"
 
 type OrganizationDialogMember = {
   id: string
@@ -97,6 +100,7 @@ type OrganizationManagementDialogProps = {
   currentUserId: string | null
   isOwner: boolean
   isAdmin: boolean
+  permissions: OrganizationPermissions
   members: OrganizationDialogMember[]
   pendingInvitations: OrganizationDialogInvitation[]
 }
@@ -169,6 +173,7 @@ export function OrganizationManagementDialog({
   currentUserId,
   isOwner,
   isAdmin,
+  permissions,
   members,
   pendingInvitations,
 }: OrganizationManagementDialogProps) {
@@ -183,11 +188,18 @@ export function OrganizationManagementDialog({
   const [organizationSlugInput, setOrganizationSlugInput] = React.useState(
     organizationSlug ?? toSlug(organizationName),
   )
+  const [allowMemberCreateProductInput, setAllowMemberCreateProductInput] = React.useState(
+    permissions.allowMemberCreateProduct,
+  )
+  const [allowMemberInviteUsersInput, setAllowMemberInviteUsersInput] = React.useState(
+    permissions.allowMemberInviteUsers,
+  )
   const [deleteConfirmationName, setDeleteConfirmationName] = React.useState("")
   const [isDeleteConfirmationDialogOpen, setIsDeleteConfirmationDialogOpen] = React.useState(false)
 
   const [isInvitePending, startInviteTransition] = React.useTransition()
   const [isTransferPending, startTransferTransition] = React.useTransition()
+  const [isUpdatePermissionsPending, startUpdatePermissionsTransition] = React.useTransition()
   const [isUpdateOrganizationPending, startUpdateOrganizationTransition] = React.useTransition()
   const [isUpdateOrganizationLogoPending, startUpdateOrganizationLogoTransition] = React.useTransition()
   const [isRemoveOrganizationLogoPending, startRemoveOrganizationLogoTransition] = React.useTransition()
@@ -201,6 +213,10 @@ export function OrganizationManagementDialog({
   )
   const [transferState, transferAction] = React.useActionState(
     transferOrganizationOwnershipAction,
+    initialOrganizationUserActionState,
+  )
+  const [updatePermissionsState, updatePermissionsActionState] = React.useActionState(
+    updateOrganizationPermissionsAction,
     initialOrganizationUserActionState,
   )
   const [updateOrganizationState, updateOrganizationAction] = React.useActionState(
@@ -227,23 +243,30 @@ export function OrganizationManagementDialog({
     removeOrganizationMemberAction,
     initialOrganizationUserActionState,
   )
+  const canManageInvites = isAdmin || permissions.allowMemberInviteUsers
+  const canAccessDialog = isAdmin || permissions.allowMemberInviteUsers
 
   const sections = React.useMemo(() => {
     const base: Array<{
       id: OrganizationManagementSection
       label: string
       icon: React.ComponentType<{ className?: string }>
-    }> = [
-      { id: "plan", label: "Plano", icon: CreditCardIcon },
-      { id: "access", label: "Acesso", icon: UsersIcon },
-    ]
+    }> = []
 
     if (isOwner) {
-      base.unshift({ id: "organization", label: "Organizacao", icon: Building2Icon })
+      base.push({ id: "organization", label: "Organizacao", icon: Building2Icon })
+    }
+
+    if (isAdmin) {
+      base.push({ id: "plan", label: "Plano", icon: CreditCardIcon })
+    }
+
+    if (canManageInvites) {
+      base.push({ id: "access", label: "Acesso", icon: UsersIcon })
     }
 
     return base
-  }, [isOwner])
+  }, [canManageInvites, isAdmin, isOwner])
 
   const accessPanels = React.useMemo(
     () =>
@@ -338,12 +361,14 @@ export function OrganizationManagementDialog({
 
     setOrganizationNameInput(organizationName)
     setOrganizationSlugInput(organizationSlug ?? toSlug(organizationName))
+    setAllowMemberCreateProductInput(permissions.allowMemberCreateProduct)
+    setAllowMemberInviteUsersInput(permissions.allowMemberInviteUsers)
     setDeleteConfirmationName("")
     setIsDeleteConfirmationDialogOpen(false)
     setSelectedAccessPanelState("invites")
     setFailedOrganizationLogoSrc(null)
     organizationLogoFormRef.current?.reset()
-  }, [open, organizationName, organizationSlug])
+  }, [open, organizationName, organizationSlug, permissions.allowMemberCreateProduct, permissions.allowMemberInviteUsers])
 
   React.useEffect(() => {
     if (deleteState.redirectTo) {
@@ -356,6 +381,7 @@ export function OrganizationManagementDialog({
     if (
       inviteState.status === "success" ||
       transferState.status === "success" ||
+      updatePermissionsState.status === "success" ||
       updateOrganizationState.status === "success" ||
       updateOrganizationLogoState.status === "success" ||
       removeOrganizationLogoState.status === "success" ||
@@ -394,6 +420,7 @@ export function OrganizationManagementDialog({
     removeMemberState.status,
     router,
     transferState.status,
+    updatePermissionsState.status,
     updateMemberRoleState.status,
     updateOrganizationLogoState.organizationLogoUrl,
     updateOrganizationLogoState.status,
@@ -410,6 +437,18 @@ export function OrganizationManagementDialog({
 
     startInviteTransition(() => {
       inviteAction(payload)
+    })
+  }
+
+  function submitOrganizationPermissions(event: React.FormEvent<HTMLFormElement>): void {
+    event.preventDefault()
+
+    const payload = new FormData()
+    payload.set("allowMemberCreateProduct", String(allowMemberCreateProductInput))
+    payload.set("allowMemberInviteUsers", String(allowMemberInviteUsersInput))
+
+    startUpdatePermissionsTransition(() => {
+      updatePermissionsActionState(payload)
     })
   }
 
@@ -487,7 +526,7 @@ export function OrganizationManagementDialog({
     })
   }
 
-  if (!isAdmin) {
+  if (!canAccessDialog) {
     return null
   }
 
@@ -584,7 +623,9 @@ export function OrganizationManagementDialog({
                 <p className="text-muted-foreground text-xs">
                   {isOwner
                     ? "Proprietario: gerencie organizacao e todo o acesso de membros em um unico lugar."
-                    : "Administrador: visualize plano e gerencie convites em uma area unica de acesso."}
+                    : isAdmin
+                      ? "Administrador: visualize plano e gerencie convites em uma area unica de acesso."
+                      : "Membro com acesso RBAC: voce pode enviar convites nesta organizacao."}
                 </p>
               </div>
 
@@ -788,36 +829,84 @@ export function OrganizationManagementDialog({
 
               {selectedSection === "access" ? (
                 <div className="space-y-4">
-                  <form
-                    onSubmit={submitInvite}
-                    className="grid gap-2 rounded-lg border p-3 sm:grid-cols-[1fr_auto_auto]"
-                  >
-                    <Input
-                      value={inviteEmail}
-                      onChange={(event) => {
-                        setInviteEmail(event.target.value)
-                      }}
-                      type="email"
-                      placeholder="novo-membro@organizacao.com"
-                      required
-                    />
-                    {isOwner ? (
-                      <select
-                        className="border-input bg-background h-7 rounded-md border px-2 text-xs"
-                        value={inviteRole}
+                  {isOwner ? (
+                    <form onSubmit={submitOrganizationPermissions} className="space-y-3 rounded-lg border p-3">
+                      <p className="text-xs font-medium">Permissoes RBAC</p>
+                      <div className="space-y-2">
+                        <label className="flex items-start justify-between gap-3 rounded-md border p-2">
+                          <div className="space-y-0.5">
+                            <p className="text-xs font-medium">Membros podem cadastrar produtos</p>
+                            <p className="text-muted-foreground text-[11px]">
+                              Libera o botao de novo produto para membros (sem abrir edicao e exclusao).
+                            </p>
+                          </div>
+                          <Switch
+                            checked={allowMemberCreateProductInput}
+                            onCheckedChange={(checked) => {
+                              setAllowMemberCreateProductInput(Boolean(checked))
+                            }}
+                            disabled={isUpdatePermissionsPending}
+                          />
+                        </label>
+                        <label className="flex items-start justify-between gap-3 rounded-md border p-2">
+                          <div className="space-y-0.5">
+                            <p className="text-xs font-medium">Membros podem convidar usuarios</p>
+                            <p className="text-muted-foreground text-[11px]">
+                              Permite enviar convites como cargo Usuario. Promocao para admin continua restrita.
+                            </p>
+                          </div>
+                          <Switch
+                            checked={allowMemberInviteUsersInput}
+                            onCheckedChange={(checked) => {
+                              setAllowMemberInviteUsersInput(Boolean(checked))
+                            }}
+                            disabled={isUpdatePermissionsPending}
+                          />
+                        </label>
+                      </div>
+                      <Button type="submit" size="sm" disabled={isUpdatePermissionsPending}>
+                        <ShieldCheckIcon data-icon="inline-start" />
+                        {isUpdatePermissionsPending ? "Salvando..." : "Salvar permissoes"}
+                      </Button>
+                    </form>
+                  ) : null}
+
+                  {canManageInvites ? (
+                    <form
+                      onSubmit={submitInvite}
+                      className="grid gap-2 rounded-lg border p-3 sm:grid-cols-[1fr_auto_auto]"
+                    >
+                      <Input
+                        value={inviteEmail}
                         onChange={(event) => {
-                          setInviteRole(event.target.value === "admin" ? "admin" : "user")
+                          setInviteEmail(event.target.value)
                         }}
-                      >
-                        <option value="user">Usuario</option>
-                        <option value="admin">Administrador</option>
-                      </select>
-                    ) : null}
-                    <Button type="submit" size="sm" disabled={isInvitePending}>
-                      <SendIcon data-icon="inline-start" />
-                      {isInvitePending ? "Enviando..." : "Convidar"}
-                    </Button>
-                  </form>
+                        type="email"
+                        placeholder="novo-membro@organizacao.com"
+                        required
+                      />
+                      {isOwner ? (
+                        <select
+                          className="border-input bg-background h-7 rounded-md border px-2 text-xs"
+                          value={inviteRole}
+                          onChange={(event) => {
+                            setInviteRole(event.target.value === "admin" ? "admin" : "user")
+                          }}
+                        >
+                          <option value="user">Usuario</option>
+                          <option value="admin">Administrador</option>
+                        </select>
+                      ) : null}
+                      <Button type="submit" size="sm" disabled={isInvitePending}>
+                        <SendIcon data-icon="inline-start" />
+                        {isInvitePending ? "Enviando..." : "Convidar"}
+                      </Button>
+                    </form>
+                  ) : (
+                    <div className="text-muted-foreground rounded-lg border p-3 text-xs">
+                      Sua conta nao tem permissao para enviar convites nesta organizacao.
+                    </div>
+                  )}
 
                   <div className="space-y-3 rounded-lg border p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -988,6 +1077,7 @@ export function OrganizationManagementDialog({
               <div className="flex flex-wrap gap-2">
                 <FormFeedback state={inviteState} showInline={false} />
                 <FormFeedback state={transferState} showInline={false} />
+                <FormFeedback state={updatePermissionsState} showInline={false} />
                 <FormFeedback state={updateOrganizationState} showInline={false} />
                 <FormFeedback state={updateOrganizationLogoState} showInline={false} />
                 <FormFeedback state={removeOrganizationLogoState} showInline={false} />

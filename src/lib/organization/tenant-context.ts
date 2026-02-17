@@ -4,12 +4,18 @@ import { cache } from "react";
 import { auth } from "@/lib/auth/server";
 import { getPlanDefinition, isPaidPlan } from "@/lib/billing/plans";
 import { normalizeOrganizationRole, type OrganizationUserRole } from "@/lib/organization/helpers";
+import {
+  defaultOrganizationPermissions,
+  resolveOrganizationPermissions,
+  type OrganizationPermissions,
+} from "@/lib/organization/permissions";
 import { prisma } from "@/lib/db/prisma";
 
 export type TenantContext = {
   session: Awaited<ReturnType<typeof auth.api.getSession>>;
   organizationId: string | null;
   organizationName: string | null;
+  permissions: OrganizationPermissions;
   organizations: Array<{
     id: string;
     name: string;
@@ -18,6 +24,7 @@ export type TenantContext = {
     planCode: "FREE" | "STARTER_50" | "PRO_100" | "SCALE_400";
     planName: string;
     isPremium: boolean;
+    permissions: OrganizationPermissions;
   }>;
   role: OrganizationUserRole | null;
 };
@@ -78,6 +85,7 @@ async function resolveTenantContext(): Promise<TenantContext> {
       session,
       organizationId: null,
       organizationName: null,
+      permissions: defaultOrganizationPermissions,
       organizations: [],
       role: null,
     };
@@ -107,8 +115,37 @@ async function resolveTenantContext(): Promise<TenantContext> {
           },
         })
       : [];
+  const organizationPermissionSnapshots =
+    organizations.length > 0
+      ? await prisma.organization
+          .findMany({
+            where: {
+              id: {
+                in: organizations.map((organization) => organization.id),
+              },
+            },
+            select: {
+              id: true,
+              allowMemberCreateProduct: true,
+              allowMemberInviteUsers: true,
+            },
+          })
+          .catch((error) => {
+            console.error("Falha ao carregar permissoes da organizacao.", error);
+            return [];
+          })
+      : [];
   const subscriptionByOrganizationId = new Map(
     organizationSubscriptions.map((subscription) => [subscription.organizationId, subscription]),
+  );
+  const permissionsByOrganizationId = new Map(
+    organizationPermissionSnapshots.map((organization) => [
+      organization.id,
+      resolveOrganizationPermissions({
+        allowMemberCreateProduct: organization.allowMemberCreateProduct,
+        allowMemberInviteUsers: organization.allowMemberInviteUsers,
+      }),
+    ]),
   );
   const organizationsWithBillingState = organizations.map((organization) => {
     const subscription = subscriptionByOrganizationId.get(
@@ -124,6 +161,8 @@ async function resolveTenantContext(): Promise<TenantContext> {
       planCode,
       planName: getPlanDefinition(planCode).name,
       isPremium: isPaidPlan(planCode),
+      permissions:
+        permissionsByOrganizationId.get(organization.id) ?? defaultOrganizationPermissions,
     };
   });
 
@@ -137,6 +176,7 @@ async function resolveTenantContext(): Promise<TenantContext> {
       session,
       organizationId: null,
       organizationName: null,
+      permissions: defaultOrganizationPermissions,
       organizations: [],
       role: null,
     };
@@ -172,6 +212,7 @@ async function resolveTenantContext(): Promise<TenantContext> {
       session,
       organizationId: null,
       organizationName: null,
+      permissions: defaultOrganizationPermissions,
       organizations: organizationsWithBillingState,
       role: null,
     };
@@ -181,6 +222,8 @@ async function resolveTenantContext(): Promise<TenantContext> {
     session,
     organizationId: selectedOrganization.id,
     organizationName: selectedOrganization.name,
+    permissions:
+      permissionsByOrganizationId.get(selectedOrganization.id) ?? defaultOrganizationPermissions,
     organizations: organizationsWithBillingState,
     role: normalizeOrganizationRole(membership.role),
   };

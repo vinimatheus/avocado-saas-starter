@@ -4,6 +4,9 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import type { ProductStatus } from "@/lib/products/schemas";
 
+const DEFAULT_PRODUCT_SEARCH_LIMIT = 8;
+const MAX_PRODUCT_SEARCH_LIMIT = 20;
+
 export type ProductRow = {
   id: string;
   organizationId: string;
@@ -49,6 +52,16 @@ type ProductDelegateLike = {
     where: { organizationId: string; id?: string | { in: string[] } };
   }) => Promise<{ count: number }>;
 };
+
+function normalizeSearchLimit(limit: number | undefined): number {
+  const parsedLimit = Math.trunc(limit ?? DEFAULT_PRODUCT_SEARCH_LIMIT);
+
+  if (!Number.isFinite(parsedLimit) || parsedLimit <= 0) {
+    return DEFAULT_PRODUCT_SEARCH_LIMIT;
+  }
+
+  return Math.min(parsedLimit, MAX_PRODUCT_SEARCH_LIMIT);
+}
 
 function getProductDelegate(): ProductDelegateLike | null {
   const maybeDelegate = (prisma as unknown as { product?: ProductDelegateLike }).product;
@@ -97,6 +110,52 @@ export async function listOrganizationProducts(organizationId: string): Promise<
     WHERE "organization_id" = ${organizationId}
     ORDER BY "updated_at" DESC
     LIMIT 1000
+  `);
+}
+
+export async function searchOrganizationProducts(
+  organizationId: string,
+  query: string,
+  limit?: number,
+): Promise<ProductRow[]> {
+  const normalizedQuery = query.trim();
+
+  if (!normalizedQuery) {
+    return [];
+  }
+
+  const safeLimit = normalizeSearchLimit(limit);
+  const containsTerm = `%${normalizedQuery}%`;
+  const startsWithTerm = `${normalizedQuery}%`;
+
+  return prisma.$queryRaw<ProductRow[]>(Prisma.sql`
+    SELECT
+      "id",
+      "organization_id" AS "organizationId",
+      "name",
+      "sku",
+      "category",
+      "status",
+      "price",
+      "stock",
+      "created_at" AS "createdAt",
+      "updated_at" AS "updatedAt"
+    FROM "product"
+    WHERE "organization_id" = ${organizationId}
+      AND (
+        "name" ILIKE ${containsTerm}
+        OR "sku" ILIKE ${containsTerm}
+        OR "category" ILIKE ${containsTerm}
+      )
+    ORDER BY
+      CASE
+        WHEN LOWER("name") = LOWER(${normalizedQuery}) THEN 0
+        WHEN "sku" ILIKE ${startsWithTerm} THEN 1
+        WHEN "name" ILIKE ${startsWithTerm} THEN 2
+        ELSE 3
+      END,
+      "updated_at" DESC
+    LIMIT ${safeLimit}
   `);
 }
 

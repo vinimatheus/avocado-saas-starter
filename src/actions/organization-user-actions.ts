@@ -15,6 +15,7 @@ import {
   toOrganizationMemberRole,
   type OrganizationUserRole,
 } from "@/lib/organization/helpers";
+import { canRoleInviteUsers, type OrganizationPermissions } from "@/lib/organization/permissions";
 import { getTenantContext } from "@/lib/organization/tenant-context";
 import { organizationAssignableRoleSchema } from "@/lib/users/schemas";
 
@@ -93,24 +94,24 @@ function revalidateUserManagementPaths() {
   }
 }
 
-async function getAdminActionContext(): Promise<{
+type OrganizationActionContext = {
   organizationId: string;
   organizationName: string | null;
   userId: string;
   userName: string | null;
   userEmail: string | null;
-  role: OrganizationUserRole;
+  role: OrganizationUserRole | null;
+  permissions: OrganizationPermissions;
   requestHeaders: Headers;
-}> {
+};
+
+async function getUserActionContext(): Promise<OrganizationActionContext> {
   const tenantContext = await getTenantContext();
   if (!tenantContext.session?.user) {
     throw new Error("Sessao invalida para gerenciar usuarios.");
   }
   if (!tenantContext.organizationId) {
     throw new Error("Usuario sem organizacao ativa.");
-  }
-  if (!isOrganizationAdminRole(tenantContext.role)) {
-    throw new Error("Somente administradores podem gerenciar usuarios.");
   }
 
   await assertOrganizationNotBlockedAfterExpiredTrial(tenantContext.organizationId);
@@ -122,8 +123,30 @@ async function getAdminActionContext(): Promise<{
     userName: tenantContext.session.user.name?.trim() || null,
     userEmail: tenantContext.session.user.email?.trim() || null,
     role: tenantContext.role,
+    permissions: tenantContext.permissions,
     requestHeaders: await headers(),
   };
+}
+
+async function getAdminActionContext(): Promise<OrganizationActionContext & { role: OrganizationUserRole }> {
+  const context = await getUserActionContext();
+  if (!isOrganizationAdminRole(context.role)) {
+    throw new Error("Somente administradores podem gerenciar usuarios.");
+  }
+
+  return {
+    ...context,
+    role: context.role,
+  };
+}
+
+async function getInviteActionContext(): Promise<OrganizationActionContext> {
+  const context = await getUserActionContext();
+  if (!canRoleInviteUsers(context.role, context.permissions)) {
+    throw new Error("Voce nao tem permissao para gerenciar convites.");
+  }
+
+  return context;
 }
 
 function getFormValue(formData: FormData, key: string): string {
@@ -135,7 +158,7 @@ export async function inviteOrganizationUserAction(
   formData: FormData,
 ): Promise<OrganizationUserActionState> {
   try {
-    const context = await getAdminActionContext();
+    const context = await getInviteActionContext();
     const parsed = inviteMemberSchema.safeParse({
       email: getFormValue(formData, "email"),
       role: getFormValue(formData, "role"),
@@ -172,7 +195,7 @@ export async function resendOrganizationInvitationAction(
   formData: FormData,
 ): Promise<OrganizationUserActionState> {
   try {
-    const context = await getAdminActionContext();
+    const context = await getInviteActionContext();
     const parsed = resendInvitationSchema.safeParse({
       email: getFormValue(formData, "email"),
       role: getFormValue(formData, "role"),
@@ -209,7 +232,7 @@ export async function cancelOrganizationInvitationAction(
   formData: FormData,
 ): Promise<OrganizationUserActionState> {
   try {
-    const context = await getAdminActionContext();
+    const context = await getInviteActionContext();
     const parsed = invitationSchema.safeParse({
       invitationId: getFormValue(formData, "invitationId"),
     });

@@ -121,6 +121,8 @@ export type ProductTableItem = {
 type ProductsDataTableProps = {
   products: ProductTableItem[];
   canManage: boolean;
+  canCreate: boolean;
+  initialSearchQuery?: string;
 };
 
 type ProductFormFieldsProps = {
@@ -501,14 +503,20 @@ function ColumnVisibilityMenu({ columns }: { columns: Column<ProductTableItem, u
   );
 }
 
-export function ProductsDataTable({ products, canManage }: ProductsDataTableProps) {
+export function ProductsDataTable({
+  products,
+  canManage,
+  canCreate,
+  initialSearchQuery = "",
+}: ProductsDataTableProps) {
   const router = useRouter();
+  const normalizedInitialSearchQuery = initialSearchQuery.trim();
 
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
-  const [globalFilter, setGlobalFilter] = useState("");
+  const [globalFilter, setGlobalFilter] = useState(normalizedInitialSearchQuery);
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
     pageSize: 10,
@@ -536,6 +544,14 @@ export function ProductsDataTable({ products, canManage }: ProductsDataTableProp
     bulkDeleteProductsAction,
     initialProductActionState,
   );
+
+  useEffect(() => {
+    setGlobalFilter(normalizedInitialSearchQuery);
+    setPagination((current) => ({
+      ...current,
+      pageIndex: 0,
+    }));
+  }, [normalizedInitialSearchQuery]);
 
   const createForm = useForm<ProductCreateValues>({
     resolver: zodResolver(productCreateSchema),
@@ -948,7 +964,7 @@ export function ProductsDataTable({ products, canManage }: ProductsDataTableProp
         <div className="ml-auto flex items-center gap-2">
           <ColumnVisibilityMenu columns={table.getAllColumns()} />
 
-          {canManage ? (
+          {canCreate ? (
             <Sheet
               open={createSheetOpen}
               onOpenChange={(open) => {

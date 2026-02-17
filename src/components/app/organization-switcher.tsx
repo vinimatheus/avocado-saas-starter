@@ -43,6 +43,12 @@ import {
   isOrganizationAdminRole,
   type OrganizationUserRole,
 } from "@/lib/organization/helpers";
+import {
+  canRoleInviteUsers,
+  defaultOrganizationPermissions,
+  resolveOrganizationPermissions,
+  type OrganizationPermissions,
+} from "@/lib/organization/permissions";
 import { localizeAuthErrorMessage } from "@/lib/auth/error-messages";
 
 type OrganizationSwitcherItem = {
@@ -53,6 +59,7 @@ type OrganizationSwitcherItem = {
   planCode: "FREE" | "STARTER_50" | "PRO_100" | "SCALE_400";
   planName: string;
   isPremium: boolean;
+  permissions: OrganizationPermissions;
 };
 
 type OrganizationSwitcherProps = {
@@ -72,6 +79,7 @@ function toOrganizationItems(
     planCode?: "FREE" | "STARTER_50" | "PRO_100" | "SCALE_400";
     planName?: string;
     isPremium?: boolean;
+    permissions?: Partial<OrganizationPermissions> | null;
   }> | null | undefined,
 ): OrganizationSwitcherItem[] {
   if (!organizations || organizations.length === 0) {
@@ -86,6 +94,7 @@ function toOrganizationItems(
     planCode: organization.planCode ?? "FREE",
     planName: organization.planName ?? "Gratuito",
     isPremium: organization.isPremium ?? false,
+    permissions: resolveOrganizationPermissions(organization.permissions),
   }));
 }
 
@@ -218,10 +227,14 @@ export function OrganizationSwitcher({
     null;
   const activeOrganizationPlanCode = resolvedActiveOrganization?.planCode ?? "FREE";
   const activeOrganizationPlanName = resolvedActiveOrganization?.planName ?? "Gratuito";
+  const activeOrganizationPermissions =
+    resolvedActiveOrganization?.permissions ?? defaultOrganizationPermissions;
 
   const activeMemberRole = activeMemberQuery.data?.role ?? "";
   const isOwner = hasOrganizationRole(activeMemberRole, "owner");
   const isAdmin = isOrganizationAdminRole(role) || hasOrganizationRole(activeMemberRole, "admin") || isOwner;
+  const canManageInvites = canRoleInviteUsers(role, activeOrganizationPermissions);
+  const canAccessManagement = isAdmin || canManageInvites;
   const currentUserId = sessionQuery.data?.user.id ?? activeMemberQuery.data?.userId ?? null;
 
   const dialogMembers = useMemo(
@@ -353,7 +366,7 @@ export function OrganizationSwitcher({
 
           <DropdownMenuSeparator />
 
-          {isAdmin ? (
+          {canAccessManagement ? (
             <>
               <DropdownMenuItem
                 onSelect={() => {
@@ -363,16 +376,18 @@ export function OrganizationSwitcher({
                 <SettingsIcon className="size-3.5" />
                 Gerenciar organizacao
               </DropdownMenuItem>
-              <DropdownMenuItem
-                variant="destructive"
-                disabled={isLeavingPending}
-                onSelect={() => {
-                  setIsLeaveDialogOpen(true);
-                }}
-              >
-                <LogOutIcon className="size-3.5" />
-                {isLeavingPending ? "Saindo..." : "Sair da organizacao"}
-              </DropdownMenuItem>
+              {isAdmin ? (
+                <DropdownMenuItem
+                  variant="destructive"
+                  disabled={isLeavingPending}
+                  onSelect={() => {
+                    setIsLeaveDialogOpen(true);
+                  }}
+                >
+                  <LogOutIcon className="size-3.5" />
+                  {isLeavingPending ? "Saindo..." : "Sair da organizacao"}
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuSeparator />
             </>
           ) : null}
@@ -397,6 +412,7 @@ export function OrganizationSwitcher({
         currentUserId={currentUserId}
         isOwner={isOwner}
         isAdmin={isAdmin}
+        permissions={activeOrganizationPermissions}
         members={dialogMembers}
         pendingInvitations={dialogPendingInvitations}
       />

@@ -12,6 +12,7 @@ import {
 } from "@/lib/billing/subscription-service";
 import { maybeSendPlanUsageThresholdAlerts } from "@/lib/auth/server";
 import { isOrganizationAdminRole } from "@/lib/organization/helpers";
+import { canRoleCreateProduct } from "@/lib/organization/permissions";
 import {
   bulkDeleteOrganizationProducts,
   bulkUpdateOrganizationProductsStatus,
@@ -58,6 +59,7 @@ function isSafeProductErrorMessage(message: string): boolean {
     "sessao invalida",
     "usuario sem organizacao ativa",
     "somente administradores",
+    "nao tem permissao para cadastrar produtos",
   ];
 
   return safeFragments.some((fragment) => normalized.includes(fragment));
@@ -190,7 +192,11 @@ async function assertBulkProductActionsAvailable(organizationId: string): Promis
   }
 }
 
-async function getAdminProductContext(): Promise<{ organizationId: string }> {
+async function getProductContext(): Promise<{
+  organizationId: string;
+  role: Awaited<ReturnType<typeof getTenantContext>>["role"];
+  permissions: Awaited<ReturnType<typeof getTenantContext>>["permissions"];
+}> {
   const tenantContext = await getTenantContext();
 
   if (!tenantContext.session?.user) {
@@ -201,12 +207,34 @@ async function getAdminProductContext(): Promise<{ organizationId: string }> {
     throw new Error("Usuario sem organizacao ativa.");
   }
 
-  if (!isOrganizationAdminRole(tenantContext.role)) {
+  return {
+    organizationId: tenantContext.organizationId,
+    role: tenantContext.role,
+    permissions: tenantContext.permissions,
+  };
+}
+
+async function getCreateProductContext(): Promise<{ organizationId: string }> {
+  const context = await getProductContext();
+
+  if (!canRoleCreateProduct(context.role, context.permissions)) {
+    throw new Error("Voce nao tem permissao para cadastrar produtos.");
+  }
+
+  return {
+    organizationId: context.organizationId,
+  };
+}
+
+async function getAdminProductContext(): Promise<{ organizationId: string }> {
+  const context = await getProductContext();
+
+  if (!isOrganizationAdminRole(context.role)) {
     throw new Error("Somente administradores podem alterar produtos.");
   }
 
   return {
-    organizationId: tenantContext.organizationId,
+    organizationId: context.organizationId,
   };
 }
 
@@ -215,7 +243,7 @@ export async function createProductAction(
   formData: FormData,
 ): Promise<ProductActionState> {
   try {
-    const context = await getAdminProductContext();
+    const context = await getCreateProductContext();
 
     const parsed = productCreateSchema.safeParse({
       name: getFormValue(formData, "name"),
