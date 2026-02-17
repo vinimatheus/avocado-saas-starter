@@ -28,6 +28,7 @@ import { getAnnualPricing } from "@/lib/billing/plans";
 import { cn } from "@/lib/shared/utils";
 
 type BillingPlanCode = "FREE" | "STARTER_50" | "PRO_100" | "SCALE_400";
+type BillingPlanAction = "renew" | "upgrade" | "downgrade" | "start";
 
 type BillingPlanCardViewModel = {
   code: BillingPlanCode;
@@ -51,6 +52,8 @@ type BillingPlansSectionProps = {
   };
 };
 
+const BILLING_PLAN_ORDER: BillingPlanCode[] = ["FREE", "STARTER_50", "PRO_100", "SCALE_400"];
+
 function formatBrlFromCents(valueCents: number): string {
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
@@ -73,6 +76,11 @@ function getPlanBadge(planCode: BillingPlanCode, isFeatured: boolean): string | 
   }
 
   return null;
+}
+
+function getPlanRank(planCode: BillingPlanCode): number {
+  const rank = BILLING_PLAN_ORDER.indexOf(planCode);
+  return rank === -1 ? 0 : rank;
 }
 
 export function BillingPlansSection({
@@ -107,6 +115,7 @@ export function BillingPlansSection({
   const selectedPlanIsRenewAction = Boolean(
     selectedPlan && canRenewCurrentPlan && selectedPlan.code === effectivePlanCode,
   );
+  const currentPlanRank = getPlanRank(effectivePlanCode);
 
   const openBillingDialog = (planCode: BillingPlanCode) => {
     if (checkoutInProgress) {
@@ -117,21 +126,40 @@ export function BillingPlansSection({
     setIsBillingDialogOpen(true);
   };
 
+  const resolvePlanAction = (planCode: BillingPlanCode): BillingPlanAction => {
+    if (canRenewCurrentPlan && planCode === effectivePlanCode) {
+      return "renew";
+    }
+
+    if (!currentIsPaidPlan) {
+      return "start";
+    }
+
+    return getPlanRank(planCode) > currentPlanRank ? "upgrade" : "downgrade";
+  };
+
   const resolveButtonLabel = (planCode: BillingPlanCode): string => {
     if (checkoutInProgress) {
       return "Pagamento em processamento";
     }
 
-    if (canRenewCurrentPlan && planCode === effectivePlanCode) {
+    const action = resolvePlanAction(planCode);
+
+    if (action === "renew") {
       return "Regularizar pagamento";
     }
 
-    if (currentIsPaidPlan) {
-      return "Evoluir para este plano";
+    if (action === "upgrade") {
+      return "Fazer upgrade";
+    }
+
+    if (action === "downgrade") {
+      return "Fazer downgrade";
     }
 
     return "Comecar agora";
   };
+  const selectedPlanAction = selectedPlan ? resolvePlanAction(selectedPlan.code) : null;
 
   if (plans.length === 0) {
     return null;
@@ -301,7 +329,15 @@ export function BillingPlansSection({
                 defaultName={billingDefaults.name}
                 defaultCellphone={billingDefaults.cellphone}
                 defaultTaxId={billingDefaults.taxId}
-                submitLabel={selectedPlanIsRenewAction ? "Regularizar pagamento" : "Salvar e ir para pagamento"}
+                submitLabel={
+                  selectedPlanIsRenewAction
+                    ? "Regularizar pagamento"
+                    : selectedPlanAction === "downgrade"
+                      ? "Confirmar downgrade e ir para pagamento"
+                      : selectedPlanAction === "upgrade"
+                        ? "Confirmar upgrade e ir para pagamento"
+                        : "Salvar e ir para pagamento"
+                }
                 pendingLabel="Redirecionando para pagamento..."
                 submitClassName="w-full"
                 submitDisabled={!selectedPlan}

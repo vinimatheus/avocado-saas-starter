@@ -9,6 +9,7 @@ import { ProfileForm } from "@/components/auth/profile-form";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { auth } from "@/lib/auth/server";
+import { getOrganizationBlockMessage } from "@/lib/billing/subscription-service";
 import type { OrganizationUserRole } from "@/lib/organization/helpers";
 import { getTenantContext } from "@/lib/organization/tenant-context";
 
@@ -44,6 +45,13 @@ export default async function ProfilePage() {
 
   if (!tenantContext.organizationId) {
     redirect("/onboarding/company");
+  }
+
+  const blockMessage = await getOrganizationBlockMessage(tenantContext.organizationId);
+  if (blockMessage) {
+    const searchParams = new URLSearchParams();
+    searchParams.set("error", blockMessage);
+    redirect(`/billing?${searchParams.toString()}`);
   }
 
   const initialTwoFactorEnabled = Boolean((user as { twoFactorEnabled?: boolean }).twoFactorEnabled);

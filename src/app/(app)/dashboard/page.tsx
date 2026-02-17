@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import {
   BoxesIcon,
   Clock3Icon,
@@ -12,6 +13,7 @@ import { AppPageHighlightCard } from "@/components/app/app-page-highlight-card";
 import { DashboardAreaCharts } from "@/components/dashboard/dashboard-area-charts";
 import { StatusBanner } from "@/components/app/status-banner";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { getOrganizationBlockMessage } from "@/lib/billing/subscription-service";
 import { getDashboardInsights } from "@/lib/dashboard/analytics";
 import { getTenantContext } from "@/lib/organization/tenant-context";
 
@@ -33,8 +35,20 @@ function formatDate(value: Date): string {
 
 export default async function DashboardPage() {
   const tenantContext = await getTenantContext();
+  const organizationId = tenantContext.organizationId;
+  if (!organizationId) {
+    return null;
+  }
+
+  const blockMessage = await getOrganizationBlockMessage(organizationId);
+  if (blockMessage) {
+    const searchParams = new URLSearchParams();
+    searchParams.set("error", blockMessage);
+    redirect(`/billing?${searchParams.toString()}`);
+  }
+
   const activeOrganizationName = tenantContext.organizationName?.trim() || "sua organizacao";
-  const insights = await getDashboardInsights(tenantContext.organizationId!);
+  const insights = await getDashboardInsights(organizationId);
 
   return (
     <AppPageContainer className="gap-4">

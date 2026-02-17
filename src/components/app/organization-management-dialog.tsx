@@ -30,6 +30,17 @@ import { initialOrganizationUserActionState } from "@/actions/organization-user-
 import { FormFeedback } from "@/components/shared/form-feedback"
 import { Logo } from "@/components/shared/logo"
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbLink,
@@ -173,6 +184,7 @@ export function OrganizationManagementDialog({
     organizationSlug ?? toSlug(organizationName),
   )
   const [deleteConfirmationName, setDeleteConfirmationName] = React.useState("")
+  const [isDeleteConfirmationDialogOpen, setIsDeleteConfirmationDialogOpen] = React.useState(false)
 
   const [isInvitePending, startInviteTransition] = React.useTransition()
   const [isTransferPending, startTransferTransition] = React.useTransition()
@@ -327,6 +339,7 @@ export function OrganizationManagementDialog({
     setOrganizationNameInput(organizationName)
     setOrganizationSlugInput(organizationSlug ?? toSlug(organizationName))
     setDeleteConfirmationName("")
+    setIsDeleteConfirmationDialogOpen(false)
     setSelectedAccessPanelState("invites")
     setFailedOrganizationLogoSrc(null)
     organizationLogoFormRef.current?.reset()
@@ -731,18 +744,42 @@ export function OrganizationManagementDialog({
                           }}
                           placeholder={organizationName}
                         />
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="destructive"
-                          onClick={submitDeleteOrganization}
-                          disabled={
-                            isDeletePending || deleteConfirmationName.trim() !== organizationName
-                          }
+                        <AlertDialog
+                          open={isDeleteConfirmationDialogOpen}
+                          onOpenChange={setIsDeleteConfirmationDialogOpen}
                         >
-                          <Trash2Icon data-icon="inline-start" />
-                          {isDeletePending ? "Excluindo..." : "Excluir organizacao"}
-                        </Button>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="destructive"
+                              disabled={
+                                isDeletePending || deleteConfirmationName.trim() !== organizationName
+                              }
+                            >
+                              <Trash2Icon data-icon="inline-start" />
+                              {isDeletePending ? "Excluindo..." : "Excluir organizacao"}
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Confirmar exclusao da organizacao</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Esta acao e permanente e vai excluir <strong>{organizationName}</strong>.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel disabled={isDeletePending}>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction
+                                variant="destructive"
+                                onClick={submitDeleteOrganization}
+                                disabled={isDeletePending}
+                              >
+                                {isDeletePending ? "Excluindo..." : "Confirmar exclusao"}
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     </div>
                   ) : null}

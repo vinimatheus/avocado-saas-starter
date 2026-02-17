@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { Prisma } from "@prisma/client";
 
 import { AppPageContainer } from "@/components/app/app-page-container";
@@ -6,6 +7,7 @@ import { AppPageHighlightCard } from "@/components/app/app-page-highlight-card";
 import { StatusBanner } from "@/components/app/status-banner";
 import { ProductsDataTable } from "@/components/templates/products-data-table";
 import { Card, CardContent } from "@/components/ui/card";
+import { getOrganizationBlockMessage } from "@/lib/billing/subscription-service";
 import { isOrganizationAdminRole } from "@/lib/organization/helpers";
 import { listOrganizationProducts } from "@/lib/products/repository";
 import { productStatusSchema } from "@/lib/products/schemas";
@@ -84,8 +86,18 @@ async function listProducts(organizationId: string | null): Promise<ProductsResu
 
 export default async function ProductsPage() {
   const tenantContext = await getTenantContext();
+  const organizationId = tenantContext.organizationId;
+  if (organizationId) {
+    const blockMessage = await getOrganizationBlockMessage(organizationId);
+    if (blockMessage) {
+      const searchParams = new URLSearchParams();
+      searchParams.set("error", blockMessage);
+      redirect(`/billing?${searchParams.toString()}`);
+    }
+  }
+
   const canManage = isOrganizationAdminRole(tenantContext.role);
-  const productsResult = await listProducts(tenantContext.organizationId);
+  const productsResult = await listProducts(organizationId);
 
   return (
     <AppPageContainer className="gap-4">

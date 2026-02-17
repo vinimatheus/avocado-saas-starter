@@ -1,8 +1,10 @@
+import { isIP } from "node:net";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { createAuthMiddleware } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
 import { jwt, organization, twoFactor } from "better-auth/plugins";
+import { Prisma, WebhookProcessingStatus } from "@prisma/client";
 import { APIError } from "better-call";
 
 import {
@@ -11,21 +13,37 @@ import {
   assertOrganizationCanCreateInvitation,
   assertOwnerCanCreateOrganization,
   ensureOwnerSubscription,
+  getOwnerEntitlements,
 } from "@/lib/billing/subscription-service";
+import { getPlanDefinition } from "@/lib/billing/plans";
 import { prisma } from "@/lib/db/prisma";
 import {
   DEFAULT_APP_BASE_URL,
   resolveExplicitAppBaseUrlFromEnv,
   resolveVercelAppBaseUrlFromEnv,
 } from "@/lib/env/app-base-url";
+import { hasOrganizationRole } from "@/lib/organization/helpers";
 
 const INVITATION_ACCEPT_PATH = "/convites/aceitar";
 const SIGN_UP_EMAIL_PATH = "/sign-up/email";
+const SIGN_IN_EMAIL_PATH = "/sign-in/email";
 const SIGN_IN_SOCIAL_PATH = "/sign-in/social";
+const TWO_FACTOR_VERIFY_TOTP_PATH = "/two-factor/verify-totp";
+const TWO_FACTOR_VERIFY_OTP_PATH = "/two-factor/verify-otp";
+const TWO_FACTOR_VERIFY_BACKUP_CODE_PATH = "/two-factor/verify-backup-code";
 const OAUTH_CALLBACK_ROUTE_PATH = "/callback/:id";
 const OAUTH_CALLBACK_PATH_PREFIX = "/callback/";
 const DEFAULT_APP_NAME = "avocado SaaS";
 const RESEND_TIMEOUT_MS = 10_000;
+const USAGE_ALERT_THRESHOLDS = [80, 100] as const;
+const LOGIN_SESSION_ALERT_PATHS = new Set([
+  SIGN_IN_EMAIL_PATH,
+  SIGN_IN_SOCIAL_PATH,
+  OAUTH_CALLBACK_ROUTE_PATH,
+  TWO_FACTOR_VERIFY_TOTP_PATH,
+  TWO_FACTOR_VERIFY_OTP_PATH,
+  TWO_FACTOR_VERIFY_BACKUP_CODE_PATH,
+]);
 
 type GoogleSocialProviderConfig = {
   clientId: string;
@@ -174,6 +192,38 @@ function toRoleLabel(role: string): string {
   return "Usuario";
 }
 
+function toMembershipRoleLabel(role: string | null | undefined): string {
+  if (hasOrganizationRole(role, "owner")) {
+    return "Proprietario";
+  }
+
+  if (hasOrganizationRole(role, "admin")) {
+    return "Administrador";
+  }
+
+  return "Usuario";
+}
+
+function formatMoneyForEmail(amountCents: number, currency: string): string {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: currency || "BRL",
+    minimumFractionDigits: 2,
+  }).format(amountCents / 100);
+}
+
+function toUsageMetricLabel(metric: UsageAlertMetric): string {
+  if (metric === "users") {
+    return "usuarios";
+  }
+
+  if (metric === "projects") {
+    return "projetos";
+  }
+
+  return "consumo mensal";
+}
+
 function toErrorMessage(error: unknown, fallbackMessage: string): string {
   if (error instanceof Error && error.message) {
     return error.message;
@@ -198,6 +248,69 @@ function shouldSendWelcomeEmailForUserCreate(path: string): boolean {
     path === OAUTH_CALLBACK_ROUTE_PATH ||
     path.startsWith(OAUTH_CALLBACK_PATH_PREFIX)
   );
+}
+
+function shouldSendSuspiciousLoginEmailForSessionCreate(path: string): boolean {
+  return path.startsWith(OAUTH_CALLBACK_PATH_PREFIX) || LOGIN_SESSION_ALERT_PATHS.has(path);
+}
+
+function normalizeSessionUserAgent(userAgent: string | null | undefined): string | null {
+  const value = typeof userAgent === "string" ? userAgent.trim().toLowerCase() : "";
+  if (!value) {
+    return null;
+  }
+
+  return value
+    .replaceAll(/\/[\d._]+/g, "/#")
+    .replaceAll(/\b\d+(?:\.\d+)*\b/g, "#")
+    .replaceAll(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeSessionIpAddress(ipAddress: string | null | undefined): string | null {
+  if (typeof ipAddress !== "string") {
+    return null;
+  }
+
+  const firstValue = ipAddress
+    .split(",")
+    .map((value) => value.trim())
+    .find(Boolean);
+  if (!firstValue) {
+    return null;
+  }
+
+  const bracketMatch = firstValue.match(/^\[([^\]]+)\](?::\d+)?$/);
+  const ipCandidateWithPort = bracketMatch?.[1] ?? firstValue;
+  const mappedIpv4Match = ipCandidateWithPort.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i);
+  const mappedOrRawIp = mappedIpv4Match?.[1] ?? ipCandidateWithPort;
+  const ipv4WithPortMatch = mappedOrRawIp.match(/^(\d{1,3}(?:\.\d{1,3}){3}):\d+$/);
+  const normalizedIp = ipv4WithPortMatch?.[1] ?? mappedOrRawIp;
+
+  return isIP(normalizedIp) ? normalizedIp : null;
+}
+
+function toSessionNetworkFingerprint(ipAddress: string | null | undefined): string | null {
+  const normalizedIp = normalizeSessionIpAddress(ipAddress);
+  if (!normalizedIp) {
+    return null;
+  }
+
+  if (isIP(normalizedIp) === 4) {
+    const octets = normalizedIp.split(".");
+    if (octets.length === 4) {
+      return `${octets[0]}.${octets[1]}.${octets[2]}.0/24`;
+    }
+  }
+
+  if (isIP(normalizedIp) === 6) {
+    const segments = normalizedIp.split(":").filter((segment) => segment.length > 0);
+    if (segments.length >= 4) {
+      return `${segments.slice(0, 4).join(":")}::/64`;
+    }
+  }
+
+  return normalizedIp;
 }
 
 async function dedupeCredentialAccountsForEmail(rawEmail: unknown): Promise<void> {
@@ -307,6 +420,137 @@ type WelcomeEmailPayload = {
     name?: string | null;
     email: string;
   };
+};
+
+type MemberRemovedFromOrganizationEmailPayload = {
+  recipientEmail: string;
+  recipientName?: string | null;
+  organizationName: string;
+  removedByName?: string | null;
+  request?: Request;
+};
+
+type OrganizationDeletedEmailPayload = {
+  recipientEmail: string;
+  recipientName?: string | null;
+  organizationName: string;
+  deletedByName?: string | null;
+  request?: Request;
+};
+
+type SubscriptionEndingSoonEmailPayload = {
+  recipientEmail: string;
+  recipientName?: string | null;
+  organizationName: string;
+  planName: string;
+  periodEndsAt: Date;
+  request?: Request;
+};
+
+type SubscriptionCanceledEmailPayload = {
+  recipientEmail: string;
+  recipientName?: string | null;
+  organizationName: string;
+  planName: string;
+  canceledAt: Date;
+  request?: Request;
+};
+
+type EmailChangeNotificationPayload = {
+  currentEmail: string;
+  newEmail: string;
+  recipientName?: string | null;
+  request?: Request;
+};
+
+type InvitationAcceptedEmailPayload = {
+  inviterEmail: string;
+  inviterName?: string | null;
+  acceptedUserEmail: string;
+  acceptedUserName?: string | null;
+  organizationName: string;
+  request?: Request;
+};
+
+type MemberRoleChangedEmailPayload = {
+  recipientEmail: string;
+  recipientName?: string | null;
+  organizationName: string;
+  previousRole: string;
+  newRole: string;
+  changedByName?: string | null;
+  request?: Request;
+};
+
+type OwnershipTransferredEmailPayload = {
+  recipientEmail: string;
+  recipientName?: string | null;
+  organizationName: string;
+  transferType: "received" | "transferred";
+  counterpartName?: string | null;
+  request?: Request;
+};
+
+type PasswordChangedEmailPayload = {
+  recipientEmail: string;
+  recipientName?: string | null;
+  request?: Request;
+};
+
+type TwoFactorChangedEmailPayload = {
+  recipientEmail: string;
+  recipientName?: string | null;
+  enabled: boolean;
+  request?: Request;
+};
+
+type SuspiciousLoginEmailPayload = {
+  recipientEmail: string;
+  recipientName?: string | null;
+  loggedInAt: Date;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  isNewDevice: boolean;
+  isNewLocation: boolean;
+  request?: Request;
+};
+
+type PaymentApprovedEmailPayload = {
+  recipientEmail: string;
+  recipientName?: string | null;
+  organizationName: string;
+  planName: string;
+  amountCents: number;
+  currency: string;
+  paidAt: Date;
+  receiptUrl?: string | null;
+  billingUrl?: string | null;
+  request?: Request;
+};
+
+type PaymentFailedDunningEmailPayload = {
+  recipientEmail: string;
+  recipientName?: string | null;
+  organizationName: string;
+  planName: string;
+  dunningDay: number;
+  graceEndsAt: Date | null;
+  billingUrl?: string | null;
+  request?: Request;
+};
+
+type UsageAlertMetric = "users" | "projects" | "monthly_usage";
+
+type PlanUsageThresholdEmailPayload = {
+  recipientEmail: string;
+  recipientName?: string | null;
+  organizationName: string;
+  planName: string;
+  metric: UsageAlertMetric;
+  threshold: 80 | 100;
+  current: number;
+  maxAllowed: number;
+  request?: Request;
 };
 
 type TransactionalEmailPayload = {
@@ -464,6 +708,69 @@ function renderBrandedEmailHtml(payload: BrandedEmailTemplatePayload): string {
 </html>`;
 }
 
+function formatDateTimeForEmail(date: Date): string {
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "long",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function toRecipientName(name: string | null | undefined, email: string): string {
+  return name?.trim() || email;
+}
+
+function usageThresholdReached(
+  current: number,
+  maxAllowed: number,
+): 80 | 100 | null {
+  if (maxAllowed <= 0) {
+    return null;
+  }
+
+  if (current >= maxAllowed) {
+    return 100;
+  }
+
+  if (current >= Math.ceil(maxAllowed * 0.8)) {
+    return 80;
+  }
+
+  return null;
+}
+
+function currentYearMonthToken(now: Date = new Date()): string {
+  const year = now.getUTCFullYear();
+  const month = String(now.getUTCMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+}
+
+async function acquireInternalNotificationMarker(
+  id: string,
+  eventType: string,
+  payload: Prisma.InputJsonValue,
+): Promise<boolean> {
+  try {
+    await prisma.billingWebhookEvent.create({
+      data: {
+        id,
+        provider: "internal",
+        eventType,
+        status: WebhookProcessingStatus.PROCESSED,
+        payload,
+        processedAt: new Date(),
+      },
+    });
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message.toLowerCase() : "";
+    if (message.includes("p2002") || message.includes("unique constraint")) {
+      return false;
+    }
+
+    throw error;
+  }
+}
+
 async function sendOrganizationInvitationEmail(
   payload: OrganizationInvitationEmailPayload,
   request?: Request,
@@ -573,6 +880,631 @@ async function sendSignUpThankYouEmail(payload: WelcomeEmailPayload, request?: R
   });
 }
 
+export async function sendMemberRemovedFromOrganizationEmail(
+  payload: MemberRemovedFromOrganizationEmailPayload,
+): Promise<void> {
+  const recipientName = toRecipientName(payload.recipientName, payload.recipientEmail);
+  const removedByName = payload.removedByName?.trim() || "um administrador";
+  const signInUrl = new URL("/sign-in", resolveAppBaseUrl(payload.request)).toString();
+  const escapedRecipientName = escapeHtml(recipientName);
+  const escapedOrganizationName = escapeHtml(payload.organizationName);
+  const escapedRemovedByName = escapeHtml(removedByName);
+
+  const subject = `Voce foi removido da organizacao ${payload.organizationName}`;
+  const text =
+    `${recipientName}, seu acesso a organizacao ${payload.organizationName} foi removido por ${removedByName}.` +
+    `\n\nSe acredita que isso foi um engano, entre em contato com o owner da organizacao.` +
+    `\n\nAcessar conta: ${signInUrl}`;
+  const html = renderBrandedEmailHtml({
+    request: payload.request,
+    subject,
+    title: "Acesso removido da organizacao",
+    messageHtml: `Ola, <strong>${escapedRecipientName}</strong>. Seu acesso a organizacao <strong>${escapedOrganizationName}</strong> foi removido por <strong>${escapedRemovedByName}</strong>.`,
+    ctaLabel: "Acessar minha conta",
+    ctaUrl: signInUrl,
+    footerHtml: "Se voce acha que isso foi um erro, fale com o owner ou administrador responsavel.",
+  });
+
+  await sendTransactionalEmail({
+    to: payload.recipientEmail,
+    subject,
+    text,
+    html,
+  });
+}
+
+export async function sendOrganizationDeletedEmail(
+  payload: OrganizationDeletedEmailPayload,
+): Promise<void> {
+  const recipientName = toRecipientName(payload.recipientName, payload.recipientEmail);
+  const deletedByName = payload.deletedByName?.trim() || "o proprietario";
+  const onboardingUrl = new URL("/onboarding/company", resolveAppBaseUrl(payload.request)).toString();
+  const escapedRecipientName = escapeHtml(recipientName);
+  const escapedOrganizationName = escapeHtml(payload.organizationName);
+  const escapedDeletedByName = escapeHtml(deletedByName);
+
+  const subject = `A organizacao ${payload.organizationName} foi excluida`;
+  const text =
+    `${recipientName}, a organizacao ${payload.organizationName} foi excluida por ${deletedByName}.` +
+    `\n\nSe precisar continuar no sistema, crie uma nova organizacao.` +
+    `\n\nCriar organizacao: ${onboardingUrl}`;
+  const html = renderBrandedEmailHtml({
+    request: payload.request,
+    subject,
+    title: "Organizacao removida",
+    messageHtml: `Ola, <strong>${escapedRecipientName}</strong>. A organizacao <strong>${escapedOrganizationName}</strong> foi removida por <strong>${escapedDeletedByName}</strong>.`,
+    ctaLabel: "Criar nova organizacao",
+    ctaUrl: onboardingUrl,
+    footerHtml: "Se essa exclusao nao era esperada, entre em contato com o owner da organizacao.",
+  });
+
+  await sendTransactionalEmail({
+    to: payload.recipientEmail,
+    subject,
+    text,
+    html,
+  });
+}
+
+export async function sendSubscriptionEndingSoonEmail(
+  payload: SubscriptionEndingSoonEmailPayload,
+): Promise<void> {
+  const recipientName = toRecipientName(payload.recipientName, payload.recipientEmail);
+  const billingUrl = new URL("/billing", resolveAppBaseUrl(payload.request)).toString();
+  const periodEndsAtLabel = formatDateTimeForEmail(payload.periodEndsAt);
+  const escapedRecipientName = escapeHtml(recipientName);
+  const escapedPlanName = escapeHtml(payload.planName);
+  const escapedOrganizationName = escapeHtml(payload.organizationName);
+  const escapedPeriodEndsAt = escapeHtml(periodEndsAtLabel);
+
+  const subject = `Aviso de vencimento: ${payload.planName} termina em ${periodEndsAtLabel}`;
+  const text =
+    `${recipientName}, o plano ${payload.planName} da organizacao ${payload.organizationName} foi marcado para encerrar no fim do periodo.` +
+    `\n\nData prevista: ${periodEndsAtLabel}` +
+    `\n\nGerenciar assinatura: ${billingUrl}`;
+  const html = renderBrandedEmailHtml({
+    request: payload.request,
+    subject,
+    title: "Plano perto do vencimento",
+    messageHtml: `Ola, <strong>${escapedRecipientName}</strong>. O plano <strong>${escapedPlanName}</strong> da organizacao <strong>${escapedOrganizationName}</strong> termina em <strong>${escapedPeriodEndsAt}</strong>.`,
+    ctaLabel: "Revisar assinatura",
+    ctaUrl: billingUrl,
+    footerHtml: "Se quiser manter o plano ativo, acesse o billing e reative antes do vencimento.",
+  });
+
+  await sendTransactionalEmail({
+    to: payload.recipientEmail,
+    subject,
+    text,
+    html,
+  });
+}
+
+export async function sendSubscriptionCanceledEmail(
+  payload: SubscriptionCanceledEmailPayload,
+): Promise<void> {
+  const recipientName = toRecipientName(payload.recipientName, payload.recipientEmail);
+  const billingUrl = new URL("/billing", resolveAppBaseUrl(payload.request)).toString();
+  const canceledAtLabel = formatDateTimeForEmail(payload.canceledAt);
+  const escapedRecipientName = escapeHtml(recipientName);
+  const escapedPlanName = escapeHtml(payload.planName);
+  const escapedOrganizationName = escapeHtml(payload.organizationName);
+  const escapedCanceledAt = escapeHtml(canceledAtLabel);
+
+  const subject = `Plano cancelado: ${payload.planName}`;
+  const text =
+    `${recipientName}, o plano ${payload.planName} da organizacao ${payload.organizationName} foi cancelado em ${canceledAtLabel}.` +
+    `\n\nSe quiser voltar para um plano pago, acesse o billing: ${billingUrl}`;
+  const html = renderBrandedEmailHtml({
+    request: payload.request,
+    subject,
+    title: "Plano cancelado",
+    messageHtml: `Ola, <strong>${escapedRecipientName}</strong>. O plano <strong>${escapedPlanName}</strong> da organizacao <strong>${escapedOrganizationName}</strong> foi cancelado em <strong>${escapedCanceledAt}</strong>.`,
+    ctaLabel: "Gerenciar assinatura",
+    ctaUrl: billingUrl,
+    footerHtml: "Voce pode contratar novamente um plano pago a qualquer momento na area de billing.",
+  });
+
+  await sendTransactionalEmail({
+    to: payload.recipientEmail,
+    subject,
+    text,
+    html,
+  });
+}
+
+export async function sendEmailChangeNotifications(
+  payload: EmailChangeNotificationPayload,
+): Promise<void> {
+  const recipientName = toRecipientName(payload.recipientName, payload.currentEmail);
+  const profileUrl = new URL("/profile", resolveAppBaseUrl(payload.request)).toString();
+  const escapedRecipientName = escapeHtml(recipientName);
+  const escapedCurrentEmail = escapeHtml(payload.currentEmail);
+  const escapedNewEmail = escapeHtml(payload.newEmail);
+
+  const currentEmailSubject = "Solicitacao de alteracao de e-mail";
+  const currentEmailText =
+    `${recipientName}, recebemos uma solicitacao para alterar o e-mail de acesso de ${payload.currentEmail} para ${payload.newEmail}.` +
+    `\n\nSe voce nao reconhece esta acao, altere sua senha imediatamente.` +
+    `\n\nRevisar perfil: ${profileUrl}`;
+  const currentEmailHtml = renderBrandedEmailHtml({
+    request: payload.request,
+    subject: currentEmailSubject,
+    title: "Alteracao de e-mail solicitada",
+    messageHtml: `Ola, <strong>${escapedRecipientName}</strong>. Recebemos uma solicitacao para trocar o e-mail de acesso de <strong>${escapedCurrentEmail}</strong> para <strong>${escapedNewEmail}</strong>.`,
+    ctaLabel: "Revisar seguranca",
+    ctaUrl: profileUrl,
+    footerHtml: "Se voce nao solicitou essa alteracao, altere sua senha e revise a seguranca da conta.",
+  });
+
+  await sendTransactionalEmail({
+    to: payload.currentEmail,
+    subject: currentEmailSubject,
+    text: currentEmailText,
+    html: currentEmailHtml,
+  });
+
+  const newEmailSubject = "Novo e-mail vinculado a sua conta";
+  const newEmailText =
+    `${payload.newEmail}, este endereco foi informado para acesso a uma conta no ${getAppName()}.` +
+    "\n\nConclua a verificacao no e-mail de confirmacao enviado automaticamente." +
+    `\n\nAcessar perfil: ${profileUrl}`;
+  const newEmailHtml = renderBrandedEmailHtml({
+    request: payload.request,
+    subject: newEmailSubject,
+    title: "Confirme seu novo e-mail",
+    messageHtml: `Este endereco <strong>${escapedNewEmail}</strong> foi informado para acesso da conta de <strong>${escapedRecipientName}</strong>. Conclua a confirmacao no e-mail de verificacao enviado automaticamente.`,
+    ctaLabel: "Abrir perfil",
+    ctaUrl: profileUrl,
+    footerHtml: "Se voce nao reconhece esta solicitacao, ignore este e-mail.",
+  });
+
+  await sendTransactionalEmail({
+    to: payload.newEmail,
+    subject: newEmailSubject,
+    text: newEmailText,
+    html: newEmailHtml,
+  });
+}
+
+export async function sendSuspiciousLoginEmail(
+  payload: SuspiciousLoginEmailPayload,
+): Promise<void> {
+  const recipientName = toRecipientName(payload.recipientName, payload.recipientEmail);
+  const profileUrl = new URL("/profile", resolveAppBaseUrl(payload.request)).toString();
+  const loggedInAtLabel = formatDateTimeForEmail(payload.loggedInAt);
+  const normalizedIpAddress = normalizeSessionIpAddress(payload.ipAddress) || "Nao informado";
+  const userAgentLabel = payload.userAgent?.trim() || "Nao informado";
+  const escapedRecipientName = escapeHtml(recipientName);
+  const escapedLoggedInAt = escapeHtml(loggedInAtLabel);
+  const escapedIpAddress = escapeHtml(normalizedIpAddress);
+  const escapedUserAgent = escapeHtml(userAgentLabel);
+
+  const reasonLabel =
+    payload.isNewDevice && payload.isNewLocation
+      ? "novo dispositivo e nova localizacao"
+      : payload.isNewDevice
+        ? "novo dispositivo"
+        : "nova localizacao";
+  const escapedReasonLabel = escapeHtml(reasonLabel);
+
+  const subject = "Alerta de seguranca: novo login detectado";
+  const text =
+    `${recipientName}, detectamos um login com ${reasonLabel} na sua conta.` +
+    `\n\nQuando: ${loggedInAtLabel}` +
+    `\nIP: ${normalizedIpAddress}` +
+    `\nDispositivo: ${userAgentLabel}` +
+    "\n\nSe foi voce, nenhuma acao e necessaria." +
+    `\nSe voce nao reconhece este acesso, altere sua senha imediatamente e revise a seguranca da conta: ${profileUrl}`;
+  const html = renderBrandedEmailHtml({
+    request: payload.request,
+    subject,
+    title: "Novo login detectado",
+    messageHtml: `Ola, <strong>${escapedRecipientName}</strong>. Detectamos um login com <strong>${escapedReasonLabel}</strong> na sua conta.<br><br><strong>Quando:</strong> ${escapedLoggedInAt}<br><strong>IP:</strong> ${escapedIpAddress}<br><strong>Dispositivo:</strong> ${escapedUserAgent}`,
+    ctaLabel: "Revisar seguranca da conta",
+    ctaUrl: profileUrl,
+    footerHtml: "Se voce nao reconhece este acesso, altere sua senha imediatamente e revise os metodos de acesso no perfil.",
+  });
+
+  await sendTransactionalEmail({
+    to: payload.recipientEmail,
+    subject,
+    text,
+    html,
+  });
+}
+
+export async function sendInvitationAcceptedEmail(
+  payload: InvitationAcceptedEmailPayload,
+): Promise<void> {
+  const inviterName = toRecipientName(payload.inviterName, payload.inviterEmail);
+  const acceptedUserName = toRecipientName(payload.acceptedUserName, payload.acceptedUserEmail);
+  const dashboardUrl = new URL("/dashboard", resolveAppBaseUrl(payload.request)).toString();
+  const escapedInviterName = escapeHtml(inviterName);
+  const escapedAcceptedUserName = escapeHtml(acceptedUserName);
+  const escapedOrganizationName = escapeHtml(payload.organizationName);
+
+  const subject = `${acceptedUserName} aceitou o convite`;
+  const text =
+    `${inviterName}, ${acceptedUserName} aceitou o convite e entrou na organizacao ${payload.organizationName}.` +
+    `\n\nAbrir dashboard: ${dashboardUrl}`;
+  const html = renderBrandedEmailHtml({
+    request: payload.request,
+    subject,
+    title: "Convite aceito",
+    messageHtml: `Ola, <strong>${escapedInviterName}</strong>. <strong>${escapedAcceptedUserName}</strong> aceitou o convite e agora faz parte da organizacao <strong>${escapedOrganizationName}</strong>.`,
+    ctaLabel: "Abrir dashboard",
+    ctaUrl: dashboardUrl,
+    footerHtml: "Voce pode revisar o acesso e as permissoes da equipe no painel de organizacao.",
+  });
+
+  await sendTransactionalEmail({
+    to: payload.inviterEmail,
+    subject,
+    text,
+    html,
+  });
+}
+
+export async function sendMemberRoleChangedEmail(
+  payload: MemberRoleChangedEmailPayload,
+): Promise<void> {
+  const recipientName = toRecipientName(payload.recipientName, payload.recipientEmail);
+  const changedByName = payload.changedByName?.trim() || "um administrador";
+  const previousRoleLabel = toMembershipRoleLabel(payload.previousRole);
+  const newRoleLabel = toMembershipRoleLabel(payload.newRole);
+  const profileUrl = new URL("/profile", resolveAppBaseUrl(payload.request)).toString();
+  const escapedRecipientName = escapeHtml(recipientName);
+  const escapedChangedByName = escapeHtml(changedByName);
+  const escapedOrganizationName = escapeHtml(payload.organizationName);
+  const escapedPreviousRole = escapeHtml(previousRoleLabel);
+  const escapedNewRole = escapeHtml(newRoleLabel);
+
+  const subject = `Seu cargo foi atualizado em ${payload.organizationName}`;
+  const text =
+    `${recipientName}, seu cargo na organizacao ${payload.organizationName} foi alterado por ${changedByName}.` +
+    `\n\nCargo anterior: ${previousRoleLabel}` +
+    `\nNovo cargo: ${newRoleLabel}` +
+    `\n\nVer perfil: ${profileUrl}`;
+  const html = renderBrandedEmailHtml({
+    request: payload.request,
+    subject,
+    title: "Cargo atualizado",
+    messageHtml: `Ola, <strong>${escapedRecipientName}</strong>. Seu cargo na organizacao <strong>${escapedOrganizationName}</strong> foi atualizado por <strong>${escapedChangedByName}</strong> de <strong>${escapedPreviousRole}</strong> para <strong>${escapedNewRole}</strong>.`,
+    ctaLabel: "Ver meu perfil",
+    ctaUrl: profileUrl,
+    footerHtml: "Se essa alteracao nao era esperada, entre em contato com o owner da organizacao.",
+  });
+
+  await sendTransactionalEmail({
+    to: payload.recipientEmail,
+    subject,
+    text,
+    html,
+  });
+}
+
+export async function sendOwnershipTransferredEmail(
+  payload: OwnershipTransferredEmailPayload,
+): Promise<void> {
+  const recipientName = toRecipientName(payload.recipientName, payload.recipientEmail);
+  const counterpartName = payload.counterpartName?.trim() || "outro membro";
+  const managementUrl = new URL("/profile", resolveAppBaseUrl(payload.request)).toString();
+  const escapedRecipientName = escapeHtml(recipientName);
+  const escapedCounterpartName = escapeHtml(counterpartName);
+  const escapedOrganizationName = escapeHtml(payload.organizationName);
+
+  const isReceived = payload.transferType === "received";
+  const subject = isReceived
+    ? `Voce agora e owner de ${payload.organizationName}`
+    : `Ownership transferido em ${payload.organizationName}`;
+  const text = isReceived
+    ? `${recipientName}, a propriedade da organizacao ${payload.organizationName} foi transferida para voce por ${counterpartName}.\n\nGerenciar organizacao: ${managementUrl}`
+    : `${recipientName}, a propriedade da organizacao ${payload.organizationName} foi transferida para ${counterpartName}.\n\nGerenciar organizacao: ${managementUrl}`;
+  const html = renderBrandedEmailHtml({
+    request: payload.request,
+    subject,
+    title: isReceived ? "Voce agora e owner" : "Ownership transferido",
+    messageHtml: isReceived
+      ? `Ola, <strong>${escapedRecipientName}</strong>. A propriedade da organizacao <strong>${escapedOrganizationName}</strong> foi transferida para voce por <strong>${escapedCounterpartName}</strong>.`
+      : `Ola, <strong>${escapedRecipientName}</strong>. A propriedade da organizacao <strong>${escapedOrganizationName}</strong> foi transferida para <strong>${escapedCounterpartName}</strong>.`,
+    ctaLabel: "Gerenciar organizacao",
+    ctaUrl: managementUrl,
+    footerHtml: "Revise os acessos e responsabilidades para manter a governanca da equipe.",
+  });
+
+  await sendTransactionalEmail({
+    to: payload.recipientEmail,
+    subject,
+    text,
+    html,
+  });
+}
+
+export async function sendPasswordChangedEmail(
+  payload: PasswordChangedEmailPayload,
+): Promise<void> {
+  const recipientName = toRecipientName(payload.recipientName, payload.recipientEmail);
+  const securityUrl = new URL("/profile", resolveAppBaseUrl(payload.request)).toString();
+  const escapedRecipientName = escapeHtml(recipientName);
+
+  const subject = "Senha da conta alterada";
+  const text =
+    `${recipientName}, a senha da sua conta foi alterada com sucesso.` +
+    `\n\nSe voce nao reconhece esta alteracao, redefina sua senha imediatamente.` +
+    `\n\nRevisar seguranca: ${securityUrl}`;
+  const html = renderBrandedEmailHtml({
+    request: payload.request,
+    subject,
+    title: "Senha alterada",
+    messageHtml: `Ola, <strong>${escapedRecipientName}</strong>. A senha da sua conta foi alterada.`,
+    ctaLabel: "Revisar seguranca",
+    ctaUrl: securityUrl,
+    footerHtml: "Se voce nao foi responsavel por essa acao, redefina a senha imediatamente.",
+  });
+
+  await sendTransactionalEmail({
+    to: payload.recipientEmail,
+    subject,
+    text,
+    html,
+  });
+}
+
+export async function sendTwoFactorChangedEmail(
+  payload: TwoFactorChangedEmailPayload,
+): Promise<void> {
+  const recipientName = toRecipientName(payload.recipientName, payload.recipientEmail);
+  const securityUrl = new URL("/profile", resolveAppBaseUrl(payload.request)).toString();
+  const escapedRecipientName = escapeHtml(recipientName);
+  const statusLabel = payload.enabled ? "ativada" : "desativada";
+
+  const subject = payload.enabled ? "2FA ativado na sua conta" : "2FA desativado na sua conta";
+  const text =
+    `${recipientName}, a autenticacao em dois fatores foi ${statusLabel} na sua conta.` +
+    `\n\nRevisar seguranca: ${securityUrl}`;
+  const html = renderBrandedEmailHtml({
+    request: payload.request,
+    subject,
+    title: payload.enabled ? "2FA ativado" : "2FA desativado",
+    messageHtml: `Ola, <strong>${escapedRecipientName}</strong>. A autenticacao em dois fatores foi <strong>${statusLabel}</strong> na sua conta.`,
+    ctaLabel: "Abrir seguranca",
+    ctaUrl: securityUrl,
+    footerHtml: "Se voce nao reconhece esta acao, altere sua senha imediatamente.",
+  });
+
+  await sendTransactionalEmail({
+    to: payload.recipientEmail,
+    subject,
+    text,
+    html,
+  });
+}
+
+export async function sendPaymentApprovedEmail(
+  payload: PaymentApprovedEmailPayload,
+): Promise<void> {
+  const recipientName = toRecipientName(payload.recipientName, payload.recipientEmail);
+  const amountLabel = formatMoneyForEmail(payload.amountCents, payload.currency);
+  const paidAtLabel = formatDateTimeForEmail(payload.paidAt);
+  const targetUrl =
+    payload.receiptUrl?.trim() ||
+    payload.billingUrl?.trim() ||
+    new URL("/billing", resolveAppBaseUrl(payload.request)).toString();
+  const escapedRecipientName = escapeHtml(recipientName);
+  const escapedPlanName = escapeHtml(payload.planName);
+  const escapedOrganizationName = escapeHtml(payload.organizationName);
+  const escapedAmountLabel = escapeHtml(amountLabel);
+  const escapedPaidAt = escapeHtml(paidAtLabel);
+
+  const subject = `Pagamento aprovado: ${payload.planName}`;
+  const text =
+    `${recipientName}, recebemos o pagamento de ${amountLabel} para o plano ${payload.planName} da organizacao ${payload.organizationName}.` +
+    `\n\nData: ${paidAtLabel}` +
+    `\nAcessar recibo/fatura: ${targetUrl}`;
+  const html = renderBrandedEmailHtml({
+    request: payload.request,
+    subject,
+    title: "Pagamento aprovado",
+    messageHtml: `Ola, <strong>${escapedRecipientName}</strong>. Confirmamos o pagamento de <strong>${escapedAmountLabel}</strong> no plano <strong>${escapedPlanName}</strong> da organizacao <strong>${escapedOrganizationName}</strong> em <strong>${escapedPaidAt}</strong>.`,
+    ctaLabel: "Ver recibo",
+    ctaUrl: targetUrl,
+    footerHtml: "Guarde este comprovante para controle interno de faturamento.",
+  });
+
+  await sendTransactionalEmail({
+    to: payload.recipientEmail,
+    subject,
+    text,
+    html,
+  });
+}
+
+export async function sendPaymentFailedDunningEmail(
+  payload: PaymentFailedDunningEmailPayload,
+): Promise<void> {
+  const recipientName = toRecipientName(payload.recipientName, payload.recipientEmail);
+  const billingUrl =
+    payload.billingUrl?.trim() || new URL("/billing", resolveAppBaseUrl(payload.request)).toString();
+  const graceEndsLabel = payload.graceEndsAt ? formatDateTimeForEmail(payload.graceEndsAt) : null;
+  const escapedRecipientName = escapeHtml(recipientName);
+  const escapedPlanName = escapeHtml(payload.planName);
+  const escapedOrganizationName = escapeHtml(payload.organizationName);
+  const escapedGraceEndsLabel = graceEndsLabel ? escapeHtml(graceEndsLabel) : null;
+
+  const subject = `Falha no pagamento - dia ${payload.dunningDay}`;
+  const text =
+    `${recipientName}, nao conseguimos processar a cobranca do plano ${payload.planName} da organizacao ${payload.organizationName}.` +
+    `\n\nEste e o aviso do dia ${payload.dunningDay} da sequencia de cobranca.` +
+    (graceEndsLabel ? `\nPrazo de regularizacao: ${graceEndsLabel}` : "") +
+    `\n\nAtualizar pagamento: ${billingUrl}`;
+  const html = renderBrandedEmailHtml({
+    request: payload.request,
+    subject,
+    title: "Falha no pagamento",
+    messageHtml: escapedGraceEndsLabel
+      ? `Ola, <strong>${escapedRecipientName}</strong>. Nao conseguimos processar a cobranca do plano <strong>${escapedPlanName}</strong> da organizacao <strong>${escapedOrganizationName}</strong>. Este e o aviso do <strong>dia ${payload.dunningDay}</strong>. Regularize ate <strong>${escapedGraceEndsLabel}</strong>.`
+      : `Ola, <strong>${escapedRecipientName}</strong>. Nao conseguimos processar a cobranca do plano <strong>${escapedPlanName}</strong> da organizacao <strong>${escapedOrganizationName}</strong>. Este e o aviso do <strong>dia ${payload.dunningDay}</strong>.`,
+    ctaLabel: "Atualizar pagamento",
+    ctaUrl: billingUrl,
+    footerHtml: "Regularize o pagamento para evitar downgrade e restricoes no plano.",
+  });
+
+  await sendTransactionalEmail({
+    to: payload.recipientEmail,
+    subject,
+    text,
+    html,
+  });
+}
+
+export async function sendPlanUsageThresholdEmail(
+  payload: PlanUsageThresholdEmailPayload,
+): Promise<void> {
+  const recipientName = toRecipientName(payload.recipientName, payload.recipientEmail);
+  const billingUrl = new URL("/billing", resolveAppBaseUrl(payload.request)).toString();
+  const metricLabel = toUsageMetricLabel(payload.metric);
+  const escapedRecipientName = escapeHtml(recipientName);
+  const escapedMetricLabel = escapeHtml(metricLabel);
+  const escapedPlanName = escapeHtml(payload.planName);
+  const escapedOrganizationName = escapeHtml(payload.organizationName);
+
+  const subject =
+    payload.threshold === 100
+      ? `Limite atingido de ${metricLabel}`
+      : `Alerta: ${payload.threshold}% do limite de ${metricLabel}`;
+  const text =
+    `${recipientName}, a organizacao ${payload.organizationName} atingiu ${payload.current}/${payload.maxAllowed} em ${metricLabel} no plano ${payload.planName}.` +
+    `\n\nGerenciar plano: ${billingUrl}`;
+  const html = renderBrandedEmailHtml({
+    request: payload.request,
+    subject,
+    title: payload.threshold === 100 ? "Limite atingido" : "Uso proximo do limite",
+    messageHtml: `Ola, <strong>${escapedRecipientName}</strong>. A organizacao <strong>${escapedOrganizationName}</strong> esta em <strong>${payload.current}/${payload.maxAllowed}</strong> de <strong>${escapedMetricLabel}</strong> no plano <strong>${escapedPlanName}</strong>.`,
+    ctaLabel: "Gerenciar plano",
+    ctaUrl: billingUrl,
+    footerHtml: "Considere upgrade ou ajuste de uso para manter a operacao sem bloqueios.",
+  });
+
+  await sendTransactionalEmail({
+    to: payload.recipientEmail,
+    subject,
+    text,
+    html,
+  });
+}
+
+export async function maybeSendPlanUsageThresholdAlerts(
+  input: {
+    organizationId: string;
+    request?: Request;
+  },
+): Promise<void> {
+  const organizationId = input.organizationId.trim();
+  if (!organizationId) {
+    return;
+  }
+
+  try {
+    const entitlements = await getOwnerEntitlements(organizationId);
+    const owner = await prisma.user.findUnique({
+      where: {
+        id: entitlements.ownerUserId,
+      },
+      select: {
+        email: true,
+        name: true,
+      },
+    });
+
+    const ownerEmail = owner?.email?.trim().toLowerCase() || "";
+    if (!ownerEmail) {
+      return;
+    }
+
+    const organization = await prisma.organization.findUnique({
+      where: {
+        id: organizationId,
+      },
+      select: {
+        name: true,
+      },
+    });
+
+    const organizationName = organization?.name?.trim() || "organizacao";
+    const planDefinition = getPlanDefinition(entitlements.effectivePlanCode);
+    const planName = planDefinition.name;
+    const usersInUse = entitlements.usage.users + entitlements.usage.pendingInvitations;
+    const monthToken = currentYearMonthToken();
+    const metrics: Array<{
+      metric: UsageAlertMetric;
+      current: number;
+      maxAllowed: number | null;
+    }> = [
+      {
+        metric: "users",
+        current: usersInUse,
+        maxAllowed: planDefinition.limits.maxUsers,
+      },
+      {
+        metric: "projects",
+        current: entitlements.usage.projects,
+        maxAllowed: planDefinition.limits.maxProjects,
+      },
+      {
+        metric: "monthly_usage",
+        current: entitlements.usage.monthlyUsage,
+        maxAllowed: planDefinition.limits.maxMonthlyUsage,
+      },
+    ];
+
+    for (const metric of metrics) {
+      if (metric.maxAllowed === null) {
+        continue;
+      }
+
+      const reachedThreshold = usageThresholdReached(metric.current, metric.maxAllowed);
+      if (!reachedThreshold || !USAGE_ALERT_THRESHOLDS.includes(reachedThreshold)) {
+        continue;
+      }
+
+      const markerId = [
+        "usage_alert",
+        organizationId,
+        metric.metric,
+        String(reachedThreshold),
+        monthToken,
+      ].join(":");
+      const markerCreated = await acquireInternalNotificationMarker(markerId, "usage.alert", {
+        organizationId,
+        metric: metric.metric,
+        threshold: reachedThreshold,
+        current: metric.current,
+        maxAllowed: metric.maxAllowed,
+        monthToken,
+      });
+
+      if (!markerCreated) {
+        continue;
+      }
+
+      await sendPlanUsageThresholdEmail({
+        recipientEmail: ownerEmail,
+        recipientName: owner?.name?.trim() || null,
+        organizationName,
+        planName,
+        metric: metric.metric,
+        threshold: reachedThreshold,
+        current: metric.current,
+        maxAllowed: metric.maxAllowed,
+        request: input.request,
+      });
+    }
+  } catch (error) {
+    console.error("Falha ao enviar alerta de limite de plano.", error);
+  }
+}
+
 export const auth = betterAuth({
   baseURL: getPrimaryAppBaseUrl(),
   secret: getAuthSecret(),
@@ -641,6 +1573,186 @@ export const auth = betterAuth({
           }
         },
       },
+      update: {
+        after: async (user, context) => {
+          if (!context) {
+            return;
+          }
+
+          const path = context.path || "";
+          if (path !== TWO_FACTOR_VERIFY_TOTP_PATH && path !== "/two-factor/disable") {
+            return;
+          }
+
+          const userEmail = typeof user.email === "string" ? user.email.trim() : "";
+          if (!userEmail) {
+            return;
+          }
+
+          try {
+            await sendTwoFactorChangedEmail({
+              recipientEmail: userEmail,
+              recipientName: typeof user.name === "string" ? user.name : null,
+              enabled: path === "/two-factor/verify-totp",
+              request: context.request,
+            });
+          } catch (error) {
+            console.error("Failed to send 2FA status email.", error);
+          }
+        },
+      },
+    },
+    session: {
+      create: {
+        after: async (session, context) => {
+          if (!context) {
+            return;
+          }
+
+          const path = context.path || "";
+          if (!shouldSendSuspiciousLoginEmailForSessionCreate(path)) {
+            return;
+          }
+
+          const userId = typeof session.userId === "string" ? session.userId : "";
+          const sessionId = typeof session.id === "string" ? session.id : "";
+          if (!userId || !sessionId) {
+            return;
+          }
+
+          const occurredAt =
+            session.createdAt instanceof Date
+              ? session.createdAt
+              : new Date(String(session.createdAt ?? ""));
+          if (Number.isNaN(occurredAt.getTime())) {
+            return;
+          }
+
+          const currentUserAgentFingerprint = normalizeSessionUserAgent(
+            typeof session.userAgent === "string" ? session.userAgent : null,
+          );
+          const currentNetworkFingerprint = toSessionNetworkFingerprint(
+            typeof session.ipAddress === "string" ? session.ipAddress : null,
+          );
+          if (!currentUserAgentFingerprint && !currentNetworkFingerprint) {
+            return;
+          }
+
+          const [user, previousSessions] = await Promise.all([
+            prisma.user.findUnique({
+              where: {
+                id: userId,
+              },
+              select: {
+                email: true,
+                name: true,
+              },
+            }),
+            prisma.session.findMany({
+              where: {
+                userId,
+                id: {
+                  not: sessionId,
+                },
+              },
+              orderBy: [
+                {
+                  createdAt: "desc",
+                },
+              ],
+              take: 10,
+              select: {
+                userAgent: true,
+                ipAddress: true,
+              },
+            }),
+          ]);
+
+          const recipientEmail = user?.email?.trim().toLowerCase() || "";
+          if (!recipientEmail || previousSessions.length === 0) {
+            return;
+          }
+
+          const isKnownDevice = currentUserAgentFingerprint
+            ? previousSessions.some(
+              (previousSession) =>
+                normalizeSessionUserAgent(previousSession.userAgent) === currentUserAgentFingerprint,
+            )
+            : false;
+          const isKnownLocation = currentNetworkFingerprint
+            ? previousSessions.some(
+              (previousSession) =>
+                toSessionNetworkFingerprint(previousSession.ipAddress) === currentNetworkFingerprint,
+            )
+            : false;
+
+          const isNewDevice = Boolean(currentUserAgentFingerprint) && !isKnownDevice;
+          const isNewLocation = Boolean(currentNetworkFingerprint) && !isKnownLocation;
+          if (!isNewDevice && !isNewLocation) {
+            return;
+          }
+
+          try {
+            await sendSuspiciousLoginEmail({
+              recipientEmail,
+              recipientName: user?.name ?? null,
+              loggedInAt: occurredAt,
+              ipAddress: typeof session.ipAddress === "string" ? session.ipAddress : null,
+              userAgent: typeof session.userAgent === "string" ? session.userAgent : null,
+              isNewDevice,
+              isNewLocation,
+              request: context.request,
+            });
+          } catch (error) {
+            console.error("Failed to send suspicious-login email.", error);
+          }
+        },
+      },
+    },
+    account: {
+      update: {
+        after: async (account, context) => {
+          if (!context) {
+            return;
+          }
+
+          const path = context.path || "";
+          if (path !== "/change-password" && path !== "/set-password" && path !== "/reset-password") {
+            return;
+          }
+
+          const providerId = typeof account.providerId === "string" ? account.providerId : "";
+          const userId = typeof account.userId === "string" ? account.userId : "";
+          if (providerId !== "credential" || !userId) {
+            return;
+          }
+
+          const user = await prisma.user.findUnique({
+            where: {
+              id: userId,
+            },
+            select: {
+              email: true,
+              name: true,
+            },
+          });
+
+          const recipientEmail = user?.email?.trim() || "";
+          if (!recipientEmail) {
+            return;
+          }
+
+          try {
+            await sendPasswordChangedEmail({
+              recipientEmail,
+              recipientName: user?.name ?? null,
+              request: context.request,
+            });
+          } catch (error) {
+            console.error("Failed to send password-changed email.", error);
+          }
+        },
+      },
     },
   },
   emailVerification: {
@@ -693,7 +1805,7 @@ export const auth = betterAuth({
   },
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
-      if (ctx.path !== "/sign-in/email") {
+      if (ctx.path !== SIGN_IN_EMAIL_PATH) {
         return;
       }
 
@@ -731,6 +1843,11 @@ export const auth = betterAuth({
             });
           }
         },
+        afterCreateInvitation: async ({ invitation }) => {
+          await maybeSendPlanUsageThresholdAlerts({
+            organizationId: invitation.organizationId,
+          });
+        },
         beforeAcceptInvitation: async ({ invitation }) => {
           try {
             await assertOrganizationCanAcceptInvitation(
@@ -742,6 +1859,42 @@ export const auth = betterAuth({
               message: toErrorMessage(error, "Limite de usuarios atingido no plano atual."),
             });
           }
+        },
+        afterAcceptInvitation: async ({ invitation, user, organization }) => {
+          const inviterId = typeof invitation.inviterId === "string" ? invitation.inviterId.trim() : "";
+          const acceptedUserEmail =
+            typeof user.email === "string" ? user.email.trim().toLowerCase() : "";
+
+          if (inviterId && acceptedUserEmail) {
+            const inviter = await prisma.user.findUnique({
+              where: {
+                id: inviterId,
+              },
+              select: {
+                email: true,
+                name: true,
+              },
+            });
+            const inviterEmail = inviter?.email?.trim().toLowerCase() || "";
+
+            if (inviterEmail) {
+              try {
+                await sendInvitationAcceptedEmail({
+                  inviterEmail,
+                  inviterName: inviter?.name ?? null,
+                  acceptedUserEmail,
+                  acceptedUserName: typeof user.name === "string" ? user.name : null,
+                  organizationName: organization.name || "organizacao",
+                });
+              } catch (error) {
+                console.error("Failed to send invitation-accepted email.", error);
+              }
+            }
+          }
+
+          await maybeSendPlanUsageThresholdAlerts({
+            organizationId: invitation.organizationId,
+          });
         },
         beforeAddMember: async ({ member }) => {
           try {
@@ -757,6 +1910,137 @@ export const auth = betterAuth({
             throw new APIError("FORBIDDEN", {
               message: toErrorMessage(error, "Limite de usuarios atingido no plano atual."),
             });
+          }
+        },
+        afterAddMember: async ({ member }) => {
+          await maybeSendPlanUsageThresholdAlerts({
+            organizationId: member.organizationId,
+          });
+        },
+        afterUpdateMemberRole: async ({ member, previousRole, user, organization }) => {
+          let recipientEmail =
+            typeof user.email === "string" ? user.email.trim().toLowerCase() : "";
+          let recipientName: string | null = typeof user.name === "string" ? user.name : null;
+
+          if (!recipientEmail) {
+            const affectedUser = await prisma.user.findUnique({
+              where: {
+                id: member.userId,
+              },
+              select: {
+                email: true,
+                name: true,
+              },
+            });
+
+            recipientEmail = affectedUser?.email?.trim().toLowerCase() || "";
+            recipientName = affectedUser?.name ?? recipientName;
+          }
+
+          if (recipientEmail) {
+            try {
+              await sendMemberRoleChangedEmail({
+                recipientEmail,
+                recipientName,
+                organizationName: organization.name || "organizacao",
+                previousRole,
+                newRole: member.role,
+                changedByName: null,
+              });
+            } catch (error) {
+              console.error("Failed to send role-changed email.", error);
+            }
+          }
+
+          const wasOwner = hasOrganizationRole(previousRole, "owner");
+          const isOwner = hasOrganizationRole(member.role, "owner");
+          if (wasOwner === isOwner || !recipientEmail) {
+            return;
+          }
+
+          if (isOwner) {
+            const previousOwnerMember = await prisma.member.findFirst({
+              where: {
+                organizationId: member.organizationId,
+                userId: {
+                  not: member.userId,
+                },
+                role: {
+                  contains: "owner",
+                },
+              },
+              orderBy: {
+                createdAt: "asc",
+              },
+              select: {
+                userId: true,
+              },
+            });
+            const previousOwner = previousOwnerMember
+              ? await prisma.user.findUnique({
+                  where: {
+                    id: previousOwnerMember.userId,
+                  },
+                  select: {
+                    email: true,
+                    name: true,
+                  },
+                })
+              : null;
+
+            try {
+              await sendOwnershipTransferredEmail({
+                recipientEmail,
+                recipientName,
+                organizationName: organization.name || "organizacao",
+                transferType: "received",
+                counterpartName: previousOwner?.name || previousOwner?.email || null,
+              });
+            } catch (error) {
+              console.error("Failed to send ownership-transfer email (received).", error);
+            }
+            return;
+          }
+
+          const newOwnerMember = await prisma.member.findFirst({
+            where: {
+              organizationId: member.organizationId,
+              userId: {
+                not: member.userId,
+              },
+              role: {
+                contains: "owner",
+              },
+            },
+            orderBy: {
+              createdAt: "asc",
+            },
+            select: {
+              userId: true,
+            },
+          });
+          const newOwner = newOwnerMember
+            ? await prisma.user.findUnique({
+                where: {
+                  id: newOwnerMember.userId,
+                },
+                select: {
+                  email: true,
+                  name: true,
+                },
+              })
+            : null;
+
+          try {
+            await sendOwnershipTransferredEmail({
+              recipientEmail,
+              recipientName,
+              organizationName: organization.name || "organizacao",
+              transferType: "transferred",
+              counterpartName: newOwner?.name || newOwner?.email || null,
+            });
+          } catch (error) {
+            console.error("Failed to send ownership-transfer email (transferred).", error);
           }
         },
       },

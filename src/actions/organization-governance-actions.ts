@@ -6,7 +6,8 @@ import { headers } from "next/headers";
 import { z } from "zod";
 
 import type { OrganizationUserActionState } from "@/actions/organization-user-action-state";
-import { auth } from "@/lib/auth/server";
+import { auth, sendOrganizationDeletedEmail } from "@/lib/auth/server";
+import { assertOrganizationNotBlockedAfterExpiredTrial } from "@/lib/billing/subscription-service";
 import { prisma } from "@/lib/db/prisma";
 import {
   hasOrganizationRole,
@@ -210,6 +211,11 @@ type GovernanceContext = {
   canManageOwnership: boolean;
 };
 
+type OrganizationEmailRecipient = {
+  email: string;
+  name: string | null;
+};
+
 async function getGovernanceContext(): Promise<GovernanceContext> {
   const tenantContext = await getTenantContext();
   if (!tenantContext.session?.user) {
@@ -254,6 +260,91 @@ async function getGovernanceContext(): Promise<GovernanceContext> {
   };
 }
 
+async function resolveOrganizationEmailRecipients(
+  members: GovernanceContext["members"],
+): Promise<OrganizationEmailRecipient[]> {
+  const recipientsByEmail = new Map<string, OrganizationEmailRecipient>();
+  const missingEmailUserIds = new Set<string>();
+
+  for (const member of members) {
+    const memberEmail = member.user?.email?.trim().toLowerCase() || "";
+    const memberName = member.user?.name?.trim() || null;
+
+    if (memberEmail) {
+      if (!recipientsByEmail.has(memberEmail)) {
+        recipientsByEmail.set(memberEmail, {
+          email: memberEmail,
+          name: memberName,
+        });
+      }
+      continue;
+    }
+
+    missingEmailUserIds.add(member.userId);
+  }
+
+  if (missingEmailUserIds.size > 0) {
+    const missingUsers = await prisma.user.findMany({
+      where: {
+        id: {
+          in: Array.from(missingEmailUserIds),
+        },
+      },
+      select: {
+        email: true,
+        name: true,
+      },
+    });
+
+    for (const user of missingUsers) {
+      const userEmail = user.email?.trim().toLowerCase() || "";
+      if (!userEmail || recipientsByEmail.has(userEmail)) {
+        continue;
+      }
+
+      recipientsByEmail.set(userEmail, {
+        email: userEmail,
+        name: user.name?.trim() || null,
+      });
+    }
+  }
+
+  return Array.from(recipientsByEmail.values());
+}
+
+async function notifyOrganizationDeleted(
+  recipients: OrganizationEmailRecipient[],
+  input: {
+    organizationName: string;
+    deletedByName: string | null;
+  },
+): Promise<void> {
+  if (recipients.length === 0) {
+    return;
+  }
+
+  const results = await Promise.allSettled(
+    recipients.map((recipient) =>
+      sendOrganizationDeletedEmail({
+        recipientEmail: recipient.email,
+        recipientName: recipient.name,
+        organizationName: input.organizationName,
+        deletedByName: input.deletedByName || undefined,
+      }),
+    ),
+  );
+
+  for (const result of results) {
+    if (result.status === "rejected") {
+      console.error("Falha ao enviar e-mail de organizacao excluida.", result.reason);
+    }
+  }
+}
+
+async function assertGovernanceWritesAllowed(organizationId: string): Promise<void> {
+  await assertOrganizationNotBlockedAfterExpiredTrial(organizationId);
+}
+
 async function resolveRedirectAfterOrganizationMutation(
   requestHeaders: Headers,
 ): Promise<string> {
@@ -286,6 +377,7 @@ export async function updateOrganizationDetailsAction(
 ): Promise<OrganizationUserActionState> {
   try {
     const context = await getGovernanceContext();
+    await assertGovernanceWritesAllowed(context.organizationId);
     if (!context.currentIsOwner) {
       return errorState("Somente o proprietario pode atualizar os dados da organizacao.");
     }
@@ -322,6 +414,7 @@ export async function updateOrganizationLogoAction(
 ): Promise<OrganizationUserActionState> {
   try {
     const context = await getGovernanceContext();
+    await assertGovernanceWritesAllowed(context.organizationId);
     if (!context.currentIsOwner) {
       return errorState("Somente o proprietario pode atualizar a imagem da organizacao.");
     }
@@ -371,6 +464,7 @@ export async function removeOrganizationLogoAction(
     void formData;
 
     const context = await getGovernanceContext();
+    await assertGovernanceWritesAllowed(context.organizationId);
     if (!context.currentIsOwner) {
       return errorState("Somente o proprietario pode remover a imagem da organizacao.");
     }
@@ -397,6 +491,7 @@ export async function transferOrganizationOwnershipAction(
 ): Promise<OrganizationUserActionState> {
   try {
     const context = await getGovernanceContext();
+    await assertGovernanceWritesAllowed(context.organizationId);
     if (!context.canManageOwnership) {
       return errorState("Somente o proprietario atual pode transferir propriedade.");
     }
@@ -530,6 +625,9 @@ export async function deleteOrganizationSafelyAction(
       return errorState("Somente o proprietario atual pode excluir a organizacao.");
     }
 
+    const notificationRecipients = await resolveOrganizationEmailRecipients(context.members);
+    const deletedByName =
+      context.currentMember.user?.name?.trim() || context.currentMember.user?.email?.trim() || null;
     const previousCurrentRole = toOrganizationMemberRoleToken(context.currentMember.role);
     const shouldPromoteCurrentMember = !context.currentIsOwner;
 
@@ -571,6 +669,11 @@ export async function deleteOrganizationSafelyAction(
 
       throw deleteError;
     }
+
+    await notifyOrganizationDeleted(notificationRecipients, {
+      organizationName: context.organizationName,
+      deletedByName,
+    });
 
     const redirectTo = await resolveRedirectAfterOrganizationMutation(context.requestHeaders);
     revalidateOrganizationGovernancePaths();

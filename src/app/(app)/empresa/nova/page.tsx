@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { AppPageContainer } from "@/components/app/app-page-container";
 import { CompanyOnboardingForm } from "@/components/auth/company-onboarding-form";
+import { getOrganizationBlockMessage } from "@/lib/billing/subscription-service";
 import { getTenantContext } from "@/lib/organization/tenant-context";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +24,13 @@ export default async function NewOrganizationPage() {
 
   if (!tenantContext.organizationId) {
     redirect("/onboarding/company");
+  }
+
+  const blockMessage = await getOrganizationBlockMessage(tenantContext.organizationId);
+  if (blockMessage) {
+    const searchParams = new URLSearchParams();
+    searchParams.set("error", blockMessage);
+    redirect(`/billing?${searchParams.toString()}`);
   }
 
   return (

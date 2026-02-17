@@ -5,7 +5,9 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import type { OrganizationUserActionState } from "@/actions/organization-user-action-state";
-import { auth } from "@/lib/auth/server";
+import { auth, sendMemberRemovedFromOrganizationEmail } from "@/lib/auth/server";
+import { assertOrganizationNotBlockedAfterExpiredTrial } from "@/lib/billing/subscription-service";
+import { prisma } from "@/lib/db/prisma";
 import {
   hasOrganizationRole,
   isOrganizationAdminRole,
@@ -93,7 +95,10 @@ function revalidateUserManagementPaths() {
 
 async function getAdminActionContext(): Promise<{
   organizationId: string;
+  organizationName: string | null;
   userId: string;
+  userName: string | null;
+  userEmail: string | null;
   role: OrganizationUserRole;
   requestHeaders: Headers;
 }> {
@@ -108,9 +113,14 @@ async function getAdminActionContext(): Promise<{
     throw new Error("Somente administradores podem gerenciar usuarios.");
   }
 
+  await assertOrganizationNotBlockedAfterExpiredTrial(tenantContext.organizationId);
+
   return {
     organizationId: tenantContext.organizationId,
+    organizationName: tenantContext.organizationName,
     userId: tenantContext.session.user.id,
+    userName: tenantContext.session.user.name?.trim() || null,
+    userEmail: tenantContext.session.user.email?.trim() || null,
     role: tenantContext.role,
     requestHeaders: await headers(),
   };
@@ -308,6 +318,24 @@ export async function removeOrganizationMemberAction(
       return errorState("Proprietario nao pode ser removido por esta operacao.");
     }
 
+    let removedUserEmail = targetMember.user?.email?.trim().toLowerCase() || "";
+    let removedUserName = targetMember.user?.name?.trim() || null;
+    if (!removedUserEmail) {
+      const removedUser = await prisma.user.findUnique({
+        where: {
+          id: targetMember.userId,
+        },
+        select: {
+          email: true,
+          name: true,
+        },
+      });
+      removedUserEmail = removedUser?.email?.trim().toLowerCase() || "";
+      if (!removedUserName) {
+        removedUserName = removedUser?.name?.trim() || null;
+      }
+    }
+
     await auth.api.removeMember({
       headers: context.requestHeaders,
       body: {
@@ -315,6 +343,17 @@ export async function removeOrganizationMemberAction(
         memberIdOrEmail: parsed.data.memberId,
       },
     });
+
+    if (removedUserEmail) {
+      await sendMemberRemovedFromOrganizationEmail({
+        recipientEmail: removedUserEmail,
+        recipientName: removedUserName,
+        organizationName: context.organizationName || "organizacao ativa",
+        removedByName: context.userName || context.userEmail || undefined,
+      }).catch((error) => {
+        console.error("Falha ao enviar e-mail de usuario removido.", error);
+      });
+    }
 
     revalidateUserManagementPaths();
     return successState("Usuario removido com sucesso.");

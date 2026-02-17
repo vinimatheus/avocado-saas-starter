@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 
 import type { ProfileActionState } from "@/actions/profile-action-state";
-import { auth } from "@/lib/auth/server";
+import { auth, sendEmailChangeNotifications } from "@/lib/auth/server";
 import {
   profileChangeEmailSchema,
   profileChangePasswordSchema,
@@ -194,6 +194,14 @@ export async function changeProfileEmailAction(
         newEmail: normalizedNewEmail,
         callbackURL: "/profile",
       },
+    });
+
+    await sendEmailChangeNotifications({
+      currentEmail: tenantContext.session.user.email,
+      newEmail: normalizedNewEmail,
+      recipientName: tenantContext.session.user.name?.trim() || null,
+    }).catch((error) => {
+      console.error("Falha ao enviar notificacoes de alteracao de e-mail.", error);
     });
 
     revalidateProfilePaths();

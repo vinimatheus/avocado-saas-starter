@@ -207,7 +207,6 @@ export default async function BillingPage({
   const isPastDueInGrace = subscription.status === "PAST_DUE" && dunning.inGracePeriod;
   const usersInUse = usage.users + usage.pendingInvitations;
   const isDowngradeScheduled = Boolean(subscription.cancelAtPeriodEnd && currentIsPaidPlan);
-  const currentPlanIndex = billingData.plans.findIndex((plan) => plan.code === effectivePlanCode);
   const canRenewCurrentPlan = isPastDueInGrace && currentIsPaidPlan;
   const billingCycleLabel = isPastDueInGrace ? "Fim da carencia" : "Fim do ciclo atual";
   const isCheckoutProcessing = Boolean(checkoutState?.isProcessing);
@@ -222,19 +221,21 @@ export default async function BillingPage({
     restriction.exceededUsers > 0 ? `${restriction.exceededUsers} usuario(s) acima do limite` : null,
   ].filter((value): value is string => Boolean(value));
 
-  const visiblePlans = currentIsPaidPlan
-    ? billingData.plans.filter((plan, index) => {
-        if (!isPaidPlan(plan.code)) {
-          return false;
-        }
+  const visiblePlans = billingData.plans.filter((plan) => {
+    if (!isPaidPlan(plan.code)) {
+      return false;
+    }
 
-        if (canRenewCurrentPlan) {
-          return index >= currentPlanIndex;
-        }
+    if (!currentIsPaidPlan) {
+      return true;
+    }
 
-        return index > currentPlanIndex;
-      })
-    : billingData.plans.filter((plan) => isPaidPlan(plan.code));
+    if (canRenewCurrentPlan) {
+      return true;
+    }
+
+    return plan.code !== effectivePlanCode;
+  });
 
   const visiblePlanCards = visiblePlans.map((plan) => ({
     code: plan.code,

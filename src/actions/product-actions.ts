@@ -10,6 +10,7 @@ import {
   consumeOrganizationMonthlyUsage,
   isFeatureEnabledForOwner,
 } from "@/lib/billing/subscription-service";
+import { maybeSendPlanUsageThresholdAlerts } from "@/lib/auth/server";
 import { isOrganizationAdminRole } from "@/lib/organization/helpers";
 import {
   bulkDeleteOrganizationProducts,
@@ -52,6 +53,7 @@ function isSafeProductErrorMessage(message: string): boolean {
   const safeFragments = [
     "limite do plano",
     "conta em modo restrito",
+    "trial gratuito de",
     "acoes em lote indisponiveis",
     "sessao invalida",
     "usuario sem organizacao ativa",
@@ -245,6 +247,9 @@ export async function createProductAction(
       organizationId: context.organizationId,
       increment: 1,
     });
+    await maybeSendPlanUsageThresholdAlerts({
+      organizationId: context.organizationId,
+    });
 
     revalidateProductPaths();
     return successState("Produto cadastrado com sucesso.");
@@ -307,6 +312,9 @@ export async function updateProductAction(
       organizationId: context.organizationId,
       increment: 1,
     });
+    await maybeSendPlanUsageThresholdAlerts({
+      organizationId: context.organizationId,
+    });
 
     revalidateProductPaths();
     return successState("Produto atualizado com sucesso.");
@@ -344,6 +352,9 @@ export async function deleteProductAction(
     await consumeOrganizationMonthlyUsage({
       organizationId: context.organizationId,
       increment: 1,
+    });
+    await maybeSendPlanUsageThresholdAlerts({
+      organizationId: context.organizationId,
     });
 
     revalidateProductPaths();
@@ -386,6 +397,9 @@ export async function bulkUpdateProductsStatusAction(
       organizationId: context.organizationId,
       increment: updatedCount,
     });
+    await maybeSendPlanUsageThresholdAlerts({
+      organizationId: context.organizationId,
+    });
 
     revalidateProductPaths();
     return successState(`${updatedCount} produto(s) atualizado(s).`);
@@ -424,6 +438,9 @@ export async function bulkDeleteProductsAction(
     await consumeOrganizationMonthlyUsage({
       organizationId: context.organizationId,
       increment: deletedCount,
+    });
+    await maybeSendPlanUsageThresholdAlerts({
+      organizationId: context.organizationId,
     });
 
     revalidateProductPaths();

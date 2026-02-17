@@ -5,7 +5,15 @@ import { redirect } from "next/navigation";
 import { BillingPlanCode } from "@prisma/client";
 import { z } from "zod";
 
-import { auth } from "@/lib/auth/server";
+import {
+  auth,
+  sendSubscriptionCanceledEmail,
+  sendSubscriptionEndingSoonEmail,
+} from "@/lib/auth/server";
+import {
+  getPlanDefinition,
+  isPaidPlan,
+} from "@/lib/billing/plans";
 import {
   cancelOwnerSubscription,
   createPlanCheckoutSession,
@@ -246,6 +254,88 @@ function isNextRedirectError(error: unknown): boolean {
   return typeof digest === "string" && digest.startsWith("NEXT_REDIRECT");
 }
 
+type SubscriptionNotificationSnapshot = {
+  ownerUserId: string;
+  planCode: BillingPlanCode;
+  trialPlanCode: BillingPlanCode | null;
+  currentPeriodEnd: Date | null;
+  canceledAt: Date | null;
+};
+
+function resolvePlanCodeForNotification(
+  subscription: Pick<SubscriptionNotificationSnapshot, "planCode" | "trialPlanCode">,
+): BillingPlanCode {
+  if (subscription.trialPlanCode && !isPaidPlan(subscription.planCode)) {
+    return subscription.trialPlanCode;
+  }
+
+  return subscription.planCode;
+}
+
+async function sendPlanCancellationNotification(input: {
+  organizationId: string;
+  immediate: boolean;
+  beforeCancel: SubscriptionNotificationSnapshot;
+  afterCancel: SubscriptionNotificationSnapshot;
+}): Promise<void> {
+  try {
+    const [owner, organization] = await Promise.all([
+      prisma.user.findUnique({
+        where: {
+          id: input.beforeCancel.ownerUserId,
+        },
+        select: {
+          email: true,
+          name: true,
+        },
+      }),
+      prisma.organization.findUnique({
+        where: {
+          id: input.organizationId,
+        },
+        select: {
+          name: true,
+        },
+      }),
+    ]);
+
+    const ownerEmail = owner?.email?.trim().toLowerCase() || "";
+    if (!ownerEmail) {
+      return;
+    }
+
+    const organizationName = organization?.name?.trim() || "organizacao";
+    const planCode = resolvePlanCodeForNotification(input.beforeCancel);
+    const planName = getPlanDefinition(planCode).name;
+
+    if (input.immediate) {
+      await sendSubscriptionCanceledEmail({
+        recipientEmail: ownerEmail,
+        recipientName: owner?.name?.trim() || null,
+        organizationName,
+        planName,
+        canceledAt: input.afterCancel.canceledAt ?? new Date(),
+      });
+      return;
+    }
+
+    const periodEndsAt = input.afterCancel.currentPeriodEnd ?? input.beforeCancel.currentPeriodEnd;
+    if (!periodEndsAt) {
+      return;
+    }
+
+    await sendSubscriptionEndingSoonEmail({
+      recipientEmail: ownerEmail,
+      recipientName: owner?.name?.trim() || null,
+      organizationName,
+      planName,
+      periodEndsAt,
+    });
+  } catch (error) {
+    console.error("Falha ao enviar notificacao de cancelamento/vencimento de plano.", error);
+  }
+}
+
 async function applyBillingPayloadFromFormData(input: {
   organizationId: string;
   formData: FormData;
@@ -338,7 +428,25 @@ export async function createPlanCheckoutAction(formData: FormData): Promise<void
         redirectWithMessage("success", "Sua conta já está no plano Free.");
       }
 
-      await cancelOwnerSubscription(organizationId, false);
+      const updatedSubscription = await cancelOwnerSubscription(organizationId, false);
+      await sendPlanCancellationNotification({
+        organizationId,
+        immediate: false,
+        beforeCancel: {
+          ownerUserId: entitlements.subscription.ownerUserId,
+          planCode: entitlements.subscription.planCode,
+          trialPlanCode: entitlements.subscription.trialPlanCode,
+          currentPeriodEnd: entitlements.subscription.currentPeriodEnd,
+          canceledAt: entitlements.subscription.canceledAt,
+        },
+        afterCancel: {
+          ownerUserId: updatedSubscription.ownerUserId,
+          planCode: updatedSubscription.planCode,
+          trialPlanCode: updatedSubscription.trialPlanCode,
+          currentPeriodEnd: updatedSubscription.currentPeriodEnd,
+          canceledAt: updatedSubscription.canceledAt,
+        },
+      });
       revalidatePath("/billing");
       redirectWithMessage("success", "Downgrade para Free agendado para o fim do período.");
     }
@@ -432,7 +540,25 @@ export async function cancelSubscriptionAction(formData: FormData): Promise<void
 
   try {
     const subscription = await ensureOwnerSubscription(organizationId);
-    await cancelOwnerSubscription(organizationId, parsed.data.immediate);
+    const canceledSubscription = await cancelOwnerSubscription(organizationId, parsed.data.immediate);
+    await sendPlanCancellationNotification({
+      organizationId,
+      immediate: parsed.data.immediate,
+      beforeCancel: {
+        ownerUserId: subscription.ownerUserId,
+        planCode: subscription.planCode,
+        trialPlanCode: subscription.trialPlanCode,
+        currentPeriodEnd: subscription.currentPeriodEnd,
+        canceledAt: subscription.canceledAt,
+      },
+      afterCancel: {
+        ownerUserId: canceledSubscription.ownerUserId,
+        planCode: canceledSubscription.planCode,
+        trialPlanCode: canceledSubscription.trialPlanCode,
+        currentPeriodEnd: canceledSubscription.currentPeriodEnd,
+        canceledAt: canceledSubscription.canceledAt,
+      },
+    });
     let feedbackSaved = true;
 
     try {

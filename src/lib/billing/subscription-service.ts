@@ -37,10 +37,13 @@ import {
 
 export const DEFAULT_USAGE_METRIC_KEY = "workspace_events";
 export const DEFAULT_PAST_DUE_GRACE_DAYS = 28;
+export const EXPIRED_TRIAL_BLOCK_MESSAGE = `O trial gratuito de ${DEFAULT_TRIAL_DAYS} dias expirou. Esta organizacao esta bloqueada ate a contratacao de um plano pago.`;
 const DEFAULT_CHECKOUT_PENDING_TIMEOUT_MINUTES = 5;
 const MAX_CHECKOUT_PENDING_TIMEOUT_MINUTES = 5;
 const PAST_DUE_REMINDER_DAYS = [7, 14, 21] as const;
+const DUNNING_EMAIL_DAYS = [1, 3, 7, 14] as const;
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_NEW_ORGANIZATION_TRIAL_PLAN_CODE = BillingPlanCode.STARTER_50;
 
 type OwnerUsageSnapshot = {
   organizations: number;
@@ -51,6 +54,7 @@ type OwnerUsageSnapshot = {
 };
 
 type DunningReminderCheckpoint = (typeof PAST_DUE_REMINDER_DAYS)[number] | null;
+type DunningEmailDay = (typeof DUNNING_EMAIL_DAYS)[number];
 
 type OwnerDunningState = {
   inGracePeriod: boolean;
@@ -83,6 +87,41 @@ export type OwnerFeatureStatus = {
   enabled: boolean;
   source: "override" | "plan" | "rollout" | "disabled";
 };
+
+function resolveOrganizationBlockMessageFromSubscription(
+  subscription: Pick<
+    OwnerSubscription,
+    "status" | "trialUsedAt" | "trialEndsAt" | "planCode" | "currentPeriodEnd"
+  >,
+): string | null {
+  if (!subscription.trialUsedAt || !subscription.trialEndsAt) {
+    return null;
+  }
+
+  const now = new Date();
+  if (subscription.trialEndsAt > now) {
+    return null;
+  }
+
+  const hasPaidAccess =
+    isPaidPlan(subscription.planCode) &&
+    ((subscription.status === SubscriptionStatus.ACTIVE &&
+      (!subscription.currentPeriodEnd || subscription.currentPeriodEnd > now)) ||
+      (subscription.status === SubscriptionStatus.PAST_DUE &&
+        subscription.currentPeriodEnd &&
+        subscription.currentPeriodEnd > now));
+
+  return hasPaidAccess ? null : EXPIRED_TRIAL_BLOCK_MESSAGE;
+}
+
+export function isOrganizationBlockedAfterExpiredTrial(
+  subscription: Pick<
+    OwnerSubscription,
+    "status" | "trialUsedAt" | "trialEndsAt" | "planCode" | "currentPeriodEnd"
+  >,
+): boolean {
+  return resolveOrganizationBlockMessageFromSubscription(subscription) !== null;
+}
 
 function addDays(date: Date, days: number): Date {
   const nextDate = new Date(date);
@@ -255,6 +294,26 @@ function resolveDunningCheckpoint(daysInGracePeriod: number): DunningReminderChe
   return null;
 }
 
+function resolveApplicableDunningEmailDay(
+  graceStartedAt: Date,
+  now: Date = new Date(),
+): DunningEmailDay | null {
+  const elapsedDays = Math.max(
+    0,
+    Math.floor((now.getTime() - graceStartedAt.getTime()) / DAY_IN_MS),
+  );
+  const currentGraceDay = elapsedDays + 1;
+
+  for (let index = DUNNING_EMAIL_DAYS.length - 1; index >= 0; index -= 1) {
+    const day = DUNNING_EMAIL_DAYS[index];
+    if (currentGraceDay >= day) {
+      return day;
+    }
+  }
+
+  return null;
+}
+
 function buildOwnerDunningState(subscription: OwnerSubscription): OwnerDunningState {
   const now = new Date();
 
@@ -388,10 +447,14 @@ async function setSubscriptionAsExpiredIfNeeded(
         organizationId: subscription.organizationId,
       },
       data: {
-        status: SubscriptionStatus.FREE,
+        status: SubscriptionStatus.EXPIRED,
         planCode: BillingPlanCode.FREE,
         pendingPlanCode: null,
         trialPlanCode: null,
+        currentPeriodStart: null,
+        currentPeriodEnd: null,
+        cancelAtPeriodEnd: false,
+        canceledAt: now,
       },
     });
   }
@@ -521,6 +584,7 @@ export async function ensureOwnerSubscription(
   }
 
   const basicProfile = await getOwnerBasicProfile(ownerUserId);
+  const trialWindow = nowInPeriod(DEFAULT_TRIAL_DAYS);
 
   const upsertPayload = {
     where: {
@@ -529,8 +593,12 @@ export async function ensureOwnerSubscription(
     create: {
       organizationId,
       ownerUserId,
-      status: SubscriptionStatus.FREE,
+      status: SubscriptionStatus.TRIALING,
       planCode: BillingPlanCode.FREE,
+      trialPlanCode: DEFAULT_NEW_ORGANIZATION_TRIAL_PLAN_CODE,
+      trialStartedAt: trialWindow.start,
+      trialEndsAt: trialWindow.end,
+      trialUsedAt: trialWindow.start,
       billingName: basicProfile.name,
     },
     update: {
@@ -680,6 +748,33 @@ function assertNotRestricted(entitlements: OwnerEntitlements): void {
   throw new Error(buildRestrictionErrorMessage(entitlements.restriction));
 }
 
+function assertNotBlockedByExpiredTrial(entitlements: OwnerEntitlements): void {
+  const blockMessage = resolveOrganizationBlockMessageFromSubscription(entitlements.subscription);
+  if (!blockMessage) {
+    return;
+  }
+
+  throw new Error(blockMessage);
+}
+
+export async function getOrganizationBlockMessage(
+  organizationId: string,
+): Promise<string | null> {
+  const entitlements = await getOwnerEntitlements(organizationId);
+  return resolveOrganizationBlockMessageFromSubscription(entitlements.subscription);
+}
+
+export async function assertOrganizationNotBlockedAfterExpiredTrial(
+  organizationId: string,
+): Promise<void> {
+  const blockMessage = await getOrganizationBlockMessage(organizationId);
+  if (!blockMessage) {
+    return;
+  }
+
+  throw new Error(blockMessage);
+}
+
 export async function assertOwnerCanCreateOrganization(ownerUserId: string): Promise<void> {
   const normalizedOwnerUserId = ownerUserId.trim();
   if (!normalizedOwnerUserId) {
@@ -756,6 +851,7 @@ export async function assertOrganizationCanCreateInvitation(
   }
 
   const entitlements = await getOwnerEntitlements(organizationId);
+  assertNotBlockedByExpiredTrial(entitlements);
   const plan = getPlanDefinition(entitlements.effectivePlanCode);
   const maxAllowed = plan.limits.maxUsers;
 
@@ -774,6 +870,7 @@ export async function assertOrganizationCanAddMember(
   targetUserId?: string,
 ): Promise<void> {
   const entitlements = await getOwnerEntitlements(organizationId);
+  assertNotBlockedByExpiredTrial(entitlements);
   const plan = getPlanDefinition(entitlements.effectivePlanCode);
   const maxAllowed = plan.limits.maxUsers;
 
@@ -822,6 +919,7 @@ export async function assertOrganizationCanAcceptInvitation(
   invitationId: string,
 ): Promise<void> {
   const entitlements = await getOwnerEntitlements(organizationId);
+  assertNotBlockedByExpiredTrial(entitlements);
   const plan = getPlanDefinition(entitlements.effectivePlanCode);
   const maxAllowed = plan.limits.maxUsers;
 
@@ -851,6 +949,7 @@ export async function assertOrganizationCanCreateProject(
   increment: number = 1,
 ): Promise<void> {
   const entitlements = await getOwnerEntitlements(organizationId);
+  assertNotBlockedByExpiredTrial(entitlements);
   assertNotRestricted(entitlements);
   const plan = getPlanDefinition(entitlements.effectivePlanCode);
   const maxAllowed = plan.limits.maxProjects;
@@ -872,6 +971,7 @@ export async function assertOrganizationCanConsumeMonthlyUsage(
   metricKey: string = DEFAULT_USAGE_METRIC_KEY,
 ): Promise<void> {
   const entitlements = await getOwnerEntitlements(organizationId, metricKey);
+  assertNotBlockedByExpiredTrial(entitlements);
   assertNotRestricted(entitlements);
   const plan = getPlanDefinition(entitlements.effectivePlanCode);
   const maxAllowed = plan.limits.maxMonthlyUsage;
@@ -2093,6 +2193,159 @@ async function resolveCheckoutFromWebhook(payload: AbacateWebhookPayload) {
   });
 }
 
+type PaymentApprovedNotificationCandidate = {
+  type: "payment-approved";
+  dedupeKey: string;
+  ownerUserId: string;
+  organizationId: string;
+  planCode: BillingPlanCode;
+  amountCents: number;
+  currency: string;
+  paidAt: Date;
+  receiptUrl: string | null;
+  billingUrl: string | null;
+};
+
+type PaymentFailedDunningNotificationCandidate = {
+  type: "payment-failed-dunning";
+  dedupeKey: string;
+  ownerUserId: string;
+  organizationId: string;
+  planCode: BillingPlanCode;
+  dunningDay: DunningEmailDay;
+  graceEndsAt: Date | null;
+  billingUrl: string | null;
+};
+
+type BillingEmailNotificationCandidate =
+  | PaymentApprovedNotificationCandidate
+  | PaymentFailedDunningNotificationCandidate;
+
+async function acquireInternalBillingNotificationMarker(
+  id: string,
+  eventType: string,
+  payload: Prisma.InputJsonValue,
+): Promise<boolean> {
+  try {
+    await prisma.billingWebhookEvent.create({
+      data: {
+        id,
+        provider: "internal",
+        eventType,
+        status: WebhookProcessingStatus.PROCESSED,
+        payload,
+        processedAt: new Date(),
+      },
+    });
+    return true;
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return false;
+    }
+
+    throw error;
+  }
+}
+
+async function dispatchBillingEmailNotification(
+  candidate: BillingEmailNotificationCandidate,
+): Promise<void> {
+  const [owner, organization] = await Promise.all([
+    prisma.user.findUnique({
+      where: {
+        id: candidate.ownerUserId,
+      },
+      select: {
+        email: true,
+        name: true,
+      },
+    }),
+    prisma.organization.findUnique({
+      where: {
+        id: candidate.organizationId,
+      },
+      select: {
+        name: true,
+      },
+    }),
+  ]);
+
+  const recipientEmail = owner?.email?.trim().toLowerCase() || "";
+  if (!recipientEmail) {
+    return;
+  }
+
+  const recipientName = owner?.name?.trim() || null;
+  const organizationName = organization?.name?.trim() || "organizacao";
+  const planName = getPlanDefinition(candidate.planCode).name;
+
+  if (candidate.type === "payment-approved") {
+    const markerCreated = await acquireInternalBillingNotificationMarker(
+      `email:payment_approved:${candidate.organizationId}:${candidate.dedupeKey}`,
+      "email.payment_approved",
+      {
+        organizationId: candidate.organizationId,
+        ownerUserId: candidate.ownerUserId,
+        dedupeKey: candidate.dedupeKey,
+      },
+    );
+    if (!markerCreated) {
+      return;
+    }
+
+    try {
+      const { sendPaymentApprovedEmail } = await import("@/lib/auth/server");
+      await sendPaymentApprovedEmail({
+        recipientEmail,
+        recipientName,
+        organizationName,
+        planName,
+        amountCents: candidate.amountCents,
+        currency: candidate.currency,
+        paidAt: candidate.paidAt,
+        receiptUrl: candidate.receiptUrl,
+        billingUrl: candidate.billingUrl,
+      });
+    } catch (error) {
+      console.error("Falha ao enviar e-mail de pagamento aprovado.", error);
+    }
+    return;
+  }
+
+  const markerCreated = await acquireInternalBillingNotificationMarker(
+    `email:payment_failed_dunning:${candidate.organizationId}:${candidate.dedupeKey}`,
+    "email.payment_failed_dunning",
+    {
+      organizationId: candidate.organizationId,
+      ownerUserId: candidate.ownerUserId,
+      dedupeKey: candidate.dedupeKey,
+      dunningDay: candidate.dunningDay,
+      graceEndsAt: candidate.graceEndsAt ? candidate.graceEndsAt.toISOString() : null,
+    },
+  );
+  if (!markerCreated) {
+    return;
+  }
+
+  try {
+    const { sendPaymentFailedDunningEmail } = await import("@/lib/auth/server");
+    await sendPaymentFailedDunningEmail({
+      recipientEmail,
+      recipientName,
+      organizationName,
+      planName,
+      dunningDay: candidate.dunningDay,
+      graceEndsAt: candidate.graceEndsAt,
+      billingUrl: candidate.billingUrl,
+    });
+  } catch (error) {
+    console.error("Falha ao enviar e-mail de falha de pagamento.", error);
+  }
+}
+
 async function applyWebhookOutcome(
   checkout: {
     id: string;
@@ -2109,6 +2362,7 @@ async function applyWebhookOutcome(
   source: "webhook" | "reconcile" = "webhook",
 ): Promise<void> {
   const now = new Date();
+  let notificationCandidate: BillingEmailNotificationCandidate | null = null;
 
   await prisma.$transaction(async (tx) => {
     const checkoutSnapshot = await tx.billingCheckoutSession.findUnique({
@@ -2120,6 +2374,7 @@ async function applyWebhookOutcome(
         status: true,
         ownerUserId: true,
         subscriptionId: true,
+        organizationId: true,
         targetPlanCode: true,
         amountCents: true,
         currency: true,
@@ -2319,6 +2574,7 @@ async function applyWebhookOutcome(
         status: true,
         planCode: true,
         pendingPlanCode: true,
+        organizationId: true,
         currentPeriodStart: true,
         currentPeriodEnd: true,
       },
@@ -2353,6 +2609,19 @@ async function applyWebhookOutcome(
           canceledAt: null,
         },
       });
+
+      notificationCandidate = {
+        type: "payment-approved",
+        dedupeKey: providerBillingLookupId,
+        ownerUserId: checkoutSnapshot.ownerUserId,
+        organizationId: checkoutSnapshot.organizationId ?? subscriptionSnapshot.organizationId,
+        planCode: checkoutSnapshot.targetPlanCode,
+        amountCents: checkoutSnapshot.amountCents,
+        currency: checkoutSnapshot.currency,
+        paidAt: now,
+        receiptUrl,
+        billingUrl,
+      };
       return;
     }
 
@@ -2432,6 +2701,14 @@ async function applyWebhookOutcome(
             subscriptionSnapshot.currentPeriodEnd &&
               subscriptionSnapshot.currentPeriodEnd > now,
           );
+        const graceStartsAt =
+          hasActiveGraceWindow && subscriptionSnapshot.currentPeriodStart
+            ? subscriptionSnapshot.currentPeriodStart
+            : gracePeriod.start;
+        const graceEndsAt =
+          hasActiveGraceWindow && subscriptionSnapshot.currentPeriodEnd
+            ? subscriptionSnapshot.currentPeriodEnd
+            : gracePeriod.end;
 
         await tx.ownerSubscription.update({
           where: {
@@ -2440,16 +2717,27 @@ async function applyWebhookOutcome(
           data: {
             status: SubscriptionStatus.PAST_DUE,
             pendingPlanCode: null,
-            currentPeriodStart: hasActiveGraceWindow
-              ? subscriptionSnapshot.currentPeriodStart
-              : gracePeriod.start,
-            currentPeriodEnd: hasActiveGraceWindow
-              ? subscriptionSnapshot.currentPeriodEnd
-              : gracePeriod.end,
+            currentPeriodStart: graceStartsAt,
+            currentPeriodEnd: graceEndsAt,
             cancelAtPeriodEnd: false,
             canceledAt: null,
           },
         });
+
+        const dunningDay = resolveApplicableDunningEmailDay(graceStartsAt, now);
+        if (dunningDay) {
+          const graceToken = graceStartsAt.toISOString().slice(0, 10);
+          notificationCandidate = {
+            type: "payment-failed-dunning",
+            dedupeKey: `${checkoutSnapshot.subscriptionId}:${graceToken}:day-${dunningDay}`,
+            ownerUserId: checkoutSnapshot.ownerUserId,
+            organizationId: checkoutSnapshot.organizationId ?? subscriptionSnapshot.organizationId,
+            planCode: checkoutSnapshot.targetPlanCode,
+            dunningDay,
+            graceEndsAt,
+            billingUrl,
+          };
+        }
         return;
       }
     }
@@ -2463,6 +2751,16 @@ async function applyWebhookOutcome(
       },
     });
   });
+
+  if (!notificationCandidate) {
+    return;
+  }
+
+  try {
+    await dispatchBillingEmailNotification(notificationCandidate);
+  } catch (error) {
+    console.error("Falha ao processar notificacao de billing por e-mail.", error);
+  }
 }
 
 export async function processAbacateWebhook(payloadInput: unknown): Promise<{
