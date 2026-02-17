@@ -534,6 +534,31 @@ export function OrganizationManagementDialog({
               </Breadcrumb>
             </header>
 
+            <nav
+              aria-label="Secoes de gerenciamento"
+              className="border-b px-3 py-2 md:hidden"
+            >
+              <div className="flex gap-1 overflow-x-auto">
+                {sections.map((section) => (
+                  <button
+                    key={section.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedSectionState(section.id)
+                    }}
+                    className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-xs whitespace-nowrap transition-colors ${
+                      selectedSection === section.id
+                        ? "bg-background text-foreground border-border shadow-sm"
+                        : "text-muted-foreground border-transparent hover:text-foreground"
+                    }`}
+                  >
+                    <section.icon className="size-3.5" />
+                    <span>{section.label}</span>
+                  </button>
+                ))}
+              </div>
+            </nav>
+
             <div
               className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col gap-4 overflow-y-auto p-4"
               style={{ scrollbarGutter: "stable" }}
