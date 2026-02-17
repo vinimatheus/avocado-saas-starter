@@ -69,13 +69,28 @@ export default async function CompanyOnboardingPage({
   }
 
   return (
-    <main className="bg-muted/40 flex min-h-screen items-center justify-center px-4 py-10">
-      <CompanyOnboardingForm
-        userName={tenantContext.session.user.name}
-        userImage={(tenantContext.session.user as { image?: string | null }).image ?? null}
-        initialCompanyName={initialCompanyName}
-        redirectPath={redirectPath}
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute left-1/2 top-0 h-72 w-72 -translate-x-1/2 rounded-full bg-primary/15 blur-3xl"
       />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute bottom-0 right-0 h-72 w-72 rounded-full bg-accent/15 blur-3xl"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute bottom-8 left-0 h-56 w-56 rounded-full bg-emerald-500/10 blur-3xl"
+      />
+
+      <div className="relative w-full">
+        <CompanyOnboardingForm
+          userName={tenantContext.session.user.name}
+          userImage={(tenantContext.session.user as { image?: string | null }).image ?? null}
+          initialCompanyName={initialCompanyName}
+          redirectPath={redirectPath}
+        />
+      </div>
     </main>
   );
 }
