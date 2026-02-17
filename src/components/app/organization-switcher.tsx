@@ -60,6 +60,7 @@ type OrganizationSwitcherProps = {
   fallbackOrganizationName?: string | null;
   organizations: OrganizationSwitcherItem[];
   role: OrganizationUserRole;
+  onOrganizationSwitch?: () => void;
 };
 
 function toOrganizationItems(
@@ -133,6 +134,7 @@ export function OrganizationSwitcher({
   fallbackOrganizationName = null,
   organizations: initialOrganizations,
   role,
+  onOrganizationSwitch,
 }: OrganizationSwitcherProps) {
   const router = useRouter();
   const [isSwitchingOrganization, startTransition] = useTransition();
@@ -273,6 +275,7 @@ export function OrganizationSwitcher({
       }
 
       toast.success(`Organizacao ativa: ${organizationName}.`);
+      onOrganizationSwitch?.();
       router.replace("/dashboard");
       router.refresh();
     });

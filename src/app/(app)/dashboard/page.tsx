@@ -33,6 +33,7 @@ function formatDate(value: Date): string {
 
 export default async function DashboardPage() {
   const tenantContext = await getTenantContext();
+  const activeOrganizationName = tenantContext.organizationName?.trim() || "sua organizacao";
   const insights = await getDashboardInsights(tenantContext.organizationId!);
 
   return (
@@ -40,9 +41,9 @@ export default async function DashboardPage() {
       <StatusBanner message={insights.errorMessage} />
 
       <AppPageHighlightCard
-        eyebrow="Painel"
+        eyebrow={`Painel - ${activeOrganizationName}`}
         title="Seu painel com visao clara para decidir mais rapido"
-        description="Acompanhe usuarios, time e produtos em um unico lugar e mantenha sua operacao evoluindo com previsibilidade."
+        description={`Acompanhe usuarios, time e produtos da organizacao ${activeOrganizationName} em um unico lugar e mantenha sua operacao evoluindo com previsibilidade.`}
         imageSrc="/img/dashboard.png"
         imageAlt="avocado mexendo no computador"
       />

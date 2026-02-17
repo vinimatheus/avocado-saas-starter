@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ArrowUpRightIcon, LayoutDashboardIcon, PackageSearchIcon, SparklesIcon } from "lucide-react";
@@ -84,7 +85,7 @@ function AppSidebar({
   userImage,
 }: Omit<AppShellProps, "children" | "pendingInvitations">) {
   const pathname = usePathname();
-  const { isMobile, open, openMobile } = useSidebar();
+  const { isMobile, open, openMobile, setOpenMobile } = useSidebar();
   const activeOrganization =
     organizations.find((organization) => organization.id === activeOrganizationId) ??
     organizations.find((organization) => organization.name === organizationName) ??
@@ -92,6 +93,14 @@ function AppSidebar({
     null;
   const shouldShowUpgradePrompt =
     (isMobile ? openMobile : open) && activeOrganization?.planCode === "FREE";
+
+  useEffect(() => {
+    if (!isMobile) {
+      return;
+    }
+
+    setOpenMobile(false);
+  }, [activeOrganizationId, organizationName, isMobile, pathname, setOpenMobile]);
 
   return (
     <Sidebar collapsible="icon">
@@ -116,6 +125,13 @@ function AppSidebar({
               activeOrganizationId={activeOrganizationId ?? null}
               fallbackOrganizationName={organizationName}
               role={role}
+              onOrganizationSwitch={() => {
+                if (!isMobile) {
+                  return;
+                }
+
+                setOpenMobile(false);
+              }}
             />
           </SidebarMenuItem>
         </SidebarMenu>
