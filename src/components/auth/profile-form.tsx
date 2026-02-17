@@ -49,6 +49,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { authClient } from "@/lib/auth/client";
 import { localizeAuthErrorMessage } from "@/lib/auth/error-messages";
 import {
@@ -569,8 +570,20 @@ export function ProfileForm({
   const profileInitials = initialsFromName(initialName);
 
   return (
-    <div className="space-y-6">
-      <Card>
+    <Tabs defaultValue="profile" className="w-full">
+      <TabsList className="grid h-auto w-full grid-cols-2">
+        <TabsTrigger value="profile">
+          <UserRoundIcon />
+          Perfil e identidade
+        </TabsTrigger>
+        <TabsTrigger value="security">
+          <ShieldCheckIcon />
+          Seguranca da conta
+        </TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="profile" forceMount className="mt-0">
+        <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <UserRoundIcon className="size-4" />
@@ -723,9 +736,11 @@ export function ProfileForm({
             Salvar alteracoes
           </FormSubmitButton>
         </CardFooter>
-      </Card>
+        </Card>
+      </TabsContent>
 
-      <Card>
+      <TabsContent value="security" forceMount className="mt-0">
+        <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <ShieldCheckIcon className="size-4" />
@@ -1115,7 +1130,8 @@ export function ProfileForm({
             </div>
           ) : null}
         </CardContent>
-      </Card>
-    </div>
+        </Card>
+      </TabsContent>
+    </Tabs>
   );
 }
