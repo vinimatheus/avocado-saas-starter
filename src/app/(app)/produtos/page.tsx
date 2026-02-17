@@ -8,8 +8,12 @@ import { StatusBanner } from "@/components/app/status-banner";
 import { ProductsDataTable } from "@/components/templates/products-data-table";
 import { Card, CardContent } from "@/components/ui/card";
 import { getOrganizationBlockMessage } from "@/lib/billing/subscription-service";
-import { isOrganizationAdminRole } from "@/lib/organization/helpers";
-import { canRoleCreateProduct } from "@/lib/organization/permissions";
+import {
+  canRoleCreateProduct,
+  canRoleDeleteProducts,
+  canRoleReadProducts,
+  canRoleUpdateProducts,
+} from "@/lib/organization/permissions";
 import { listOrganizationProducts } from "@/lib/products/repository";
 import { productStatusSchema } from "@/lib/products/schemas";
 import { getTenantContext } from "@/lib/organization/tenant-context";
@@ -116,8 +120,14 @@ export default async function ProductsPage({
     }
   }
 
-  const canManage = isOrganizationAdminRole(tenantContext.role);
+  const canRead = canRoleReadProducts(tenantContext.role, tenantContext.permissions);
+  if (!canRead) {
+    redirect("/dashboard");
+  }
+
   const canCreate = canRoleCreateProduct(tenantContext.role, tenantContext.permissions);
+  const canUpdate = canRoleUpdateProducts(tenantContext.role, tenantContext.permissions);
+  const canDelete = canRoleDeleteProducts(tenantContext.role, tenantContext.permissions);
   const productsResult = await listProducts(organizationId);
 
   return (
@@ -136,8 +146,9 @@ export default async function ProductsPage({
         <CardContent className="pt-6">
           <ProductsDataTable
             products={productsResult.items}
-            canManage={canManage}
             canCreate={canCreate}
+            canUpdate={canUpdate}
+            canDelete={canDelete}
             initialSearchQuery={initialSearchQuery}
           />
         </CardContent>

@@ -120,8 +120,9 @@ export type ProductTableItem = {
 
 type ProductsDataTableProps = {
   products: ProductTableItem[];
-  canManage: boolean;
   canCreate: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
   initialSearchQuery?: string;
 };
 
@@ -131,7 +132,8 @@ type ProductFormFieldsProps = {
 
 type ProductRowActionsProps = {
   product: ProductTableItem;
-  canManage: boolean;
+  canUpdate: boolean;
+  canDelete: boolean;
   onEdit: (product: ProductTableItem) => void;
   onChangeStatus: (productId: string, nextStatus: ProductStatus) => void;
   onDelete: (product: ProductTableItem) => void;
@@ -417,12 +419,13 @@ function ProductFormFields({ form }: ProductFormFieldsProps) {
 
 function ProductRowActions({
   product,
-  canManage,
+  canUpdate,
+  canDelete,
   onEdit,
   onChangeStatus,
   onDelete,
 }: ProductRowActionsProps) {
-  if (!canManage) {
+  if (!canUpdate && !canDelete) {
     return null;
   }
 
@@ -436,23 +439,29 @@ function ProductRowActions({
 
       <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuLabel>Acoes</DropdownMenuLabel>
-        <DropdownMenuItem onSelect={() => onEdit(product)}>
-          <PencilLineIcon data-icon="inline-start" />
-          Editar produto
-        </DropdownMenuItem>
+        {canUpdate ? (
+          <>
+            <DropdownMenuItem onSelect={() => onEdit(product)}>
+              <PencilLineIcon data-icon="inline-start" />
+              Editar produto
+            </DropdownMenuItem>
 
-        <DropdownMenuSeparator />
+            <DropdownMenuSeparator />
 
-        <DropdownMenuItem onSelect={() => onChangeStatus(product.id, "active")}>Marcar como ativo</DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => onChangeStatus(product.id, "draft")}>Marcar como rascunho</DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => onChangeStatus(product.id, "archived")}>Marcar como arquivado</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onChangeStatus(product.id, "active")}>Marcar como ativo</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onChangeStatus(product.id, "draft")}>Marcar como rascunho</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onChangeStatus(product.id, "archived")}>Marcar como arquivado</DropdownMenuItem>
+          </>
+        ) : null}
 
-        <DropdownMenuSeparator />
+        {canUpdate && canDelete ? <DropdownMenuSeparator /> : null}
 
-        <DropdownMenuItem variant="destructive" onSelect={() => onDelete(product)}>
-          <Trash2Icon data-icon="inline-start" />
-          Remover produto
-        </DropdownMenuItem>
+        {canDelete ? (
+          <DropdownMenuItem variant="destructive" onSelect={() => onDelete(product)}>
+            <Trash2Icon data-icon="inline-start" />
+            Remover produto
+          </DropdownMenuItem>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -505,12 +514,14 @@ function ColumnVisibilityMenu({ columns }: { columns: Column<ProductTableItem, u
 
 export function ProductsDataTable({
   products,
-  canManage,
   canCreate,
+  canUpdate,
+  canDelete,
   initialSearchQuery = "",
 }: ProductsDataTableProps) {
   const router = useRouter();
   const normalizedInitialSearchQuery = initialSearchQuery.trim();
+  const canSelectRows = canUpdate || canDelete;
 
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -635,6 +646,10 @@ export function ProductsDataTable({
 
   const handleDeleteProduct = useCallback(
     (productId: string) => {
+      if (!canDelete) {
+        return;
+      }
+
       const payload = new FormData();
       payload.set("productId", productId);
 
@@ -642,11 +657,15 @@ export function ProductsDataTable({
         deleteAction(payload);
       });
     },
-    [deleteAction],
+    [canDelete, deleteAction],
   );
 
   const handleBulkStatus = useCallback(
     (productIds: string[], status: ProductStatus) => {
+      if (!canUpdate) {
+        return;
+      }
+
       const payload = new FormData();
       for (const productId of productIds) {
         payload.append("productIds", productId);
@@ -657,11 +676,15 @@ export function ProductsDataTable({
         bulkStatusAction(payload);
       });
     },
-    [bulkStatusAction],
+    [bulkStatusAction, canUpdate],
   );
 
   const handleBulkDelete = useCallback(
     (productIds: string[]) => {
+      if (!canDelete) {
+        return;
+      }
+
       const payload = new FormData();
       for (const productId of productIds) {
         payload.append("productIds", productId);
@@ -671,24 +694,32 @@ export function ProductsDataTable({
         bulkDeleteAction(payload);
       });
     },
-    [bulkDeleteAction],
+    [bulkDeleteAction, canDelete],
   );
 
   const handleOpenSingleDeleteDialog = useCallback((product: ProductTableItem) => {
+    if (!canDelete) {
+      return;
+    }
+
     setDeleteDialogState({
       mode: "single",
       productId: product.id,
       productName: product.name,
     });
-  }, []);
+  }, [canDelete]);
 
   const handleOpenBulkDeleteDialog = useCallback((productIds: string[], count: number) => {
+    if (!canDelete) {
+      return;
+    }
+
     setDeleteDialogState({
       mode: "bulk",
       productIds: [...productIds],
       count,
     });
-  }, []);
+  }, [canDelete]);
 
   const handleConfirmDelete = useCallback(() => {
     setDeleteDialogState((current) => {
@@ -802,12 +833,10 @@ export function ProductsDataTable({
       },
     ];
 
-    if (!canManage) {
-      return coreColumns;
-    }
+    const columnsWithPermissions: ColumnDef<ProductTableItem>[] = [];
 
-    return [
-      {
+    if (canSelectRows) {
+      columnsWithPermissions.push({
         id: "select",
         header: ({ table }) => (
           <RowSelectCheckbox
@@ -830,16 +859,21 @@ export function ProductsDataTable({
         ),
         enableSorting: false,
         enableHiding: false,
-      },
-      ...coreColumns,
-      {
+      });
+    }
+
+    columnsWithPermissions.push(...coreColumns);
+
+    if (canUpdate || canDelete) {
+      columnsWithPermissions.push({
         id: "actions",
         enableHiding: false,
         cell: ({ row }) => (
           <div className="text-right">
             <ProductRowActions
               product={row.original}
-              canManage={canManage}
+              canUpdate={canUpdate}
+              canDelete={canDelete}
               onEdit={handleOpenEdit}
               onChangeStatus={(productId, status) => {
                 handleBulkStatus([productId], status);
@@ -848,9 +882,11 @@ export function ProductsDataTable({
             />
           </div>
         ),
-      },
-    ];
-  }, [canManage, handleBulkStatus, handleOpenEdit, handleOpenSingleDeleteDialog]);
+      });
+    }
+
+    return columnsWithPermissions;
+  }, [canDelete, canSelectRows, canUpdate, handleBulkStatus, handleOpenEdit, handleOpenSingleDeleteDialog]);
 
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Table API is designed around mutable table instance methods.
   const table = useReactTable({
@@ -865,7 +901,7 @@ export function ProductsDataTable({
       globalFilter,
       pagination,
     },
-    enableRowSelection: canManage,
+    enableRowSelection: canSelectRows,
     globalFilterFn: globalProductFilter,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
@@ -1025,64 +1061,70 @@ export function ProductsDataTable({
         })}
       </div>
 
-      {canManage && selectedCount > 0 ? (
+      {canSelectRows && selectedCount > 0 ? (
         <div className="ring-foreground/5 bg-background flex flex-wrap items-center gap-2 rounded-2xl border p-2 shadow-sm ring-1">
           <div className="bg-muted/80 text-muted-foreground rounded-full px-3 py-1 text-xs font-medium">
             {selectedCount} selecionado(s)
           </div>
 
-          <Button
-            size="sm"
-            variant="outline"
-            className="rounded-full"
-            disabled={isBulkActionPending}
-            onClick={() => {
-              handleBulkStatus(selectedIds, "active");
-            }}
-          >
-            <CheckIcon data-icon="inline-start" />
-            Ativar
-          </Button>
+          {canUpdate ? (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                className="rounded-full"
+                disabled={isBulkActionPending}
+                onClick={() => {
+                  handleBulkStatus(selectedIds, "active");
+                }}
+              >
+                <CheckIcon data-icon="inline-start" />
+                Ativar
+              </Button>
 
-          <Button
-            size="sm"
-            variant="outline"
-            className="rounded-full"
-            disabled={isBulkActionPending}
-            onClick={() => {
-              handleBulkStatus(selectedIds, "draft");
-            }}
-          >
-            <PencilLineIcon data-icon="inline-start" />
-            Rascunho
-          </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="rounded-full"
+                disabled={isBulkActionPending}
+                onClick={() => {
+                  handleBulkStatus(selectedIds, "draft");
+                }}
+              >
+                <PencilLineIcon data-icon="inline-start" />
+                Rascunho
+              </Button>
 
-          <Button
-            size="sm"
-            variant="outline"
-            className="rounded-full"
-            disabled={isBulkActionPending}
-            onClick={() => {
-              handleBulkStatus(selectedIds, "archived");
-            }}
-          >
-            <ArchiveIcon data-icon="inline-start" />
-            Arquivar
-          </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="rounded-full"
+                disabled={isBulkActionPending}
+                onClick={() => {
+                  handleBulkStatus(selectedIds, "archived");
+                }}
+              >
+                <ArchiveIcon data-icon="inline-start" />
+                Arquivar
+              </Button>
+            </>
+          ) : null}
 
           <div className="ml-auto flex items-center gap-1.5">
-            <Button
-              size="sm"
-              variant="destructive"
-              className="rounded-full"
-              disabled={isBulkActionPending}
-              onClick={() => {
-                handleOpenBulkDeleteDialog(selectedIds, selectedCount);
-              }}
-            >
-              <Trash2Icon data-icon="inline-start" />
-              Excluir
-            </Button>
+            {canDelete ? (
+              <Button
+                size="sm"
+                variant="destructive"
+                className="rounded-full"
+                disabled={isBulkActionPending}
+                onClick={() => {
+                  handleOpenBulkDeleteDialog(selectedIds, selectedCount);
+                }}
+              >
+                <Trash2Icon data-icon="inline-start" />
+                Excluir
+              </Button>
+            ) : null}
 
             <Button
               size="sm"
@@ -1216,7 +1258,7 @@ export function ProductsDataTable({
         </div>
       </div>
 
-      {canManage ? (
+      {canUpdate ? (
         <Sheet
           open={editSheetOpen}
           onOpenChange={(open) => {
@@ -1253,34 +1295,36 @@ export function ProductsDataTable({
         </Sheet>
       ) : null}
 
-      <AlertDialog
-        open={deleteDialogState !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setDeleteDialogState(null);
-          }
-        }}
-      >
-        <AlertDialogContent size="sm">
-          <AlertDialogHeader>
-            <AlertDialogMedia className="bg-destructive/15 text-destructive">
-              <Trash2Icon />
-            </AlertDialogMedia>
-            <AlertDialogTitle>Confirmar exclusao</AlertDialogTitle>
-            <AlertDialogDescription>
-              {deleteDialogState?.mode === "single"
-                ? `Voce esta prestes a excluir o produto \"${deleteDialogState.productName}\". Esta acao nao pode ser desfeita.`
-                : `Voce esta prestes a excluir ${deleteDialogState?.count ?? 0} produto(s) selecionado(s). Esta acao nao pode ser desfeita.`}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction variant="destructive" onClick={handleConfirmDelete}>
-              Excluir
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {canDelete ? (
+        <AlertDialog
+          open={deleteDialogState !== null}
+          onOpenChange={(open) => {
+            if (!open) {
+              setDeleteDialogState(null);
+            }
+          }}
+        >
+          <AlertDialogContent size="sm">
+            <AlertDialogHeader>
+              <AlertDialogMedia className="bg-destructive/15 text-destructive">
+                <Trash2Icon />
+              </AlertDialogMedia>
+              <AlertDialogTitle>Confirmar exclusao</AlertDialogTitle>
+              <AlertDialogDescription>
+                {deleteDialogState?.mode === "single"
+                  ? `Voce esta prestes a excluir o produto \"${deleteDialogState.productName}\". Esta acao nao pode ser desfeita.`
+                  : `Voce esta prestes a excluir ${deleteDialogState?.count ?? 0} produto(s) selecionado(s). Esta acao nao pode ser desfeita.`}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction variant="destructive" onClick={handleConfirmDelete}>
+                Excluir
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      ) : null}
 
       {isDeletePending ? <span className="sr-only">Removendo produto</span> : null}
     </div>

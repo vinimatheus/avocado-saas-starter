@@ -2,6 +2,7 @@
 
 import { Prisma } from "@prisma/client";
 
+import { canRoleReadProducts } from "@/lib/organization/permissions";
 import { getTenantContext } from "@/lib/organization/tenant-context";
 import { searchOrganizationProducts } from "@/lib/products/repository";
 import { productStatusSchema } from "@/lib/products/schemas";
@@ -50,6 +51,11 @@ export async function searchProductsAction(
 ): Promise<ProductSearchActionResult> {
   const tenantContext = await getTenantContext();
   if (!tenantContext.session?.user || !tenantContext.organizationId) {
+    return {
+      items: [],
+    };
+  }
+  if (!canRoleReadProducts(tenantContext.role, tenantContext.permissions)) {
     return {
       items: [],
     };

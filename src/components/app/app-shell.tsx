@@ -35,7 +35,11 @@ import {
 } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { OrganizationUserRole } from "@/lib/organization/helpers";
-import type { OrganizationPermissions } from "@/lib/organization/permissions";
+import {
+  canRoleReadProducts,
+  defaultOrganizationPermissions,
+  type OrganizationPermissions,
+} from "@/lib/organization/permissions";
 
 type AppShellProps = {
   activeOrganizationId?: string | null;
@@ -61,7 +65,7 @@ type NavItem = {
   label: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
-  showWhen: (role: OrganizationUserRole) => boolean;
+  showWhen: (role: OrganizationUserRole, permissions: OrganizationPermissions) => boolean;
 };
 
 const NAV_ITEMS: NavItem[] = [
@@ -75,9 +79,22 @@ const NAV_ITEMS: NavItem[] = [
     label: "Produtos",
     href: "/produtos",
     icon: PackageSearchIcon,
-    showWhen: () => true,
+    showWhen: (role, permissions) => canRoleReadProducts(role, permissions),
   },
 ];
+
+function resolveActiveOrganization(
+  organizations: AppShellProps["organizations"],
+  activeOrganizationId?: string | null,
+  organizationName?: string | null,
+): AppShellProps["organizations"][number] | null {
+  return (
+    organizations.find((organization) => organization.id === activeOrganizationId) ??
+    organizations.find((organization) => organization.name === organizationName) ??
+    organizations[0] ??
+    null
+  );
+}
 
 function AppSidebar({
   activeOrganizationId,
@@ -89,13 +106,15 @@ function AppSidebar({
 }: Omit<AppShellProps, "children" | "pendingInvitations">) {
   const pathname = usePathname();
   const { isMobile, open, openMobile, setOpenMobile } = useSidebar();
-  const activeOrganization =
-    organizations.find((organization) => organization.id === activeOrganizationId) ??
-    organizations.find((organization) => organization.name === organizationName) ??
-    organizations[0] ??
-    null;
+  const activeOrganization = resolveActiveOrganization(
+    organizations,
+    activeOrganizationId,
+    organizationName,
+  );
   const shouldShowUpgradePrompt =
     (isMobile ? openMobile : open) && activeOrganization?.planCode === "FREE";
+  const activeOrganizationPermissions =
+    activeOrganization?.permissions ?? defaultOrganizationPermissions;
 
   useEffect(() => {
     if (!isMobile) {
@@ -145,7 +164,7 @@ function AppSidebar({
           <SidebarGroupLabel>Navegacao</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {NAV_ITEMS.filter((item) => item.showWhen(role)).map((item) => {
+              {NAV_ITEMS.filter((item) => item.showWhen(role, activeOrganizationPermissions)).map((item) => {
                 const isActive = pathname === item.href;
 
                 return (
@@ -222,8 +241,17 @@ export function AppShell({
   userImage = null,
   children,
 }: AppShellProps) {
+  const activeOrganization = resolveActiveOrganization(
+    organizations,
+    activeOrganizationId,
+    organizationName,
+  );
+  const activeOrganizationPermissions =
+    activeOrganization?.permissions ?? defaultOrganizationPermissions;
+  const canReadProducts = canRoleReadProducts(role, activeOrganizationPermissions);
+
   return (
-    <AppCommandBar>
+    <AppCommandBar canReadProducts={canReadProducts}>
       <TooltipProvider>
         <SidebarProvider defaultOpen>
           <AppSidebar

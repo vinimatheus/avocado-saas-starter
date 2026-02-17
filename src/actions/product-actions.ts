@@ -11,8 +11,11 @@ import {
   isFeatureEnabledForOwner,
 } from "@/lib/billing/subscription-service";
 import { maybeSendPlanUsageThresholdAlerts } from "@/lib/auth/server";
-import { isOrganizationAdminRole } from "@/lib/organization/helpers";
-import { canRoleCreateProduct } from "@/lib/organization/permissions";
+import {
+  canRoleCreateProduct,
+  canRoleDeleteProducts,
+  canRoleUpdateProducts,
+} from "@/lib/organization/permissions";
 import {
   bulkDeleteOrganizationProducts,
   bulkUpdateOrganizationProductsStatus,
@@ -60,6 +63,8 @@ function isSafeProductErrorMessage(message: string): boolean {
     "usuario sem organizacao ativa",
     "somente administradores",
     "nao tem permissao para cadastrar produtos",
+    "nao tem permissao para atualizar produtos",
+    "nao tem permissao para remover produtos",
   ];
 
   return safeFragments.some((fragment) => normalized.includes(fragment));
@@ -226,11 +231,23 @@ async function getCreateProductContext(): Promise<{ organizationId: string }> {
   };
 }
 
-async function getAdminProductContext(): Promise<{ organizationId: string }> {
+async function getUpdateProductContext(): Promise<{ organizationId: string }> {
   const context = await getProductContext();
 
-  if (!isOrganizationAdminRole(context.role)) {
-    throw new Error("Somente administradores podem alterar produtos.");
+  if (!canRoleUpdateProducts(context.role, context.permissions)) {
+    throw new Error("Voce nao tem permissao para atualizar produtos.");
+  }
+
+  return {
+    organizationId: context.organizationId,
+  };
+}
+
+async function getDeleteProductContext(): Promise<{ organizationId: string }> {
+  const context = await getProductContext();
+
+  if (!canRoleDeleteProducts(context.role, context.permissions)) {
+    throw new Error("Voce nao tem permissao para remover produtos.");
   }
 
   return {
@@ -303,7 +320,7 @@ export async function updateProductAction(
   formData: FormData,
 ): Promise<ProductActionState> {
   try {
-    const context = await getAdminProductContext();
+    const context = await getUpdateProductContext();
 
     const parsed = productUpdateSchema.safeParse({
       productId: getFormValue(formData, "productId"),
@@ -356,7 +373,7 @@ export async function deleteProductAction(
   formData: FormData,
 ): Promise<ProductActionState> {
   try {
-    const context = await getAdminProductContext();
+    const context = await getDeleteProductContext();
 
     const parsed = productDeleteSchema.safeParse({
       productId: getFormValue(formData, "productId"),
@@ -397,7 +414,7 @@ export async function bulkUpdateProductsStatusAction(
   formData: FormData,
 ): Promise<ProductActionState> {
   try {
-    const context = await getAdminProductContext();
+    const context = await getUpdateProductContext();
 
     const parsed = productBulkStatusSchema.safeParse({
       productIds: getFormArrayValues(formData, "productIds"),
@@ -441,7 +458,7 @@ export async function bulkDeleteProductsAction(
   formData: FormData,
 ): Promise<ProductActionState> {
   try {
-    const context = await getAdminProductContext();
+    const context = await getDeleteProductContext();
 
     const parsed = productBulkDeleteSchema.safeParse({
       productIds: getFormArrayValues(formData, "productIds"),

@@ -128,6 +128,7 @@ async function resolveTenantContext(): Promise<TenantContext> {
               id: true,
               allowMemberCreateProduct: true,
               allowMemberInviteUsers: true,
+              rbacPermissions: true,
             },
           })
           .catch((error) => {
@@ -141,10 +142,13 @@ async function resolveTenantContext(): Promise<TenantContext> {
   const permissionsByOrganizationId = new Map(
     organizationPermissionSnapshots.map((organization) => [
       organization.id,
-      resolveOrganizationPermissions({
-        allowMemberCreateProduct: organization.allowMemberCreateProduct,
-        allowMemberInviteUsers: organization.allowMemberInviteUsers,
-      }),
+      resolveOrganizationPermissions(
+        organization.rbacPermissions,
+        {
+          allowMemberCreateProduct: organization.allowMemberCreateProduct,
+          allowMemberInviteUsers: organization.allowMemberInviteUsers,
+        },
+      ),
     ]),
   );
   const organizationsWithBillingState = organizations.map((organization) => {

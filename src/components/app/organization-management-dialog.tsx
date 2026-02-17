@@ -70,7 +70,18 @@ import {
   SidebarProvider,
 } from "@/components/ui/sidebar"
 import { Switch } from "@/components/ui/switch"
-import type { OrganizationPermissions } from "@/lib/organization/permissions"
+import type { OrganizationUserRole } from "@/lib/organization/helpers"
+import {
+  canRoleCreateUsers,
+  canRoleDeleteUsers,
+  canRoleReadUsers,
+  canRoleUpdateUsers,
+  ownerPermissions,
+  resolveOrganizationPermissions,
+  type OrganizationPermissions,
+  type PermissionAction,
+  type PermissionResource,
+} from "@/lib/organization/permissions"
 
 type OrganizationDialogMember = {
   id: string
@@ -98,6 +109,7 @@ type OrganizationManagementDialogProps = {
   planCode: "FREE" | "STARTER_50" | "PRO_100" | "SCALE_400"
   planName: string
   currentUserId: string | null
+  role: OrganizationUserRole
   isOwner: boolean
   isAdmin: boolean
   permissions: OrganizationPermissions
@@ -108,6 +120,27 @@ type OrganizationManagementDialogProps = {
 type OrganizationManagementSection = "organization" | "plan" | "access"
 type AccessPanel = "invites" | "members" | "ownership"
 type AssignableRole = "admin" | "user"
+type EditablePermissionRole = "admin" | "user"
+
+const PERMISSION_ACTIONS: PermissionAction[] = ["create", "read", "update", "delete"]
+const PERMISSION_ACTION_LABELS: Record<PermissionAction, string> = {
+  create: "Criar",
+  read: "Ler",
+  update: "Atualizar",
+  delete: "Excluir",
+}
+
+const PERMISSION_RESOURCES: PermissionResource[] = ["products", "users"]
+const PERMISSION_RESOURCE_LABELS: Record<PermissionResource, string> = {
+  products: "Produtos",
+  users: "Usuarios",
+}
+
+const PERMISSION_ROLE_LABELS: Record<EditablePermissionRole | "owner", string> = {
+  owner: "Owner",
+  admin: "Admin",
+  user: "User",
+}
 
 function normalizeRoleLabel(role: string): string {
   const roleList = role
@@ -161,6 +194,19 @@ function toSlug(value: string): string {
     .slice(0, 70)
 }
 
+function permissionsInputFromProps(permissions: OrganizationPermissions): OrganizationPermissions {
+  return {
+    admin: {
+      products: { ...permissions.admin.products },
+      users: { ...permissions.admin.users },
+    },
+    user: {
+      products: { ...permissions.user.products },
+      users: { ...permissions.user.users },
+    },
+  }
+}
+
 export function OrganizationManagementDialog({
   open,
   onOpenChange,
@@ -171,6 +217,7 @@ export function OrganizationManagementDialog({
   planCode,
   planName,
   currentUserId,
+  role,
   isOwner,
   isAdmin,
   permissions,
@@ -188,11 +235,8 @@ export function OrganizationManagementDialog({
   const [organizationSlugInput, setOrganizationSlugInput] = React.useState(
     organizationSlug ?? toSlug(organizationName),
   )
-  const [allowMemberCreateProductInput, setAllowMemberCreateProductInput] = React.useState(
-    permissions.allowMemberCreateProduct,
-  )
-  const [allowMemberInviteUsersInput, setAllowMemberInviteUsersInput] = React.useState(
-    permissions.allowMemberInviteUsers,
+  const [permissionsInput, setPermissionsInput] = React.useState<OrganizationPermissions>(
+    resolveOrganizationPermissions(permissionsInputFromProps(permissions)),
   )
   const [deleteConfirmationName, setDeleteConfirmationName] = React.useState("")
   const [isDeleteConfirmationDialogOpen, setIsDeleteConfirmationDialogOpen] = React.useState(false)
@@ -243,8 +287,12 @@ export function OrganizationManagementDialog({
     removeOrganizationMemberAction,
     initialOrganizationUserActionState,
   )
-  const canManageInvites = isAdmin || permissions.allowMemberInviteUsers
-  const canAccessDialog = isAdmin || permissions.allowMemberInviteUsers
+  const canCreateUsers = canRoleCreateUsers(role, permissions)
+  const canReadUsers = canRoleReadUsers(role, permissions)
+  const canUpdateUsers = canRoleUpdateUsers(role, permissions)
+  const canDeleteUsers = canRoleDeleteUsers(role, permissions)
+  const canAccessUsersSection = isOwner || canCreateUsers || canReadUsers || canUpdateUsers || canDeleteUsers
+  const canAccessDialog = isAdmin || canAccessUsersSection
 
   const sections = React.useMemo(() => {
     const base: Array<{
@@ -261,31 +309,29 @@ export function OrganizationManagementDialog({
       base.push({ id: "plan", label: "Plano", icon: CreditCardIcon })
     }
 
-    if (canManageInvites) {
+    if (canAccessUsersSection) {
       base.push({ id: "access", label: "Acesso", icon: UsersIcon })
     }
 
     return base
-  }, [canManageInvites, isAdmin, isOwner])
+  }, [canAccessUsersSection, isAdmin, isOwner])
 
   const accessPanels = React.useMemo(
     () =>
       (
         [
-          { id: "invites", label: "Convites", icon: MailIcon },
-          ...(isOwner
-            ? [
-                { id: "members", label: "Membros", icon: UsersIcon },
-                { id: "ownership", label: "Transferencia", icon: CrownIcon },
-              ]
+          ...(canCreateUsers || canReadUsers ? [{ id: "invites", label: "Convites", icon: MailIcon }] : []),
+          ...(isOwner || canReadUsers || canUpdateUsers || canDeleteUsers
+            ? [{ id: "members", label: "Membros", icon: UsersIcon }]
             : []),
+          ...(isOwner ? [{ id: "ownership", label: "Transferencia", icon: CrownIcon }] : []),
         ] as Array<{
           id: AccessPanel
           label: string
           icon: React.ComponentType<{ className?: string }>
         }>
       ).filter(Boolean),
-    [isOwner],
+    [canCreateUsers, canDeleteUsers, canReadUsers, canUpdateUsers, isOwner],
   )
 
   const selectedAccessPanel = React.useMemo(() => {
@@ -361,14 +407,13 @@ export function OrganizationManagementDialog({
 
     setOrganizationNameInput(organizationName)
     setOrganizationSlugInput(organizationSlug ?? toSlug(organizationName))
-    setAllowMemberCreateProductInput(permissions.allowMemberCreateProduct)
-    setAllowMemberInviteUsersInput(permissions.allowMemberInviteUsers)
+    setPermissionsInput(permissionsInputFromProps(permissions))
     setDeleteConfirmationName("")
     setIsDeleteConfirmationDialogOpen(false)
     setSelectedAccessPanelState("invites")
     setFailedOrganizationLogoSrc(null)
     organizationLogoFormRef.current?.reset()
-  }, [open, organizationName, organizationSlug, permissions.allowMemberCreateProduct, permissions.allowMemberInviteUsers])
+  }, [open, organizationName, organizationSlug, permissions])
 
   React.useEffect(() => {
     if (deleteState.redirectTo) {
@@ -444,12 +489,29 @@ export function OrganizationManagementDialog({
     event.preventDefault()
 
     const payload = new FormData()
-    payload.set("allowMemberCreateProduct", String(allowMemberCreateProductInput))
-    payload.set("allowMemberInviteUsers", String(allowMemberInviteUsersInput))
+    payload.set("permissions", JSON.stringify(permissionsInput))
 
     startUpdatePermissionsTransition(() => {
       updatePermissionsActionState(payload)
     })
+  }
+
+  function togglePermission(
+    targetRole: EditablePermissionRole,
+    resource: PermissionResource,
+    action: PermissionAction,
+    checked: boolean,
+  ): void {
+    setPermissionsInput((current) => ({
+      ...current,
+      [targetRole]: {
+        ...current[targetRole],
+        [resource]: {
+          ...current[targetRole][resource],
+          [action]: checked,
+        },
+      },
+    }))
   }
 
   function submitOwnershipTransfer(): void {
@@ -625,7 +687,7 @@ export function OrganizationManagementDialog({
                     ? "Proprietario: gerencie organizacao e todo o acesso de membros em um unico lugar."
                     : isAdmin
                       ? "Administrador: visualize plano e gerencie convites em uma area unica de acesso."
-                      : "Membro com acesso RBAC: voce pode enviar convites nesta organizacao."}
+                      : "Membro com RBAC ativo: seu acesso segue a matriz CRUD definida pelo owner."}
                 </p>
               </div>
 
@@ -831,38 +893,56 @@ export function OrganizationManagementDialog({
                 <div className="space-y-4">
                   {isOwner ? (
                     <form onSubmit={submitOrganizationPermissions} className="space-y-3 rounded-lg border p-3">
-                      <p className="text-xs font-medium">Permissoes RBAC</p>
-                      <div className="space-y-2">
-                        <label className="flex items-start justify-between gap-3 rounded-md border p-2">
-                          <div className="space-y-0.5">
-                            <p className="text-xs font-medium">Membros podem cadastrar produtos</p>
-                            <p className="text-muted-foreground text-[11px]">
-                              Libera o botao de novo produto para membros (sem abrir edicao e exclusao).
-                            </p>
+                      <p className="text-xs font-medium">Permissoes RBAC (CRUD)</p>
+                      <p className="text-muted-foreground text-[11px]">
+                        Owner sempre tem acesso total. Ajuste abaixo apenas User e Admin para esta organizacao.
+                      </p>
+                      <div className="space-y-3">
+                        {PERMISSION_RESOURCES.map((resource) => (
+                          <div key={resource} className="space-y-2 rounded-md border p-2">
+                            <p className="text-xs font-medium">{PERMISSION_RESOURCE_LABELS[resource]}</p>
+                            <div className="overflow-x-auto">
+                              <div className="grid min-w-[480px] grid-cols-[110px_repeat(4,minmax(74px,1fr))] gap-1 text-[11px]">
+                                <span className="text-muted-foreground px-2 py-1 font-medium">Papel</span>
+                                {PERMISSION_ACTIONS.map((action) => (
+                                  <span key={action} className="text-muted-foreground px-2 py-1 text-center font-medium">
+                                    {PERMISSION_ACTION_LABELS[action]}
+                                  </span>
+                                ))}
+
+                                <span className="px-2 py-1 font-medium">{PERMISSION_ROLE_LABELS.owner}</span>
+                                {PERMISSION_ACTIONS.map((action) => (
+                                  <span
+                                    key={`owner-${resource}-${action}`}
+                                    className="bg-muted text-foreground rounded px-2 py-1 text-center"
+                                  >
+                                    {ownerPermissions[resource][action] ? "Sempre" : "-"}
+                                  </span>
+                                ))}
+
+                                {(["admin", "user"] as EditablePermissionRole[]).map((targetRole) => (
+                                  <React.Fragment key={`${resource}-${targetRole}`}>
+                                    <span className="px-2 py-1 font-medium">{PERMISSION_ROLE_LABELS[targetRole]}</span>
+                                    {PERMISSION_ACTIONS.map((action) => (
+                                      <span
+                                        key={`${targetRole}-${resource}-${action}`}
+                                        className="flex items-center justify-center px-2 py-1"
+                                      >
+                                        <Switch
+                                          checked={permissionsInput[targetRole][resource][action]}
+                                          onCheckedChange={(checked) => {
+                                            togglePermission(targetRole, resource, action, Boolean(checked))
+                                          }}
+                                          disabled={isUpdatePermissionsPending}
+                                        />
+                                      </span>
+                                    ))}
+                                  </React.Fragment>
+                                ))}
+                              </div>
+                            </div>
                           </div>
-                          <Switch
-                            checked={allowMemberCreateProductInput}
-                            onCheckedChange={(checked) => {
-                              setAllowMemberCreateProductInput(Boolean(checked))
-                            }}
-                            disabled={isUpdatePermissionsPending}
-                          />
-                        </label>
-                        <label className="flex items-start justify-between gap-3 rounded-md border p-2">
-                          <div className="space-y-0.5">
-                            <p className="text-xs font-medium">Membros podem convidar usuarios</p>
-                            <p className="text-muted-foreground text-[11px]">
-                              Permite enviar convites como cargo Usuario. Promocao para admin continua restrita.
-                            </p>
-                          </div>
-                          <Switch
-                            checked={allowMemberInviteUsersInput}
-                            onCheckedChange={(checked) => {
-                              setAllowMemberInviteUsersInput(Boolean(checked))
-                            }}
-                            disabled={isUpdatePermissionsPending}
-                          />
-                        </label>
+                        ))}
                       </div>
                       <Button type="submit" size="sm" disabled={isUpdatePermissionsPending}>
                         <ShieldCheckIcon data-icon="inline-start" />
@@ -871,7 +951,7 @@ export function OrganizationManagementDialog({
                     </form>
                   ) : null}
 
-                  {canManageInvites ? (
+                  {canCreateUsers ? (
                     <form
                       onSubmit={submitInvite}
                       className="grid gap-2 rounded-lg border p-3 sm:grid-cols-[1fr_auto_auto]"
@@ -944,7 +1024,11 @@ export function OrganizationManagementDialog({
                     {selectedAccessPanel === "invites" ? (
                       <div className="space-y-2">
                         <p className="text-xs font-medium">Convites pendentes</p>
-                        {pendingInvitations.length === 0 ? (
+                        {!canReadUsers && !isOwner ? (
+                          <p className="text-muted-foreground text-xs">
+                            Voce pode enviar convites, mas nao tem permissao para visualizar a lista.
+                          </p>
+                        ) : pendingInvitations.length === 0 ? (
                           <p className="text-muted-foreground text-xs">Nenhum convite pendente.</p>
                         ) : (
                           <div className="max-h-56 space-y-1 overflow-y-auto pr-1">
@@ -982,13 +1066,13 @@ export function OrganizationManagementDialog({
                                 <p className="text-muted-foreground truncate text-[11px]">{member.email}</p>
                               </div>
 
-                              {isOwner ? (
-                                member.role === "owner" ? (
-                                  <span className="text-muted-foreground shrink-0 text-[11px]">
-                                    Proprietario atual
-                                  </span>
-                                ) : (
-                                  <div className="flex shrink-0 items-center gap-2">
+                              {member.role === "owner" ? (
+                                <span className="text-muted-foreground shrink-0 text-[11px]">
+                                  Proprietario atual
+                                </span>
+                              ) : canUpdateUsers || canDeleteUsers ? (
+                                <div className="flex shrink-0 items-center gap-2">
+                                  {canUpdateUsers ? (
                                     <select
                                       className="border-input bg-background h-7 rounded-md border px-2 text-xs"
                                       value={toAssignableRole(member.role)}
@@ -1003,6 +1087,13 @@ export function OrganizationManagementDialog({
                                       <option value="user">Usuario</option>
                                       <option value="admin">Administrador</option>
                                     </select>
+                                  ) : (
+                                    <span className="text-muted-foreground shrink-0 text-[11px]">
+                                      {normalizeRoleLabel(member.role)}
+                                    </span>
+                                  )}
+
+                                  {canDeleteUsers ? (
                                     <Button
                                       type="button"
                                       size="xs"
@@ -1018,8 +1109,8 @@ export function OrganizationManagementDialog({
                                     >
                                       Remover
                                     </Button>
-                                  </div>
-                                )
+                                  ) : null}
+                                </div>
                               ) : (
                                 <span className="text-muted-foreground shrink-0 text-[11px]">
                                   {normalizeRoleLabel(member.role)}

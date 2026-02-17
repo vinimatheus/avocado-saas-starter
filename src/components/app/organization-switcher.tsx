@@ -44,7 +44,10 @@ import {
   type OrganizationUserRole,
 } from "@/lib/organization/helpers";
 import {
-  canRoleInviteUsers,
+  canRoleCreateUsers,
+  canRoleDeleteUsers,
+  canRoleReadUsers,
+  canRoleUpdateUsers,
   defaultOrganizationPermissions,
   resolveOrganizationPermissions,
   type OrganizationPermissions,
@@ -233,8 +236,11 @@ export function OrganizationSwitcher({
   const activeMemberRole = activeMemberQuery.data?.role ?? "";
   const isOwner = hasOrganizationRole(activeMemberRole, "owner");
   const isAdmin = isOrganizationAdminRole(role) || hasOrganizationRole(activeMemberRole, "admin") || isOwner;
-  const canManageInvites = canRoleInviteUsers(role, activeOrganizationPermissions);
-  const canAccessManagement = isAdmin || canManageInvites;
+  const canCreateUsers = canRoleCreateUsers(role, activeOrganizationPermissions);
+  const canReadUsers = canRoleReadUsers(role, activeOrganizationPermissions);
+  const canUpdateUsers = canRoleUpdateUsers(role, activeOrganizationPermissions);
+  const canDeleteUsers = canRoleDeleteUsers(role, activeOrganizationPermissions);
+  const canAccessManagement = isAdmin || canCreateUsers || canReadUsers || canUpdateUsers || canDeleteUsers;
   const currentUserId = sessionQuery.data?.user.id ?? activeMemberQuery.data?.userId ?? null;
 
   const dialogMembers = useMemo(
@@ -410,6 +416,7 @@ export function OrganizationSwitcher({
         planCode={activeOrganizationPlanCode}
         planName={activeOrganizationPlanName}
         currentUserId={currentUserId}
+        role={role}
         isOwner={isOwner}
         isAdmin={isAdmin}
         permissions={activeOrganizationPermissions}

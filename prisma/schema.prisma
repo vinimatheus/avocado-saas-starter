@@ -15,6 +15,7 @@ model Organization {
   metadata              String?
   allowMemberCreateProduct Boolean              @default(false) @map("allow_member_create_product")
   allowMemberInviteUsers Boolean                @default(false) @map("allow_member_invite_users")
+  rbacPermissions       Json?                   @map("rbac_permissions")
   createdAt             DateTime                @default(now()) @map("created_at")
   updatedAt             DateTime                @updatedAt @map("updated_at")
   members               Member[]

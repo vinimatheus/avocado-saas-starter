@@ -78,13 +78,14 @@ function buildProductsQueryParam(searchTerm: string): string {
   return searchParams.toString();
 }
 
-function AppCommandActions() {
+function AppCommandActions({ canReadProducts }: { canReadProducts: boolean }) {
   const router = useRouter();
   const { searchQuery } = useKBar((state) => ({
     searchQuery: state.searchQuery,
   }));
   const normalizedQuery = searchQuery.trim();
-  const hasProductQuery = normalizedQuery.length >= MIN_PRODUCT_QUERY_LENGTH;
+  const hasProductQuery =
+    canReadProducts && normalizedQuery.length >= MIN_PRODUCT_QUERY_LENGTH;
   const [productSearchSnapshot, setProductSearchSnapshot] = useState<{
     query: string;
     results: ProductSearchResult[];
@@ -94,51 +95,58 @@ function AppCommandActions() {
   });
 
   const pageActions = useMemo<Action[]>(
-    () => [
-      {
-        id: "go-dashboard",
-        name: "Painel",
-        section: "Paginas",
-        subtitle: "Abrir painel principal",
-        keywords: "dashboard painel home inicio",
-        shortcut: ["g", "d"],
-        perform: () => {
-          router.push("/dashboard");
+    () => {
+      const baseActions: Action[] = [
+        {
+          id: "go-dashboard",
+          name: "Painel",
+          section: "Paginas",
+          subtitle: "Abrir painel principal",
+          keywords: "dashboard painel home inicio",
+          shortcut: ["g", "d"],
+          perform: () => {
+            router.push("/dashboard");
+          },
         },
-      },
-      {
-        id: "go-products",
-        name: "Produtos",
-        section: "Paginas",
-        subtitle: "Abrir catalogo de produtos",
-        keywords: "produtos catalogo itens sku",
-        shortcut: ["g", "p"],
-        perform: () => {
-          router.push("/produtos");
+        {
+          id: "go-billing",
+          name: "Plano",
+          section: "Paginas",
+          subtitle: "Abrir pagina de assinatura",
+          keywords: "billing plano assinatura pagamento",
+          perform: () => {
+            router.push("/billing");
+          },
         },
-      },
-      {
-        id: "go-billing",
-        name: "Plano",
-        section: "Paginas",
-        subtitle: "Abrir pagina de assinatura",
-        keywords: "billing plano assinatura pagamento",
-        perform: () => {
-          router.push("/billing");
+        {
+          id: "go-profile",
+          name: "Perfil",
+          section: "Paginas",
+          subtitle: "Abrir configuracoes da conta",
+          keywords: "perfil conta usuario",
+          perform: () => {
+            router.push("/profile");
+          },
         },
-      },
-      {
-        id: "go-profile",
-        name: "Perfil",
-        section: "Paginas",
-        subtitle: "Abrir configuracoes da conta",
-        keywords: "perfil conta usuario",
-        perform: () => {
-          router.push("/profile");
-        },
-      },
-    ],
-    [router],
+      ];
+
+      if (canReadProducts) {
+        baseActions.push({
+          id: "go-products",
+          name: "Produtos",
+          section: "Paginas",
+          subtitle: "Abrir catalogo de produtos",
+          keywords: "produtos catalogo itens sku",
+          shortcut: ["g", "p"],
+          perform: () => {
+            router.push("/produtos");
+          },
+        });
+      }
+
+      return baseActions;
+    },
+    [canReadProducts, router],
   );
 
   useRegisterActions(pageActions, [pageActions]);
@@ -189,7 +197,7 @@ function AppCommandActions() {
   );
 
   const productActions = useMemo<Action[]>(() => {
-    if (!hasProductQuery) {
+    if (!canReadProducts || !hasProductQuery) {
       return [];
     }
 
@@ -222,7 +230,7 @@ function AppCommandActions() {
     }
 
     return actions;
-  }, [hasProductQuery, normalizedQuery, productResults, router]);
+  }, [canReadProducts, hasProductQuery, normalizedQuery, productResults, router]);
 
   useRegisterActions(productActions, [productActions]);
 
@@ -296,10 +304,15 @@ function AppCommandPalette() {
   );
 }
 
-export function AppCommandBar({ children }: { children: React.ReactNode }) {
+type AppCommandBarProps = {
+  canReadProducts: boolean;
+  children: React.ReactNode;
+};
+
+export function AppCommandBar({ canReadProducts, children }: AppCommandBarProps) {
   return (
     <KBarProvider>
-      <AppCommandActions />
+      <AppCommandActions canReadProducts={canReadProducts} />
       <AppCommandPalette />
       {children}
     </KBarProvider>

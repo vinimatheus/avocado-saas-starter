@@ -10,12 +10,16 @@ import { assertOrganizationNotBlockedAfterExpiredTrial } from "@/lib/billing/sub
 import { prisma } from "@/lib/db/prisma";
 import {
   hasOrganizationRole,
-  isOrganizationAdminRole,
   isOrganizationOwnerRole,
   toOrganizationMemberRole,
   type OrganizationUserRole,
 } from "@/lib/organization/helpers";
-import { canRoleInviteUsers, type OrganizationPermissions } from "@/lib/organization/permissions";
+import {
+  canRoleCreateUsers,
+  canRoleDeleteUsers,
+  canRoleUpdateUsers,
+  type OrganizationPermissions,
+} from "@/lib/organization/permissions";
 import { getTenantContext } from "@/lib/organization/tenant-context";
 import { organizationAssignableRoleSchema } from "@/lib/users/schemas";
 
@@ -128,22 +132,28 @@ async function getUserActionContext(): Promise<OrganizationActionContext> {
   };
 }
 
-async function getAdminActionContext(): Promise<OrganizationActionContext & { role: OrganizationUserRole }> {
-  const context = await getUserActionContext();
-  if (!isOrganizationAdminRole(context.role)) {
-    throw new Error("Somente administradores podem gerenciar usuarios.");
-  }
-
-  return {
-    ...context,
-    role: context.role,
-  };
-}
-
 async function getInviteActionContext(): Promise<OrganizationActionContext> {
   const context = await getUserActionContext();
-  if (!canRoleInviteUsers(context.role, context.permissions)) {
+  if (!canRoleCreateUsers(context.role, context.permissions)) {
     throw new Error("Voce nao tem permissao para gerenciar convites.");
+  }
+
+  return context;
+}
+
+async function getUserUpdateActionContext(): Promise<OrganizationActionContext> {
+  const context = await getUserActionContext();
+  if (!canRoleUpdateUsers(context.role, context.permissions)) {
+    throw new Error("Voce nao tem permissao para atualizar usuarios.");
+  }
+
+  return context;
+}
+
+async function getUserDeleteActionContext(): Promise<OrganizationActionContext> {
+  const context = await getUserActionContext();
+  if (!canRoleDeleteUsers(context.role, context.permissions)) {
+    throw new Error("Voce nao tem permissao para remover usuarios.");
   }
 
   return context;
@@ -232,7 +242,7 @@ export async function cancelOrganizationInvitationAction(
   formData: FormData,
 ): Promise<OrganizationUserActionState> {
   try {
-    const context = await getInviteActionContext();
+    const context = await getUserDeleteActionContext();
     const parsed = invitationSchema.safeParse({
       invitationId: getFormValue(formData, "invitationId"),
     });
@@ -260,7 +270,7 @@ export async function updateOrganizationMemberRoleAction(
   formData: FormData,
 ): Promise<OrganizationUserActionState> {
   try {
-    const context = await getAdminActionContext();
+    const context = await getUserUpdateActionContext();
     const parsed = updateMemberRoleSchema.safeParse({
       memberId: getFormValue(formData, "memberId"),
       role: getFormValue(formData, "role"),
@@ -312,7 +322,7 @@ export async function removeOrganizationMemberAction(
   formData: FormData,
 ): Promise<OrganizationUserActionState> {
   try {
-    const context = await getAdminActionContext();
+    const context = await getUserDeleteActionContext();
     const parsed = removeMemberSchema.safeParse({
       memberId: getFormValue(formData, "memberId"),
     });

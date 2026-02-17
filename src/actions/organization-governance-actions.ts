@@ -13,6 +13,10 @@ import {
   hasOrganizationRole,
   isOrganizationAdminRole,
 } from "@/lib/organization/helpers";
+import {
+  resolveOrganizationPermissions,
+  type OrganizationPermissions,
+} from "@/lib/organization/permissions";
 import { getTenantContext } from "@/lib/organization/tenant-context";
 import { detectImageMimeTypeBySignature } from "@/lib/uploads/image-signature";
 
@@ -48,9 +52,21 @@ const organizationConfirmationSchema = z.object({
   organizationName: z.string().trim().min(1, "Confirme o nome da organizacao para continuar."),
 });
 
-const updateOrganizationPermissionsSchema = z.object({
-  allowMemberCreateProduct: z.enum(["true", "false"]),
-  allowMemberInviteUsers: z.enum(["true", "false"]),
+const crudPermissionsSchema = z.object({
+  create: z.boolean(),
+  read: z.boolean(),
+  update: z.boolean(),
+  delete: z.boolean(),
+});
+
+const resourcePermissionsSchema = z.object({
+  products: crudPermissionsSchema,
+  users: crudPermissionsSchema,
+});
+
+const organizationPermissionsSchema = z.object({
+  admin: resourcePermissionsSchema,
+  user: resourcePermissionsSchema,
 });
 
 function successState(
@@ -377,6 +393,24 @@ async function resolveRedirectAfterOrganizationMutation(
   return "/dashboard";
 }
 
+function parsePermissionsPayload(rawPayload: string): OrganizationPermissions | null {
+  if (!rawPayload) {
+    return null;
+  }
+
+  try {
+    const decoded = JSON.parse(rawPayload) as unknown;
+    const parsed = organizationPermissionsSchema.safeParse(decoded);
+    if (!parsed.success) {
+      return null;
+    }
+
+    return resolveOrganizationPermissions(parsed.data);
+  } catch {
+    return null;
+  }
+}
+
 export async function updateOrganizationDetailsAction(
   _previousState: OrganizationUserActionState,
   formData: FormData,
@@ -425,12 +459,10 @@ export async function updateOrganizationPermissionsAction(
       return errorState("Somente o proprietario pode atualizar permissoes RBAC.");
     }
 
-    const parsed = updateOrganizationPermissionsSchema.safeParse({
-      allowMemberCreateProduct: String(formData.get("allowMemberCreateProduct") ?? "").trim(),
-      allowMemberInviteUsers: String(formData.get("allowMemberInviteUsers") ?? "").trim(),
-    });
-    if (!parsed.success) {
-      return errorState(parsed.error.issues[0]?.message ?? "Permissoes RBAC invalidas.");
+    const payload = String(formData.get("permissions") ?? "").trim();
+    const parsedPermissions = parsePermissionsPayload(payload);
+    if (!parsedPermissions) {
+      return errorState("Permissoes RBAC invalidas.");
     }
 
     await prisma.organization.update({
@@ -438,8 +470,9 @@ export async function updateOrganizationPermissionsAction(
         id: context.organizationId,
       },
       data: {
-        allowMemberCreateProduct: parsed.data.allowMemberCreateProduct === "true",
-        allowMemberInviteUsers: parsed.data.allowMemberInviteUsers === "true",
+        rbacPermissions: parsedPermissions,
+        allowMemberCreateProduct: parsedPermissions.user.products.create,
+        allowMemberInviteUsers: parsedPermissions.user.users.create,
       },
     });
 
