@@ -23,6 +23,11 @@ const contentSecurityPolicy = [
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "8mb",
+    },
+  },
   async headers() {
     return [
       {

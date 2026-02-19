@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState, useTransition } from "react";
+import { useActionState, useEffect, useState, useTransition, type ChangeEvent } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   ArrowRightIcon,
@@ -63,6 +63,7 @@ type CompanyOnboardingFormProps = {
 };
 
 const ORGANIZATION_SLUG_MAX_LENGTH = 70;
+const MAX_IMAGE_UPLOAD_BYTES = 5 * 1024 * 1024;
 const initialOnboardingProfileActionState: OnboardingProfileActionState = {
   status: "idle",
   message: "",
@@ -113,7 +114,9 @@ function NewAccountOnboardingForm({
   const [nameInput, setNameInput] = useState((userName ?? "").trim());
   const [companyNameInput, setCompanyNameInput] = useState(initialCompanyName);
   const [profileImageName, setProfileImageName] = useState("");
+  const [profileImageError, setProfileImageError] = useState("");
   const [organizationImageName, setOrganizationImageName] = useState("");
+  const [organizationImageError, setOrganizationImageError] = useState("");
 
   const normalizedUserImage = normalizeImageUrl(userImage);
 
@@ -137,6 +140,31 @@ function NewAccountOnboardingForm({
     router.replace(organizationState.redirectTo);
     router.refresh();
   }, [organizationState.redirectTo, organizationState.status, router]);
+
+  function handleImageSelection(
+    event: ChangeEvent<HTMLInputElement>,
+    setFileName: (value: string) => void,
+    setError: (value: string) => void,
+  ) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      setFileName("");
+      setError("");
+      return;
+    }
+
+    if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+      const message = "Arquivo muito pesado. Envie uma imagem de ate 5 MB.";
+      event.target.value = "";
+      setFileName("");
+      setError(message);
+      toast.error(message);
+      return;
+    }
+
+    setFileName(file.name.trim());
+    setError("");
+  }
 
   return (
     <Card className="mx-auto w-full max-w-3xl overflow-hidden rounded-[1.8rem] border border-border/75 bg-card/95 shadow-[0_45px_110px_-70px_rgba(17,34,20,0.92)] backdrop-blur-xl">
@@ -252,13 +280,16 @@ function NewAccountOnboardingForm({
                       type="file"
                       accept="image/*"
                       onChange={(event) =>
-                        setProfileImageName(event.target.files?.[0]?.name?.trim() ?? "")
+                        handleImageSelection(event, setProfileImageName, setProfileImageError)
                       }
                       className="h-10 rounded-lg border-border/70 bg-background/80 text-sm"
                     />
                     <p className="text-muted-foreground mt-2 text-xs">
                       PNG, JPEG, GIF ou WEBP com ate 5 MB.
                     </p>
+                    {profileImageError ? (
+                      <p className="text-destructive mt-1 text-xs font-medium">{profileImageError}</p>
+                    ) : null}
                     {profileImageName ? (
                       <p className="text-foreground mt-1 flex items-center gap-1.5 text-xs font-medium">
                         <UploadIcon className="size-3.5" />
@@ -301,6 +332,7 @@ function NewAccountOnboardingForm({
             <FormSubmitButton
               className="h-11 w-full rounded-xl text-sm font-semibold shadow-[0_14px_30px_-20px_rgba(76,175,80,0.85)]"
               pendingLabel="Salvando perfil..."
+              disabled={Boolean(profileImageError)}
             >
               Continuar para organizacao
               <ArrowRightIcon className="size-4" />
@@ -351,13 +383,20 @@ function NewAccountOnboardingForm({
                       type="file"
                       accept="image/*"
                       onChange={(event) =>
-                        setOrganizationImageName(event.target.files?.[0]?.name?.trim() ?? "")
+                        handleImageSelection(
+                          event,
+                          setOrganizationImageName,
+                          setOrganizationImageError,
+                        )
                       }
                       className="h-10 rounded-lg border-border/70 bg-background/80 text-sm"
                     />
                     <p className="text-muted-foreground mt-2 text-xs">
                       PNG, JPEG, GIF ou WEBP com ate 5 MB.
                     </p>
+                    {organizationImageError ? (
+                      <p className="text-destructive mt-1 text-xs font-medium">{organizationImageError}</p>
+                    ) : null}
                     {organizationImageName ? (
                       <p className="text-foreground mt-1 flex items-center gap-1.5 text-xs font-medium">
                         <UploadIcon className="size-3.5" />
@@ -400,6 +439,7 @@ function NewAccountOnboardingForm({
             <FormSubmitButton
               className="h-11 w-full rounded-xl text-sm font-semibold shadow-[0_14px_30px_-20px_rgba(76,175,80,0.85)]"
               pendingLabel="Concluindo onboarding..."
+              disabled={Boolean(organizationImageError)}
             >
               <CameraIcon className="size-4" />
               Concluir onboarding
