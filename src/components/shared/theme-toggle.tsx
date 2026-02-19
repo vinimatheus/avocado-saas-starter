@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/shared/utils";
-import { applyThemeToDom, persistTheme, resolveThemeFromDom, type Theme } from "@/lib/theme";
+import { resolveThemeFromDom, setTheme, subscribeToThemeChange, type Theme } from "@/lib/theme";
 
 type ThemeToggleProps = {
   className?: string;
@@ -16,6 +16,10 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
+    const unsubscribe = subscribeToThemeChange((theme) => {
+      setIsDark(theme === "dark");
+    });
+
     const frame = window.requestAnimationFrame(() => {
       const currentTheme = resolveThemeFromDom();
       setIsDark(currentTheme === "dark");
@@ -23,6 +27,7 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
     });
 
     return () => {
+      unsubscribe();
       window.cancelAnimationFrame(frame);
     };
   }, []);
@@ -31,8 +36,7 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
     setIsDark(checked);
 
     const nextTheme: Theme = checked ? "dark" : "light";
-    applyThemeToDom(nextTheme);
-    persistTheme(nextTheme);
+    setTheme(nextTheme);
   }
 
   return (

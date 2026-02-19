@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/shared/utils";
-import { applyThemeToDom, persistTheme, resolveThemeFromDom, type Theme } from "@/lib/theme";
+import { resolveThemeFromDom, setTheme, subscribeToThemeChange, type Theme } from "@/lib/theme";
 
 type ThemeOption = {
   value: Theme;
@@ -34,20 +34,24 @@ export function ThemeAppearanceSection() {
   const [activeTheme, setActiveTheme] = useState<Theme>("light");
 
   useEffect(() => {
+    const unsubscribe = subscribeToThemeChange((theme) => {
+      setActiveTheme(theme);
+    });
+
     const frame = window.requestAnimationFrame(() => {
       setActiveTheme(resolveThemeFromDom());
       setMounted(true);
     });
 
     return () => {
+      unsubscribe();
       window.cancelAnimationFrame(frame);
     };
   }, []);
 
   function handleThemeSelect(theme: Theme): void {
     setActiveTheme(theme);
-    applyThemeToDom(theme);
-    persistTheme(theme);
+    setTheme(theme);
   }
 
   return (
