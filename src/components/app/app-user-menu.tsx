@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { ChevronUpIcon, LogOutIcon, UserRoundIcon } from "lucide-react";
+import { ChevronUpIcon, LogOutIcon, SlidersHorizontalIcon, UserRoundIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -108,6 +108,13 @@ export function AppUserMenu({ role, userName = null, userImage = null }: AppUser
       </DropdownMenuTrigger>
 
       <DropdownMenuContent align="end" side="top">
+        <DropdownMenuItem asChild>
+          <Link href="/configuracoes" className="flex items-center gap-2">
+            <SlidersHorizontalIcon className="size-3.5" />
+            Configuracoes
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
           <Link href="/profile" className="flex items-center gap-2">
             <UserRoundIcon className="size-3.5" />

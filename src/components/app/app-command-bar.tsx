@@ -128,6 +128,17 @@ function AppCommandActions({ canReadProducts }: { canReadProducts: boolean }) {
             router.push("/profile");
           },
         },
+        {
+          id: "go-settings",
+          name: "Configuracoes",
+          section: "Paginas",
+          subtitle: "Abrir preferencias de aparencia",
+          keywords: "configuracoes tema claro escuro preferencias",
+          shortcut: ["g", "s"],
+          perform: () => {
+            router.push("/configuracoes");
+          },
+        },
       ];
 
       if (canReadProducts) {

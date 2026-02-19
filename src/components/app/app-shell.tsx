@@ -3,7 +3,13 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowUpRightIcon, LayoutDashboardIcon, PackageSearchIcon, SparklesIcon } from "lucide-react";
+import {
+  ArrowUpRightIcon,
+  LayoutDashboardIcon,
+  PackageSearchIcon,
+  SlidersHorizontalIcon,
+  SparklesIcon,
+} from "lucide-react";
 
 import { GitHubCreditLink } from "@/components/shared/github-credit-link";
 import { Logo } from "@/components/shared/logo";
@@ -80,6 +86,12 @@ const NAV_ITEMS: NavItem[] = [
     href: "/produtos",
     icon: PackageSearchIcon,
     showWhen: (role, permissions) => canRoleReadProducts(role, permissions),
+  },
+  {
+    label: "Configuracoes",
+    href: "/configuracoes",
+    icon: SlidersHorizontalIcon,
+    showWhen: () => true,
   },
 ];
 

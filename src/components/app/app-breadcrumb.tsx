@@ -18,6 +18,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   produtos: "Produtos",
   billing: "Plano",
   profile: "Perfil",
+  configuracoes: "Configuracoes",
   onboarding: "Primeiros passos",
   company: "Organizacao",
   sign: "Acesso",

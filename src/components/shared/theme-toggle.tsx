@@ -5,33 +5,7 @@ import { useEffect, useState } from "react";
 
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/shared/utils";
-import { THEME_STORAGE_KEY, type Theme } from "@/lib/theme";
-
-function resolveThemeFromDom(): Theme {
-  if (typeof document === "undefined") {
-    return "light";
-  }
-
-  const domTheme = document.documentElement.dataset.theme;
-  if (domTheme === "dark" || domTheme === "light") {
-    return domTheme;
-  }
-
-  return document.documentElement.classList.contains("dark") ? "dark" : "light";
-}
-
-function applyTheme(theme: Theme): void {
-  if (typeof document === "undefined") {
-    return;
-  }
-
-  const root = document.documentElement;
-  const isDark = theme === "dark";
-
-  root.classList.toggle("dark", isDark);
-  root.dataset.theme = theme;
-  root.style.colorScheme = theme;
-}
+import { applyThemeToDom, persistTheme, resolveThemeFromDom, type Theme } from "@/lib/theme";
 
 type ThemeToggleProps = {
   className?: string;
@@ -57,13 +31,8 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
     setIsDark(checked);
 
     const nextTheme: Theme = checked ? "dark" : "light";
-    applyTheme(nextTheme);
-
-    try {
-      localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
-    } catch {
-      // Ignore storage restrictions.
-    }
+    applyThemeToDom(nextTheme);
+    persistTheme(nextTheme);
   }
 
   return (
