@@ -13,6 +13,10 @@ model Organization {
   slug                  String                  @unique
   logo                  String?
   metadata              String?
+  platformStatus        PlatformOrgStatus       @default(ACTIVE) @map("platform_status")
+  platformBlockedAt     DateTime?               @map("platform_blocked_at")
+  platformBlockedReason String?                 @map("platform_blocked_reason")
+  platformBlockedByAdminId String?              @map("platform_blocked_by_admin_id")
   allowMemberCreateProduct Boolean              @default(false) @map("allow_member_create_product")
   allowMemberInviteUsers Boolean                @default(false) @map("allow_member_invite_users")
   rbacPermissions       Json?                   @map("rbac_permissions")
@@ -25,6 +29,8 @@ model Organization {
   ownerSubscription     OwnerSubscription?
   billingCheckoutSessions BillingCheckoutSession[]
   monthlyUsages         OwnerMonthlyUsage[]
+  platformBlockedByAdmin PlatformAdmin?         @relation("OrganizationPlatformBlockedBy", fields: [platformBlockedByAdminId], references: [id], onDelete: SetNull)
+  platformEvents        PlatformEventLog[]      @relation("PlatformEventOrganization")
 
   @@map("organization")
 }
@@ -36,6 +42,10 @@ model User {
   emailVerified       Boolean                 @default(false)
   twoFactorEnabled    Boolean                 @default(false)
   image               String?
+  platformStatus      PlatformUserStatus      @default(ACTIVE) @map("platform_status")
+  platformBlockedAt   DateTime?               @map("platform_blocked_at")
+  platformBlockedReason String?               @map("platform_blocked_reason")
+  platformBlockedByAdminId String?            @map("platform_blocked_by_admin_id")
   createdAt           DateTime                @default(now())
   updatedAt           DateTime                @updatedAt
   sessions            Session[]
@@ -49,6 +59,9 @@ model User {
   subscriptionCancellationFeedbacks SubscriptionCancellationFeedback[]
   featureOverrides    OwnerFeatureOverride[]
   monthlyUsages       OwnerMonthlyUsage[]
+  platformBlockedByAdmin PlatformAdmin?       @relation("UserPlatformBlockedBy", fields: [platformBlockedByAdminId], references: [id], onDelete: SetNull)
+  platformAdmin       PlatformAdmin?          @relation("PlatformAdminUser")
+  actorPlatformEvents PlatformEventLog[]      @relation("PlatformEventActorUser")
 
   @@unique([email])
   @@map("user")
@@ -197,6 +210,79 @@ enum WebhookProcessingStatus {
   FAILED
 }
 
+enum PlatformAdminRole {
+  MASTER
+  ADMIN
+}
+
+enum PlatformAdminStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum PlatformOrgStatus {
+  ACTIVE
+  BLOCKED
+}
+
+enum PlatformUserStatus {
+  ACTIVE
+  BLOCKED
+}
+
+enum PlatformEventSeverity {
+  INFO
+  WARN
+  ERROR
+}
+
+model PlatformAdmin {
+  id               String              @id @default(cuid())
+  userId           String              @unique @map("user_id")
+  role             PlatformAdminRole   @default(ADMIN)
+  status           PlatformAdminStatus @default(ACTIVE)
+  mustChangePassword Boolean           @default(false) @map("must_change_password")
+  createdByAdminId String?             @map("created_by_admin_id")
+  createdAt        DateTime            @default(now()) @map("created_at")
+  updatedAt        DateTime            @updatedAt @map("updated_at")
+  user             User                @relation("PlatformAdminUser", fields: [userId], references: [id], onDelete: Cascade)
+  createdByAdmin   PlatformAdmin?      @relation("PlatformAdminCreatedBy", fields: [createdByAdminId], references: [id], onDelete: SetNull)
+  createdAdmins    PlatformAdmin[]     @relation("PlatformAdminCreatedBy")
+  blockedOrganizations Organization[]  @relation("OrganizationPlatformBlockedBy")
+  blockedUsers     User[]              @relation("UserPlatformBlockedBy")
+  actorPlatformEvents PlatformEventLog[] @relation("PlatformEventActorAdmin")
+
+  @@index([role], map: "platform_admin_role_idx")
+  @@index([status], map: "platform_admin_status_idx")
+  @@map("platform_admin")
+}
+
+model PlatformEventLog {
+  id           String               @id @default(cuid())
+  source       String
+  action       String
+  severity     PlatformEventSeverity @default(INFO)
+  actorUserId  String?              @map("actor_user_id")
+  actorAdminId String?              @map("actor_admin_id")
+  organizationId String?            @map("organization_id")
+  targetType   String               @map("target_type")
+  targetId     String               @map("target_id")
+  metadata     Json?
+  createdAt    DateTime             @default(now()) @map("created_at")
+  actorUser    User?                @relation("PlatformEventActorUser", fields: [actorUserId], references: [id], onDelete: SetNull)
+  actorAdmin   PlatformAdmin?       @relation("PlatformEventActorAdmin", fields: [actorAdminId], references: [id], onDelete: SetNull)
+  organization Organization?        @relation("PlatformEventOrganization", fields: [organizationId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt], map: "platform_event_log_created_at_idx")
+  @@index([source], map: "platform_event_log_source_idx")
+  @@index([action], map: "platform_event_log_action_idx")
+  @@index([organizationId], map: "platform_event_log_organization_id_idx")
+  @@index([targetType, targetId], map: "platform_event_log_target_type_target_id_idx")
+  @@index([actorUserId], map: "platform_event_log_actor_user_id_idx")
+  @@index([actorAdminId], map: "platform_event_log_actor_admin_id_idx")
+  @@map("platform_event_log")
+}
+
 model OwnerSubscription {
   id                String             @id @default(cuid())
   ownerUserId       String             @map("owner_user_id")
@@ -211,6 +297,10 @@ model OwnerSubscription {
   trialStartedAt    DateTime?          @map("trial_started_at")
   trialEndsAt       DateTime?          @map("trial_ends_at")
   trialUsedAt       DateTime?          @map("trial_used_at")
+  complimentaryPlanCode BillingPlanCode? @map("complimentary_plan_code")
+  complimentaryMonths Int?             @map("complimentary_months")
+  complimentaryStartsAt DateTime?      @map("complimentary_starts_at")
+  complimentaryEndsAt DateTime?        @map("complimentary_ends_at")
   canceledAt        DateTime?          @map("canceled_at")
   abacateCustomerId String?            @unique @map("abacate_customer_id")
   billingName       String?            @map("billing_name")

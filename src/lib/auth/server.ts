@@ -4,7 +4,7 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { createAuthMiddleware } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
 import { jwt, organization, twoFactor } from "better-auth/plugins";
-import { Prisma, WebhookProcessingStatus } from "@prisma/client";
+import { PlatformEventSeverity, Prisma, WebhookProcessingStatus } from "@prisma/client";
 import { APIError } from "better-call";
 
 import {
@@ -23,9 +23,9 @@ import {
   resolveVercelAppBaseUrlFromEnv,
 } from "@/lib/env/app-base-url";
 import { hasOrganizationRole } from "@/lib/organization/helpers";
+import { logPlatformEvent } from "@/lib/platform/events";
 
 const INVITATION_ACCEPT_PATH = "/convites/aceitar";
-const SIGN_UP_EMAIL_PATH = "/sign-up/email";
 const SIGN_IN_EMAIL_PATH = "/sign-in/email";
 const SIGN_IN_SOCIAL_PATH = "/sign-in/social";
 const TWO_FACTOR_VERIFY_TOTP_PATH = "/two-factor/verify-totp";
@@ -34,6 +34,7 @@ const TWO_FACTOR_VERIFY_BACKUP_CODE_PATH = "/two-factor/verify-backup-code";
 const OAUTH_CALLBACK_ROUTE_PATH = "/callback/:id";
 const OAUTH_CALLBACK_PATH_PREFIX = "/callback/";
 const DEFAULT_APP_NAME = "avocado SaaS";
+const DEFAULT_AUTH_COOKIE_PREFIX = "avocado-starter-auth";
 const RESEND_TIMEOUT_MS = 10_000;
 const USAGE_ALERT_THRESHOLDS = [80, 100] as const;
 const LOGIN_SESSION_ALERT_PATHS = new Set([
@@ -133,6 +134,11 @@ function getAuthSecret(): string {
   }
 
   return secret;
+}
+
+function getAuthCookiePrefix(): string {
+  const configuredPrefix = process.env.BETTER_AUTH_COOKIE_PREFIX?.trim() || "";
+  return configuredPrefix || DEFAULT_AUTH_COOKIE_PREFIX;
 }
 
 function getTwoFactorIssuer(): string {
@@ -243,7 +249,6 @@ function toErrorMessage(error: unknown, fallbackMessage: string): string {
 
 function shouldSendWelcomeEmailForUserCreate(path: string): boolean {
   return (
-    path === SIGN_UP_EMAIL_PATH ||
     path === SIGN_IN_SOCIAL_PATH ||
     path === OAUTH_CALLBACK_ROUTE_PATH ||
     path.startsWith(OAUTH_CALLBACK_PATH_PREFIX)
@@ -384,6 +389,57 @@ async function dedupeCredentialAccountsForEmail(rawEmail: unknown): Promise<void
   });
 }
 
+async function resolvePlatformUserByEmail(rawEmail: unknown): Promise<{
+  id: string;
+  platformStatus: "ACTIVE" | "BLOCKED";
+  platformBlockedReason: string | null;
+} | null> {
+  if (typeof rawEmail !== "string") {
+    return null;
+  }
+
+  const normalizedEmail = rawEmail.trim().toLowerCase();
+  if (!normalizedEmail) {
+    return null;
+  }
+
+  return prisma.user.findUnique({
+    where: {
+      email: normalizedEmail,
+    },
+    select: {
+      id: true,
+      platformStatus: true,
+      platformBlockedReason: true,
+    },
+  });
+}
+
+async function assertEmailUserNotPlatformBlocked(rawEmail: unknown, path: string): Promise<void> {
+  const user = await resolvePlatformUserByEmail(rawEmail);
+  if (!user || user.platformStatus !== "BLOCKED") {
+    return;
+  }
+
+  await logPlatformEvent({
+    source: "auth",
+    action: "login.blocked",
+    severity: PlatformEventSeverity.WARN,
+    actorUserId: user.id,
+    targetType: "user",
+    targetId: user.id,
+    metadata: {
+      path,
+      reason: user.platformBlockedReason ?? null,
+      channel: "pre-sign-in",
+    },
+  });
+
+  throw new APIError("FORBIDDEN", {
+    message: "Conta bloqueada pela administracao da plataforma.",
+  });
+}
+
 type OrganizationInvitationEmailPayload = {
   id: string;
   role: string;
@@ -417,6 +473,7 @@ type ResetPasswordEmailPayload = {
 
 type WelcomeEmailPayload = {
   user: {
+    id: string;
     name?: string | null;
     email: string;
   };
@@ -878,6 +935,27 @@ async function sendSignUpThankYouEmail(payload: WelcomeEmailPayload, request?: R
     text,
     html,
   });
+}
+
+async function maybeSendSignUpThankYouEmail(
+  payload: WelcomeEmailPayload,
+  request?: Request,
+): Promise<void> {
+  const userId = payload.user.id.trim();
+  if (!userId) {
+    return;
+  }
+
+  const markerId = ["welcome_email", userId].join(":");
+  const markerCreated = await acquireInternalNotificationMarker(markerId, "auth.welcome_email", {
+    userId,
+    email: payload.user.email,
+  });
+  if (!markerCreated) {
+    return;
+  }
+
+  await sendSignUpThankYouEmail(payload, request);
 }
 
 export async function sendMemberRemovedFromOrganizationEmail(
@@ -1535,6 +1613,7 @@ export const auth = betterAuth({
   },
   advanced: {
     useSecureCookies: isProduction(),
+    cookiePrefix: getAuthCookiePrefix(),
     ipAddress: {
       ipAddressHeaders: ["cf-connecting-ip", "x-forwarded-for", "x-real-ip"],
       ipv6Subnet: 64,
@@ -1556,12 +1635,18 @@ export const auth = betterAuth({
             return;
           }
 
+          const userId = typeof user.id === "string" ? user.id.trim() : "";
+          if (!userId) {
+            return;
+          }
+
           const userName = typeof user.name === "string" ? user.name : null;
 
           try {
-            await sendSignUpThankYouEmail(
+            await maybeSendSignUpThankYouEmail(
               {
                 user: {
+                  id: userId,
                   name: userName,
                   email: userEmail,
                 },
@@ -1599,6 +1684,24 @@ export const auth = betterAuth({
           } catch (error) {
             console.error("Failed to send 2FA status email.", error);
           }
+
+          const userId = typeof user.id === "string" ? user.id.trim() : "";
+          if (!userId) {
+            return;
+          }
+
+          await logPlatformEvent({
+            source: "auth",
+            action: "security.two_factor_changed",
+            severity: PlatformEventSeverity.INFO,
+            actorUserId: userId,
+            targetType: "user",
+            targetId: userId,
+            metadata: {
+              enabled: path === "/two-factor/verify-totp",
+              path,
+            },
+          });
         },
       },
     },
@@ -1609,22 +1712,76 @@ export const auth = betterAuth({
             return;
           }
 
-          const path = context.path || "";
-          if (!shouldSendSuspiciousLoginEmailForSessionCreate(path)) {
-            return;
-          }
-
           const userId = typeof session.userId === "string" ? session.userId : "";
           const sessionId = typeof session.id === "string" ? session.id : "";
           if (!userId || !sessionId) {
             return;
           }
 
-          const occurredAt =
+          const path = context.path || "";
+          const occurredAtCandidate =
             session.createdAt instanceof Date
               ? session.createdAt
               : new Date(String(session.createdAt ?? ""));
-          if (Number.isNaN(occurredAt.getTime())) {
+          const occurredAt = Number.isNaN(occurredAtCandidate.getTime()) ? null : occurredAtCandidate;
+
+          const blockedUser = await prisma.user.findUnique({
+            where: {
+              id: userId,
+            },
+            select: {
+              platformStatus: true,
+              platformBlockedReason: true,
+            },
+          });
+
+          if (blockedUser?.platformStatus === "BLOCKED") {
+            await prisma.session.deleteMany({
+              where: {
+                id: sessionId,
+                userId,
+              },
+            });
+
+            await logPlatformEvent({
+              source: "auth",
+              action: "login.blocked",
+              severity: PlatformEventSeverity.WARN,
+              actorUserId: userId,
+              targetType: "user",
+              targetId: userId,
+              metadata: {
+                path,
+                reason: blockedUser.platformBlockedReason ?? null,
+                channel: "session-create",
+              },
+            });
+
+            throw new APIError("FORBIDDEN", {
+              message: "Conta bloqueada pela administracao da plataforma.",
+            });
+          }
+
+          await logPlatformEvent({
+            source: "auth",
+            action: "session.created",
+            severity: PlatformEventSeverity.INFO,
+            actorUserId: userId,
+            targetType: "session",
+            targetId: sessionId,
+            metadata: {
+              path,
+              loggedInAt: occurredAt?.toISOString() ?? null,
+              ipAddress: typeof session.ipAddress === "string" ? session.ipAddress : null,
+              userAgent: typeof session.userAgent === "string" ? session.userAgent : null,
+            },
+          });
+
+          if (!shouldSendSuspiciousLoginEmailForSessionCreate(path)) {
+            return;
+          }
+
+          if (!occurredAt) {
             return;
           }
 
@@ -1751,6 +1908,19 @@ export const auth = betterAuth({
           } catch (error) {
             console.error("Failed to send password-changed email.", error);
           }
+
+          await logPlatformEvent({
+            source: "auth",
+            action: "security.password_changed",
+            severity: PlatformEventSeverity.INFO,
+            actorUserId: userId,
+            targetType: "user",
+            targetId: userId,
+            metadata: {
+              path,
+              providerId,
+            },
+          });
         },
       },
     },
@@ -1767,6 +1937,28 @@ export const auth = betterAuth({
         },
         url,
       });
+    },
+    afterEmailVerification: async (user, request) => {
+      const userEmail = typeof user.email === "string" ? user.email.trim() : "";
+      const userId = typeof user.id === "string" ? user.id.trim() : "";
+      if (!userEmail || !userId) {
+        return;
+      }
+
+      try {
+        await maybeSendSignUpThankYouEmail(
+          {
+            user: {
+              id: userId,
+              name: user.name,
+              email: userEmail,
+            },
+          },
+          request,
+        );
+      } catch (error) {
+        console.error("Failed to send post-verification welcome email.", error);
+      }
     },
   },
   emailAndPassword: {
@@ -1810,6 +2002,7 @@ export const auth = betterAuth({
       }
 
       await dedupeCredentialAccountsForEmail(ctx.body?.email);
+      await assertEmailUserNotPlatformBlocked(ctx.body?.email, ctx.path);
     }),
   },
   plugins: [

@@ -45,6 +45,14 @@ function getSingleSearchParam(value: string | string[] | undefined): string {
   return value ?? "";
 }
 
+function getPrefillPlanCode(value: string): "STARTER_50" | "PRO_100" | "SCALE_400" | null {
+  if (value === "STARTER_50" || value === "PRO_100" || value === "SCALE_400") {
+    return value;
+  }
+
+  return null;
+}
+
 function formatDate(value: Date | string | null): string {
   if (!value) {
     return "-";
@@ -169,6 +177,9 @@ export default async function BillingPage({
   const successMessage = getSingleSearchParam(resolvedSearchParams.success).trim();
   const errorMessage = getSingleSearchParam(resolvedSearchParams.error).trim();
   const checkoutId = getSingleSearchParam(resolvedSearchParams.checkout).trim();
+  const prefillPlanCode = getPrefillPlanCode(
+    getSingleSearchParam(resolvedSearchParams.prefillPlan).trim(),
+  );
 
   const tenantContext = await getTenantContext();
   const user = tenantContext.session?.user;
@@ -205,10 +216,29 @@ export default async function BillingPage({
   const restriction = billingData.entitlements.restriction;
   const currentIsPaidPlan = isPaidPlan(effectivePlanCode);
   const isPastDueInGrace = subscription.status === "PAST_DUE" && dunning.inGracePeriod;
+  const isComplimentaryActive = Boolean(
+    subscription.status === "ACTIVE" &&
+      subscription.cancelAtPeriodEnd &&
+      subscription.complimentaryPlanCode &&
+      subscription.complimentaryMonths &&
+      subscription.complimentaryStartsAt &&
+      subscription.complimentaryEndsAt &&
+      subscription.currentPeriodEnd &&
+      subscription.currentPeriodEnd.getTime() === subscription.complimentaryEndsAt.getTime() &&
+      subscription.complimentaryEndsAt > new Date() &&
+      subscription.planCode === subscription.complimentaryPlanCode,
+  );
+  const complimentaryPlanName = subscription.complimentaryPlanCode
+    ? getPlanDefinition(subscription.complimentaryPlanCode).name
+    : null;
   const usersInUse = usage.users + usage.pendingInvitations;
   const isDowngradeScheduled = Boolean(subscription.cancelAtPeriodEnd && currentIsPaidPlan);
   const canRenewCurrentPlan = isPastDueInGrace && currentIsPaidPlan;
-  const billingCycleLabel = isPastDueInGrace ? "Fim da carencia" : "Fim do ciclo atual";
+  const billingCycleLabel = isPastDueInGrace
+    ? "Fim da carencia"
+    : isComplimentaryActive
+      ? "Fim da cortesia"
+      : "Fim do ciclo atual";
   const isCheckoutProcessing = Boolean(checkoutState?.isProcessing);
   const isCheckoutFailure = Boolean(
     checkoutState &&
@@ -299,6 +329,22 @@ export default async function BillingPage({
         </Card>
       ) : null}
 
+      {isComplimentaryActive ? (
+        <Card className="border-emerald-500/40 bg-emerald-500/10">
+          <CardContent className="space-y-1 py-3 text-sm">
+            <p className="font-medium">Plano em cortesia</p>
+            <p>
+              Voce ganhou <strong>{subscription.complimentaryMonths} mes(es)</strong> gratis no plano{" "}
+              <strong>{complimentaryPlanName}</strong>.
+            </p>
+            <p className="text-xs">
+              Periodo: {formatDate(subscription.complimentaryStartsAt)} ate{" "}
+              {formatDate(subscription.complimentaryEndsAt)}. Durante esse periodo nao existe cobranca.
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <AppPageHighlightCard
         eyebrow="Plano"
         title="Controle financeiro com visao clara para crescer com seguranca"
@@ -355,14 +401,15 @@ export default async function BillingPage({
       ) : null}
 
       {visiblePlanCards.length > 0 ? (
-        <BillingPlansSection
-          plans={visiblePlanCards}
-          effectivePlanCode={effectivePlanCode}
-          currentIsPaidPlan={currentIsPaidPlan}
-          canRenewCurrentPlan={canRenewCurrentPlan}
-          checkoutInProgress={isCheckoutProcessing}
-          billingDefaults={billingDefaults}
-        />
+      <BillingPlansSection
+        plans={visiblePlanCards}
+        effectivePlanCode={effectivePlanCode}
+        currentIsPaidPlan={currentIsPaidPlan}
+        canRenewCurrentPlan={canRenewCurrentPlan}
+        checkoutInProgress={isCheckoutProcessing}
+        initialPlanCode={prefillPlanCode}
+        billingDefaults={billingDefaults}
+      />
       ) : (
         <Card className="border-dashed">
           <CardHeader>
@@ -390,6 +437,7 @@ export default async function BillingPage({
           <div className="flex flex-wrap gap-2">
             <Badge variant="secondary">{currentPlan.name}</Badge>
             <Badge variant="outline">Status: {statusLabel(subscription.status)}</Badge>
+            {isComplimentaryActive ? <Badge variant="secondary">Cortesia ativa</Badge> : null}
             {isPastDueInGrace ? <Badge variant="destructive">Carencia ativa</Badge> : null}
             {restriction.isRestricted ? <Badge variant="destructive">Modo restrito</Badge> : null}
             {isDowngradeScheduled ? <Badge variant="destructive">Rebaixamento para Gratuito agendado</Badge> : null}
@@ -420,7 +468,7 @@ export default async function BillingPage({
             </div>
           </div>
 
-          {currentIsPaidPlan && subscription.status !== "PAST_DUE" ? (
+          {currentIsPaidPlan && subscription.status !== "PAST_DUE" && !isComplimentaryActive ? (
             <div className="space-y-2">
               <CancelSubscriptionDialog
                 disabled={isDowngradeScheduled}

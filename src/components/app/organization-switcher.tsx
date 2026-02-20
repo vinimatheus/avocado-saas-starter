@@ -59,6 +59,8 @@ type OrganizationSwitcherItem = {
   name: string;
   slug: string;
   logo: string | null;
+  platformStatus: "ACTIVE" | "BLOCKED";
+  platformBlockedReason: string | null;
   planCode: "FREE" | "STARTER_50" | "PRO_100" | "SCALE_400";
   planName: string;
   isPremium: boolean;
@@ -79,6 +81,8 @@ function toOrganizationItems(
     name: string;
     slug: string;
     logo?: string | null;
+    platformStatus?: "ACTIVE" | "BLOCKED";
+    platformBlockedReason?: string | null;
     planCode?: "FREE" | "STARTER_50" | "PRO_100" | "SCALE_400";
     planName?: string;
     isPremium?: boolean;
@@ -94,11 +98,24 @@ function toOrganizationItems(
     name: organization.name,
     slug: organization.slug,
     logo: organization.logo ?? null,
+    platformStatus: organization.platformStatus ?? "ACTIVE",
+    platformBlockedReason: organization.platformBlockedReason ?? null,
     planCode: organization.planCode ?? "FREE",
     planName: organization.planName ?? "Gratuito",
     isPremium: organization.isPremium ?? false,
     permissions: resolveOrganizationPermissions(organization.permissions),
   }));
+}
+
+function resolveBlockedOrganizationMessage(organization: OrganizationSwitcherItem): string {
+  const reason = organization.platformBlockedReason?.trim() ?? "";
+  const isPlaceholderReason = /^(teste?|debug|n\/a|na)$/i.test(reason);
+
+  if (reason && !isPlaceholderReason) {
+    return `Esta organizacao foi bloqueada: ${reason}`;
+  }
+
+  return "Esta organizacao foi bloqueada pela administracao da plataforma.";
 }
 
 function planBadgeLabel(planCode: OrganizationSwitcherItem["planCode"]): string {
@@ -278,7 +295,13 @@ export function OrganizationSwitcher({
     router.refresh();
   }, [leaveState.redirectTo, router]);
 
-  function switchOrganization(organizationId: string, organizationName: string): void {
+  function switchOrganization(organization: OrganizationSwitcherItem): void {
+    if (organization.platformStatus === "BLOCKED") {
+      toast.error(resolveBlockedOrganizationMessage(organization));
+      return;
+    }
+
+    const organizationId = organization.id;
     if (!organizationId || organizationId === resolvedActiveOrganizationId) {
       return;
     }
@@ -293,7 +316,7 @@ export function OrganizationSwitcher({
         return;
       }
 
-      toast.success(`Organizacao ativa: ${organizationName}.`);
+      toast.success(`Organizacao ativa: ${organization.name}.`);
       onOrganizationSwitch?.();
       router.replace("/dashboard");
       router.refresh();
@@ -352,8 +375,12 @@ export function OrganizationSwitcher({
             organizations.map((organization) => (
               <DropdownMenuItem
                 key={organization.id}
-                onSelect={() => {
-                  switchOrganization(organization.id, organization.name);
+                onSelect={(event) => {
+                  if (organization.platformStatus === "BLOCKED") {
+                    event.preventDefault();
+                  }
+
+                  switchOrganization(organization);
                 }}
                 disabled={isSwitchingOrganization}
               >
@@ -362,6 +389,11 @@ export function OrganizationSwitcher({
                   <Badge variant="outline" className="h-4 px-1.5 text-[0.6rem] font-medium">
                     {planBadgeLabel(organization.planCode)}
                   </Badge>
+                  {organization.platformStatus === "BLOCKED" ? (
+                    <Badge variant="destructive" className="h-4 px-1.5 text-[0.6rem] font-medium">
+                      Bloqueada
+                    </Badge>
+                  ) : null}
                 </span>
                 {organization.id === resolvedActiveOrganizationId ? (
                   <CheckIcon className="ml-auto size-3.5" />

@@ -4,6 +4,7 @@ import {
   BillingPlanCode,
   CheckoutStatus,
   OwnerSubscription,
+  PlatformEventSeverity,
   Prisma,
   SubscriptionStatus,
   WebhookProcessingStatus,
@@ -34,6 +35,7 @@ import {
   resolveExplicitAppBaseUrlFromEnv,
   resolveVercelAppBaseUrlFromEnv,
 } from "@/lib/env/app-base-url";
+import { logPlatformEvent } from "@/lib/platform/events";
 
 export const DEFAULT_USAGE_METRIC_KEY = "workspace_events";
 export const DEFAULT_PAST_DUE_GRACE_DAYS = 28;
@@ -44,6 +46,8 @@ const PAST_DUE_REMINDER_DAYS = [7, 14, 21] as const;
 const DUNNING_EMAIL_DAYS = [1, 3, 7, 14] as const;
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_NEW_ORGANIZATION_TRIAL_PLAN_CODE = BillingPlanCode.STARTER_50;
+const PLATFORM_ORGANIZATION_BLOCK_MESSAGE =
+  "Esta organizacao foi bloqueada pela administracao da plataforma.";
 
 type OwnerUsageSnapshot = {
   organizations: number;
@@ -757,9 +761,46 @@ function assertNotBlockedByExpiredTrial(entitlements: OwnerEntitlements): void {
   throw new Error(blockMessage);
 }
 
+async function resolvePlatformOrganizationBlockMessage(
+  organizationId: string,
+): Promise<string | null> {
+  const organization = await prisma.organization.findUnique({
+    where: {
+      id: organizationId,
+    },
+    select: {
+      platformStatus: true,
+      platformBlockedReason: true,
+    },
+  });
+
+  if (organization?.platformStatus !== "BLOCKED") {
+    return null;
+  }
+
+  const reason = organization.platformBlockedReason?.trim();
+  return reason || PLATFORM_ORGANIZATION_BLOCK_MESSAGE;
+}
+
+async function assertOrganizationNotPlatformBlocked(
+  organizationId: string,
+): Promise<void> {
+  const blockMessage = await resolvePlatformOrganizationBlockMessage(organizationId);
+  if (!blockMessage) {
+    return;
+  }
+
+  throw new Error(blockMessage);
+}
+
 export async function getOrganizationBlockMessage(
   organizationId: string,
 ): Promise<string | null> {
+  const platformBlockMessage = await resolvePlatformOrganizationBlockMessage(organizationId);
+  if (platformBlockMessage) {
+    return platformBlockMessage;
+  }
+
   const entitlements = await getOwnerEntitlements(organizationId);
   return resolveOrganizationBlockMessageFromSubscription(entitlements.subscription);
 }
@@ -835,6 +876,8 @@ export async function assertOrganizationCanCreateInvitation(
   organizationId: string,
   email: string,
 ): Promise<void> {
+  await assertOrganizationNotPlatformBlocked(organizationId);
+
   const existingPendingInvitation = await prisma.invitation.findFirst({
     where: {
       organizationId,
@@ -869,6 +912,8 @@ export async function assertOrganizationCanAddMember(
   organizationId: string,
   targetUserId?: string,
 ): Promise<void> {
+  await assertOrganizationNotPlatformBlocked(organizationId);
+
   const entitlements = await getOwnerEntitlements(organizationId);
   assertNotBlockedByExpiredTrial(entitlements);
   const plan = getPlanDefinition(entitlements.effectivePlanCode);
@@ -918,6 +963,8 @@ export async function assertOrganizationCanAcceptInvitation(
   organizationId: string,
   invitationId: string,
 ): Promise<void> {
+  await assertOrganizationNotPlatformBlocked(organizationId);
+
   const entitlements = await getOwnerEntitlements(organizationId);
   assertNotBlockedByExpiredTrial(entitlements);
   const plan = getPlanDefinition(entitlements.effectivePlanCode);
@@ -948,6 +995,8 @@ export async function assertOrganizationCanCreateProject(
   organizationId: string,
   increment: number = 1,
 ): Promise<void> {
+  await assertOrganizationNotPlatformBlocked(organizationId);
+
   const entitlements = await getOwnerEntitlements(organizationId);
   assertNotBlockedByExpiredTrial(entitlements);
   assertNotRestricted(entitlements);
@@ -970,6 +1019,8 @@ export async function assertOrganizationCanConsumeMonthlyUsage(
   increment: number = 1,
   metricKey: string = DEFAULT_USAGE_METRIC_KEY,
 ): Promise<void> {
+  await assertOrganizationNotPlatformBlocked(organizationId);
+
   const entitlements = await getOwnerEntitlements(organizationId, metricKey);
   assertNotBlockedByExpiredTrial(entitlements);
   assertNotRestricted(entitlements);
@@ -2784,6 +2835,18 @@ export async function processAbacateWebhook(payloadInput: unknown): Promise<{
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === "P2002"
     ) {
+      await logPlatformEvent({
+        source: "billing",
+        action: "webhook.duplicate",
+        severity: PlatformEventSeverity.INFO,
+        targetType: "billing_webhook_event",
+        targetId: payload.id,
+        metadata: {
+          provider: "abacatepay",
+          event: payload.event,
+        },
+      });
+
       return {
         duplicate: true,
         processed: false,
@@ -2797,6 +2860,19 @@ export async function processAbacateWebhook(payloadInput: unknown): Promise<{
 
   if (!outcome) {
     await markWebhookEvent(payload.id, WebhookProcessingStatus.IGNORED, null);
+    await logPlatformEvent({
+      source: "billing",
+      action: "webhook.ignored",
+      severity: PlatformEventSeverity.INFO,
+      targetType: "billing_webhook_event",
+      targetId: payload.id,
+      metadata: {
+        provider: "abacatepay",
+        event: payload.event,
+        reason: "outcome_not_supported",
+      },
+    });
+
     return {
       duplicate: false,
       processed: false,
@@ -2812,6 +2888,18 @@ export async function processAbacateWebhook(payloadInput: unknown): Promise<{
         WebhookProcessingStatus.IGNORED,
         "Checkout não encontrado para o evento recebido.",
       );
+      await logPlatformEvent({
+        source: "billing",
+        action: "webhook.ignored",
+        severity: PlatformEventSeverity.WARN,
+        targetType: "billing_webhook_event",
+        targetId: payload.id,
+        metadata: {
+          provider: "abacatepay",
+          event: payload.event,
+          reason: "checkout_not_found",
+        },
+      });
 
       return {
         duplicate: false,
@@ -2821,6 +2909,20 @@ export async function processAbacateWebhook(payloadInput: unknown): Promise<{
 
     await applyWebhookOutcome(checkout, payload, outcome, "webhook");
     await markWebhookEvent(payload.id, WebhookProcessingStatus.PROCESSED, null);
+    await logPlatformEvent({
+      source: "billing",
+      action: "webhook.processed",
+      severity: PlatformEventSeverity.INFO,
+      organizationId: checkout.organizationId,
+      targetType: "billing_webhook_event",
+      targetId: payload.id,
+      metadata: {
+        provider: "abacatepay",
+        event: payload.event,
+        outcome,
+        checkoutId: checkout.id,
+      },
+    });
 
     return {
       duplicate: false,
@@ -2829,6 +2931,18 @@ export async function processAbacateWebhook(payloadInput: unknown): Promise<{
   } catch (error) {
     const message = error instanceof Error ? error.message : "Falha ao processar webhook.";
     await markWebhookEvent(payload.id, WebhookProcessingStatus.FAILED, message);
+    await logPlatformEvent({
+      source: "billing",
+      action: "webhook.failed",
+      severity: PlatformEventSeverity.ERROR,
+      targetType: "billing_webhook_event",
+      targetId: payload.id,
+      metadata: {
+        provider: "abacatepay",
+        event: payload.event,
+        error: message,
+      },
+    });
     throw error;
   }
 }

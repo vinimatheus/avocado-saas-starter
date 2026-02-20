@@ -48,7 +48,7 @@ export function ChartContainer({ config, className, children, ...props }: ChartC
     <ChartContext.Provider value={{ config }}>
       <div
         className={cn(
-          "flex w-full justify-center text-xs [&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground",
+          "flex min-w-0 w-full justify-center text-xs [&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground",
           "[&_.recharts-cartesian-grid_line]:stroke-border/60 [&_.recharts-curve.recharts-tooltip-cursor]:stroke-border",
           "[&_.recharts-dot[stroke='#fff']]:stroke-transparent [&_.recharts-layer]:outline-none",
           "[&_.recharts-polar-grid_[stroke='#ccc']]:stroke-border [&_.recharts-sector]:outline-none",
@@ -58,7 +58,9 @@ export function ChartContainer({ config, className, children, ...props }: ChartC
         style={chartStyle}
         {...props}
       >
-        <RechartsPrimitive.ResponsiveContainer>{children}</RechartsPrimitive.ResponsiveContainer>
+        <RechartsPrimitive.ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={180}>
+          {children}
+        </RechartsPrimitive.ResponsiveContainer>
       </div>
     </ChartContext.Provider>
   );

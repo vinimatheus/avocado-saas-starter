@@ -45,6 +45,7 @@ type BillingPlansSectionProps = {
   currentIsPaidPlan: boolean;
   canRenewCurrentPlan: boolean;
   checkoutInProgress?: boolean;
+  initialPlanCode?: BillingPlanCode | null;
   billingDefaults: {
     name: string;
     cellphone: string;
@@ -89,11 +90,20 @@ export function BillingPlansSection({
   currentIsPaidPlan,
   canRenewCurrentPlan,
   checkoutInProgress = false,
+  initialPlanCode = null,
   billingDefaults,
 }: BillingPlansSectionProps) {
+  const resolvedInitialPlanCode =
+    initialPlanCode && plans.some((plan) => plan.code === initialPlanCode)
+      ? initialPlanCode
+      : null;
   const [annualBillingPreview, setAnnualBillingPreview] = useState(false);
-  const [isBillingDialogOpen, setIsBillingDialogOpen] = useState(false);
-  const [selectedPlanCode, setSelectedPlanCode] = useState<BillingPlanCode | null>(null);
+  const [isBillingDialogOpen, setIsBillingDialogOpen] = useState(
+    () => Boolean(resolvedInitialPlanCode),
+  );
+  const [selectedPlanCode, setSelectedPlanCode] = useState<BillingPlanCode | null>(
+    () => resolvedInitialPlanCode,
+  );
 
   const featuredPlanCode = useMemo<BillingPlanCode | null>(() => {
     if (plans.some((plan) => plan.code === "PRO_100")) {

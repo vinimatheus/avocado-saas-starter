@@ -45,6 +45,22 @@ export default async function AppLayout({ children }: Readonly<{ children: React
     redirect("/onboarding/company");
   }
 
+  if (tenantContext.activeOrganizationPlatformStatus === "BLOCKED") {
+    const params = new URLSearchParams();
+    const reason =
+      tenantContext.activeOrganizationPlatformBlockedReason?.trim() ||
+      "Sua organizacao foi bloqueada pela administracao da plataforma.";
+    const allOrganizationsBlocked =
+      tenantContext.organizations.length > 0 &&
+      tenantContext.organizations.every((organization) => organization.platformStatus === "BLOCKED");
+
+    params.set("reason", reason);
+    if (allOrganizationsBlocked) {
+      params.set("allBlocked", "1");
+    }
+    redirect(`/blocked?${params.toString()}`);
+  }
+
   const pendingInvitations = await auth.api
     .listUserInvitations({
       headers: requestHeaders,

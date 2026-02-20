@@ -15,15 +15,21 @@ export type TenantContext = {
   session: Awaited<ReturnType<typeof auth.api.getSession>>;
   organizationId: string | null;
   organizationName: string | null;
+  activeOrganizationPlatformStatus: "ACTIVE" | "BLOCKED" | null;
+  activeOrganizationPlatformBlockedReason: string | null;
   permissions: OrganizationPermissions;
   organizations: Array<{
     id: string;
     name: string;
     slug: string;
     logo: string | null;
+    platformStatus: "ACTIVE" | "BLOCKED";
+    platformBlockedReason: string | null;
     planCode: "FREE" | "STARTER_50" | "PRO_100" | "SCALE_400";
     planName: string;
     isPremium: boolean;
+    subscriptionStatus: "FREE" | "TRIALING" | "ACTIVE" | "PAST_DUE" | "CANCELED" | "EXPIRED" | null;
+    trialEndsAt: string | null;
     permissions: OrganizationPermissions;
   }>;
   role: OrganizationUserRole | null;
@@ -85,6 +91,38 @@ async function resolveTenantContext(): Promise<TenantContext> {
       session,
       organizationId: null,
       organizationName: null,
+      activeOrganizationPlatformStatus: null,
+      activeOrganizationPlatformBlockedReason: null,
+      permissions: defaultOrganizationPermissions,
+      organizations: [],
+      role: null,
+    };
+  }
+
+  const userPlatformStatus = await prisma.user.findUnique({
+    where: {
+      id: session.user.id,
+    },
+    select: {
+      platformStatus: true,
+    },
+  });
+
+  if (userPlatformStatus?.platformStatus === "BLOCKED") {
+    try {
+      await auth.api.signOut({
+        headers: requestHeaders,
+      });
+    } catch {
+      // Ignore sign-out failures and proceed without tenant access.
+    }
+
+    return {
+      session: null,
+      organizationId: null,
+      organizationName: null,
+      activeOrganizationPlatformStatus: null,
+      activeOrganizationPlatformBlockedReason: null,
       permissions: defaultOrganizationPermissions,
       organizations: [],
       role: null,
@@ -129,6 +167,8 @@ async function resolveTenantContext(): Promise<TenantContext> {
               allowMemberCreateProduct: true,
               allowMemberInviteUsers: true,
               rbacPermissions: true,
+              platformStatus: true,
+              platformBlockedReason: true,
             },
           })
           .catch((error) => {
@@ -151,6 +191,18 @@ async function resolveTenantContext(): Promise<TenantContext> {
       ),
     ]),
   );
+  const platformStatusByOrganizationId = new Map(
+    organizationPermissionSnapshots.map((organization) => [
+      organization.id,
+      organization.platformStatus,
+    ]),
+  );
+  const platformBlockedReasonByOrganizationId = new Map(
+    organizationPermissionSnapshots.map((organization) => [
+      organization.id,
+      organization.platformBlockedReason ?? null,
+    ]),
+  );
   const organizationsWithBillingState = organizations.map((organization) => {
     const subscription = subscriptionByOrganizationId.get(
       organization.id,
@@ -162,9 +214,13 @@ async function resolveTenantContext(): Promise<TenantContext> {
       name: organization.name,
       slug: organization.slug,
       logo: normalizeOrganizationLogo((organization as { logo?: unknown }).logo),
+      platformStatus: platformStatusByOrganizationId.get(organization.id) ?? "ACTIVE",
+      platformBlockedReason: platformBlockedReasonByOrganizationId.get(organization.id) ?? null,
       planCode,
       planName: getPlanDefinition(planCode).name,
       isPremium: isPaidPlan(planCode),
+      subscriptionStatus: subscription?.status ?? null,
+      trialEndsAt: subscription?.trialEndsAt ? subscription.trialEndsAt.toISOString() : null,
       permissions:
         permissionsByOrganizationId.get(organization.id) ?? defaultOrganizationPermissions,
     };
@@ -172,14 +228,33 @@ async function resolveTenantContext(): Promise<TenantContext> {
 
   const activeOrganizationId = session.session.activeOrganizationId ?? null;
   const activeOrganization = organizations.find((organization) => organization.id === activeOrganizationId);
-  const fallbackOrganization = organizations[0] ?? null;
-  const selectedOrganization = activeOrganization ?? fallbackOrganization;
+  const activeOrganizationIsBlocked = Boolean(
+    activeOrganization &&
+      platformStatusByOrganizationId.get(activeOrganization.id) === "BLOCKED",
+  );
+  const firstUnblockedOrganization =
+    organizations.find(
+      (organization) => platformStatusByOrganizationId.get(organization.id) !== "BLOCKED",
+    ) ?? null;
+  const fallbackOrganization = firstUnblockedOrganization ?? organizations[0] ?? null;
+  const selectedOrganization =
+    activeOrganization && !activeOrganizationIsBlocked
+      ? activeOrganization
+      : fallbackOrganization;
+  const selectedOrganizationPlatformStatus = selectedOrganization
+    ? platformStatusByOrganizationId.get(selectedOrganization.id) ?? "ACTIVE"
+    : null;
+  const selectedOrganizationBlockedReason = selectedOrganization
+    ? platformBlockedReasonByOrganizationId.get(selectedOrganization.id) ?? null
+    : null;
 
   if (!selectedOrganization) {
     return {
       session,
       organizationId: null,
       organizationName: null,
+      activeOrganizationPlatformStatus: null,
+      activeOrganizationPlatformBlockedReason: null,
       permissions: defaultOrganizationPermissions,
       organizations: [],
       role: null,
@@ -216,6 +291,8 @@ async function resolveTenantContext(): Promise<TenantContext> {
       session,
       organizationId: null,
       organizationName: null,
+      activeOrganizationPlatformStatus: null,
+      activeOrganizationPlatformBlockedReason: null,
       permissions: defaultOrganizationPermissions,
       organizations: organizationsWithBillingState,
       role: null,
@@ -226,6 +303,8 @@ async function resolveTenantContext(): Promise<TenantContext> {
     session,
     organizationId: selectedOrganization.id,
     organizationName: selectedOrganization.name,
+    activeOrganizationPlatformStatus: selectedOrganizationPlatformStatus,
+    activeOrganizationPlatformBlockedReason: selectedOrganizationBlockedReason,
     permissions:
       permissionsByOrganizationId.get(selectedOrganization.id) ?? defaultOrganizationPermissions,
     organizations: organizationsWithBillingState,

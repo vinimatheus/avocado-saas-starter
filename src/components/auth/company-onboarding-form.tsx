@@ -7,16 +7,18 @@ import {
   Building2Icon,
   CameraIcon,
   CheckCircle2Icon,
+  CheckIcon,
   SparklesIcon,
   UploadIcon,
   UserRoundIcon,
 } from "lucide-react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
 
 import {
+  createOrganizationWithPlanAction,
   completeOnboardingOrganizationStepAction,
   completeOnboardingProfileStepAction,
   type OnboardingOrganizationActionState,
@@ -37,11 +39,12 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { authClient } from "@/lib/auth/client";
-import { localizeAuthErrorMessage } from "@/lib/auth/error-messages";
 import { stripFieldRef } from "@/lib/forms/rhf";
 import { getFirstValidationErrorMessage } from "@/lib/forms/validation-toast";
-import { buildOrganizationSlug } from "@/lib/organization/helpers";
+import { cn } from "@/lib/shared/utils";
+
+const organizationCreatePlanCodes = ["FREE", "STARTER_50", "PRO_100", "SCALE_400"] as const;
+type OrganizationCreatePlanCode = (typeof organizationCreatePlanCodes)[number];
 
 const companyOnboardingSchema = z.object({
   companyName: z
@@ -49,6 +52,7 @@ const companyOnboardingSchema = z.object({
     .trim()
     .min(2, "Nome da organizacao deve ter ao menos 2 caracteres.")
     .max(120, "Nome da organizacao deve ter no maximo 120 caracteres."),
+  planCode: z.enum(organizationCreatePlanCodes),
 });
 
 type CompanyOnboardingValues = z.infer<typeof companyOnboardingSchema>;
@@ -62,7 +66,6 @@ type CompanyOnboardingFormProps = {
   redirectPath?: string;
 };
 
-const ORGANIZATION_SLUG_MAX_LENGTH = 70;
 const MAX_IMAGE_UPLOAD_BYTES = 5 * 1024 * 1024;
 const initialOnboardingProfileActionState: OnboardingProfileActionState = {
   status: "idle",
@@ -74,14 +77,42 @@ const initialOnboardingOrganizationActionState: OnboardingOrganizationActionStat
   redirectTo: null,
 };
 
-function generateOrganizationSlugVariant(baseSlug: string): string {
-  const suffix = Math.random().toString(36).slice(2, 8);
-  const base = baseSlug
-    .slice(0, Math.max(1, ORGANIZATION_SLUG_MAX_LENGTH - suffix.length - 1))
-    .replace(/-+$/g, "");
-
-  return `${base || "organizacao"}-${suffix}`.slice(0, ORGANIZATION_SLUG_MAX_LENGTH);
-}
+const ORGANIZATION_CREATE_PLAN_OPTIONS: Array<{
+  code: OrganizationCreatePlanCode;
+  name: string;
+  priceLabel: string;
+  description: string;
+  helper: string;
+}> = [
+  {
+    code: "FREE",
+    name: "Gratis",
+    priceLabel: "R$0",
+    description: "Trial por 7 dias para iniciar rapido.",
+    helper: "Limite de 1 organizacao free ativa por usuario.",
+  },
+  {
+    code: "STARTER_50",
+    name: "Starter",
+    priceLabel: "R$50/mes",
+    description: "Ate 50 usuarios por organizacao.",
+    helper: "Ideal para times iniciando operacao recorrente.",
+  },
+  {
+    code: "PRO_100",
+    name: "Pro",
+    priceLabel: "R$100/mes",
+    description: "Ate 100 usuarios com recursos avancados.",
+    helper: "Mais capacidade para crescimento de equipe.",
+  },
+  {
+    code: "SCALE_400",
+    name: "Scale",
+    priceLabel: "R$400/mes",
+    description: "Usuarios ilimitados e suporte prioritario.",
+    helper: "Pensado para operacoes em larga escala.",
+  },
+];
 
 function initialsFromName(name: string | null | undefined): string {
   const parts = (name ?? "")
@@ -465,114 +496,35 @@ function OrganizationCreateForm({
     resolver: zodResolver(companyOnboardingSchema),
     defaultValues: {
       companyName: initialCompanyName,
+      planCode: "FREE",
     },
   });
+  const selectedPlanCode = useWatch({
+    control: form.control,
+    name: "planCode",
+    defaultValue: "FREE",
+  });
+  const selectedPlanIsPaid = selectedPlanCode !== "FREE";
 
   const onSubmit = form.handleSubmit(
     (values) => {
       setServerMessage("");
       startTransition(async () => {
-        const sessionResult = await authClient.getSession();
-        const userEmail = sessionResult.data?.user.email ?? null;
-        if (!userEmail) {
-          const message = "Nao foi possivel identificar seu e-mail. Faca login novamente.";
-          setServerMessage(message);
-          toast.error(message);
+        const payload = new FormData();
+        payload.set("companyName", values.companyName);
+        payload.set("planCode", values.planCode);
+        payload.set("redirectPath", redirectPath);
+        payload.set("keepCurrentActiveOrganization", String(keepCurrentActiveOrganization));
+
+        const result = await createOrganizationWithPlanAction(payload);
+        if (result.status === "error") {
+          setServerMessage(result.message);
+          toast.error(result.message);
           return;
         }
 
-        const slug = buildOrganizationSlug(values.companyName, userEmail);
-
-        const organizationResult = await authClient.organization.create({
-          name: values.companyName,
-          slug,
-          keepCurrentActiveOrganization,
-        });
-
-        if (organizationResult.error) {
-          const rawErrorMessage = organizationResult.error.message ?? "";
-          const normalizedErrorMessage = rawErrorMessage.trim().toLowerCase();
-
-          if (normalizedErrorMessage.includes("organization already exists")) {
-            const organizationsResult = await authClient.organization.list();
-            if (organizationsResult.error) {
-              const message = localizeAuthErrorMessage(
-                organizationsResult.error.message ?? "Nao foi possivel verificar suas organizacoes.",
-              );
-              setServerMessage(message);
-              toast.error(message);
-              return;
-            }
-
-            const organizations = organizationsResult.data ?? [];
-            const existingOrganization = organizations.find((organization) => organization.slug === slug);
-
-            if (existingOrganization) {
-              if (!keepCurrentActiveOrganization) {
-                const activateResult = await authClient.organization.setActive({
-                  organizationId: existingOrganization.id,
-                });
-
-                if (activateResult.error) {
-                  const message = localizeAuthErrorMessage(
-                    activateResult.error.message ?? "Nao foi possivel ativar a organizacao.",
-                  );
-                  setServerMessage(message);
-                  toast.error(message);
-                  return;
-                }
-              }
-
-              toast.success(
-                keepCurrentActiveOrganization
-                  ? "Organizacao ja existe. Use o seletor do menu lateral para trocar de organizacao."
-                  : "Organizacao vinculada com sucesso.",
-              );
-              router.replace(redirectPath);
-              router.refresh();
-              return;
-            }
-
-            // If the slug is taken but the organization is not in the user's list, generate a new slug.
-            const retryResult = await authClient.organization.create({
-              name: values.companyName,
-              slug: generateOrganizationSlugVariant(slug),
-              keepCurrentActiveOrganization,
-            });
-
-            if (!retryResult.error) {
-              toast.success(
-                keepCurrentActiveOrganization
-                  ? "Organizacao criada. Use o seletor do menu lateral para trocar de organizacao."
-                  : "Organizacao vinculada com sucesso.",
-              );
-              router.replace(redirectPath);
-              router.refresh();
-              return;
-            }
-
-            const message = localizeAuthErrorMessage(
-              retryResult.error.message ?? "Nao foi possivel criar a organizacao.",
-            );
-            setServerMessage(message);
-            toast.error(message);
-            return;
-          }
-
-          const message = localizeAuthErrorMessage(
-            organizationResult.error.message ?? "Nao foi possivel criar a organizacao.",
-          );
-          setServerMessage(message);
-          toast.error(message);
-          return;
-        }
-
-        toast.success(
-          keepCurrentActiveOrganization
-            ? "Organizacao criada. Use o seletor do menu lateral para trocar de organizacao."
-            : "Organizacao vinculada com sucesso.",
-        );
-        router.replace(redirectPath);
+        toast.success(result.message);
+        router.replace(result.redirectTo ?? redirectPath);
         router.refresh();
       });
     },
@@ -641,6 +593,64 @@ function OrganizationCreateForm({
               }}
             />
 
+            <FormField
+              control={form.control}
+              name="planCode"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-[0.72rem] font-semibold tracking-[0.08em] uppercase">
+                    Plano inicial
+                  </FormLabel>
+                  <FormControl>
+                    <div className="space-y-2">
+                      {ORGANIZATION_CREATE_PLAN_OPTIONS.map((plan) => {
+                        const isSelected = field.value === plan.code;
+
+                        return (
+                          <label
+                            key={plan.code}
+                            className={cn(
+                              "flex cursor-pointer items-start justify-between gap-3 rounded-xl border px-3 py-2 transition-colors",
+                              isSelected
+                                ? "border-primary/60 bg-primary/10"
+                                : "border-border/70 bg-background/70 hover:bg-muted/40",
+                            )}
+                          >
+                            <input
+                              type="radio"
+                              name={field.name}
+                              value={plan.code}
+                              checked={isSelected}
+                              onChange={() => field.onChange(plan.code)}
+                              className="sr-only"
+                            />
+
+                            <span className="space-y-0.5">
+                              <span className="flex items-center gap-2 text-sm font-semibold">
+                                {plan.name}
+                                <span className="text-muted-foreground text-xs font-medium">
+                                  {plan.priceLabel}
+                                </span>
+                              </span>
+                              <span className="text-muted-foreground block text-xs">
+                                {plan.description}
+                              </span>
+                              <span className="text-muted-foreground/90 block text-[0.68rem]">
+                                {plan.helper}
+                              </span>
+                            </span>
+
+                            {isSelected ? <CheckIcon className="text-primary mt-0.5 size-4" /> : null}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             {serverMessage ? (
               <p className="text-destructive text-sm font-medium">{serverMessage}</p>
             ) : null}
@@ -650,7 +660,11 @@ function OrganizationCreateForm({
               className="h-11 w-full rounded-xl text-sm font-semibold shadow-[0_14px_30px_-20px_rgba(76,175,80,0.85)]"
               disabled={isPending}
             >
-              {isPending ? "Criando organizacao..." : "Criar organizacao"}
+              {isPending
+                ? "Criando organizacao..."
+                : selectedPlanIsPaid
+                  ? "Criar e seguir para pagamento"
+                  : "Criar organizacao"}
             </Button>
           </form>
         </Form>

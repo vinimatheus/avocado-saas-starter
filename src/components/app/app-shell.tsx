@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   ArrowUpRightIcon,
+  Clock3Icon,
   LayoutDashboardIcon,
   PackageSearchIcon,
   SlidersHorizontalIcon,
@@ -22,6 +23,7 @@ import {
 } from "@/components/app/invitation-notification-menu";
 import { OrganizationSwitcher } from "@/components/app/organization-switcher";
 import { AppUserMenu } from "@/components/app/app-user-menu";
+import { Badge } from "@/components/ui/badge";
 import {
   Sidebar,
   SidebarContent,
@@ -55,9 +57,13 @@ type AppShellProps = {
     name: string;
     slug: string;
     logo: string | null;
+    platformStatus: "ACTIVE" | "BLOCKED";
+    platformBlockedReason: string | null;
     planCode: "FREE" | "STARTER_50" | "PRO_100" | "SCALE_400";
     planName: string;
     isPremium: boolean;
+    subscriptionStatus: "FREE" | "TRIALING" | "ACTIVE" | "PAST_DUE" | "CANCELED" | "EXPIRED" | null;
+    trialEndsAt: string | null;
     permissions: OrganizationPermissions;
   }>;
   pendingInvitations: UserInvitation[];
@@ -94,6 +100,55 @@ const NAV_ITEMS: NavItem[] = [
     showWhen: () => true,
   },
 ];
+
+const MINUTE_IN_MS = 60 * 1000;
+const HOUR_IN_MINUTES = 60;
+const DAY_IN_MINUTES = 24 * HOUR_IN_MINUTES;
+const DAY_IN_MS = DAY_IN_MINUTES * MINUTE_IN_MS;
+
+type TrialBadgeState = {
+  label: string;
+  isEndingSoon: boolean;
+};
+
+function resolveTrialBadgeState(
+  status: AppShellProps["organizations"][number]["subscriptionStatus"],
+  trialEndsAt: string | null,
+  now: Date = new Date(),
+): TrialBadgeState | null {
+  if (status !== "TRIALING" || !trialEndsAt) {
+    return null;
+  }
+
+  const trialEndDate = new Date(trialEndsAt);
+  if (Number.isNaN(trialEndDate.getTime())) {
+    return null;
+  }
+
+  const remainingMs = trialEndDate.getTime() - now.getTime();
+  if (remainingMs <= 0) {
+    return null;
+  }
+
+  const remainingMinutes = Math.ceil(remainingMs / MINUTE_IN_MS);
+  const days = Math.floor(remainingMinutes / DAY_IN_MINUTES);
+  const hours = Math.floor((remainingMinutes % DAY_IN_MINUTES) / HOUR_IN_MINUTES);
+  const minutes = remainingMinutes % HOUR_IN_MINUTES;
+
+  let remainingLabel = "";
+  if (days > 0) {
+    remainingLabel = `${days}d ${hours}h`;
+  } else if (hours > 0) {
+    remainingLabel = `${hours}h ${minutes}m`;
+  } else {
+    remainingLabel = `${Math.max(1, minutes)}m`;
+  }
+
+  return {
+    label: `Trial: ${remainingLabel}`,
+    isEndingSoon: remainingMs <= DAY_IN_MS,
+  };
+}
 
 function resolveActiveOrganization(
   organizations: AppShellProps["organizations"],
@@ -258,9 +313,25 @@ export function AppShell({
     activeOrganizationId,
     organizationName,
   );
+  const [currentTime, setCurrentTime] = useState(() => new Date());
   const activeOrganizationPermissions =
     activeOrganization?.permissions ?? defaultOrganizationPermissions;
   const canReadProducts = canRoleReadProducts(role, activeOrganizationPermissions);
+  const trialStatus = activeOrganization?.subscriptionStatus ?? null;
+  const trialEndsAt = activeOrganization?.trialEndsAt ?? null;
+  const trialBadgeState = resolveTrialBadgeState(trialStatus, trialEndsAt, currentTime);
+
+  useEffect(() => {
+    if (trialStatus !== "TRIALING" || !trialEndsAt) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setCurrentTime(new Date());
+    }, MINUTE_IN_MS);
+
+    return () => window.clearInterval(intervalId);
+  }, [trialStatus, trialEndsAt]);
 
   return (
     <AppCommandBar canReadProducts={canReadProducts}>
@@ -281,6 +352,17 @@ export function AppShell({
                 <AppBreadcrumb />
               </div>
               <div className="ml-auto flex items-center gap-2">
+                {trialBadgeState ? (
+                  <Link href="/billing" className="hidden sm:inline-flex">
+                    <Badge
+                      variant={trialBadgeState.isEndingSoon ? "destructive" : "secondary"}
+                      className="h-7 px-2.5 text-[0.68rem] font-semibold whitespace-nowrap"
+                    >
+                      <Clock3Icon className="mr-1 size-3.5" />
+                      {trialBadgeState.label}
+                    </Badge>
+                  </Link>
+                ) : null}
                 <AppCommandBarTrigger />
                 <GitHubCreditLink />
                 <ThemeToggle />

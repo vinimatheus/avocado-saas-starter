@@ -3,11 +3,14 @@
 import { createHash } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
+import { BillingPlanCode, SubscriptionStatus } from "@prisma/client";
 import { z } from "zod";
 
 import { auth } from "@/lib/auth/server";
 import { localizeAuthErrorMessage } from "@/lib/auth/error-messages";
 import { profileUpdateSchema } from "@/lib/auth/schemas";
+import { DEFAULT_TRIAL_DAYS, getPlanDefinition } from "@/lib/billing/plans";
+import { prisma } from "@/lib/db/prisma";
 import { buildOrganizationSlug } from "@/lib/organization/helpers";
 import { getTenantContext } from "@/lib/organization/tenant-context";
 import { detectImageMimeTypeBySignature } from "@/lib/uploads/image-signature";
@@ -33,6 +36,15 @@ const onboardingOrganizationSchema = z.object({
     ),
 });
 
+const createOrganizationWithPlanSchema = onboardingOrganizationSchema.extend({
+  planCode: z.nativeEnum(BillingPlanCode),
+  keepCurrentActiveOrganization: z
+    .string()
+    .trim()
+    .optional()
+    .transform((value) => value === "true"),
+});
+
 export type OnboardingProfileActionState = {
   status: "idle" | "success" | "error";
   message: string;
@@ -40,6 +52,12 @@ export type OnboardingProfileActionState = {
 
 export type OnboardingOrganizationActionState = {
   status: "idle" | "success" | "error";
+  message: string;
+  redirectTo: string | null;
+};
+
+export type CreateOrganizationWithPlanActionResult = {
+  status: "success" | "error";
   message: string;
   redirectTo: string | null;
 };
@@ -70,6 +88,25 @@ function successOrganizationState(
 }
 
 function errorOrganizationState(message: string): OnboardingOrganizationActionState {
+  return {
+    status: "error",
+    message,
+    redirectTo: null,
+  };
+}
+
+function successCreateOrganizationResult(
+  message: string,
+  redirectTo: string,
+): CreateOrganizationWithPlanActionResult {
+  return {
+    status: "success",
+    message,
+    redirectTo,
+  };
+}
+
+function errorCreateOrganizationResult(message: string): CreateOrganizationWithPlanActionResult {
   return {
     status: "error",
     message,
@@ -250,6 +287,7 @@ async function createOrganizationWithSlugFallback(
   companyName: string,
   slug: string,
   logo: string | null,
+  keepCurrentActiveOrganization: boolean = false,
 ): Promise<void> {
   try {
     await auth.api.createOrganization({
@@ -257,6 +295,7 @@ async function createOrganizationWithSlugFallback(
       body: {
         name: companyName,
         slug,
+        keepCurrentActiveOrganization,
         ...(logo ? { logo } : {}),
       },
     });
@@ -280,12 +319,14 @@ async function createOrganizationWithSlugFallback(
 
     const existingOrganization = organizations.find((organization) => organization.slug === slug);
     if (existingOrganization) {
-      await auth.api.setActiveOrganization({
-        headers: requestHeaders,
-        body: {
-          organizationId: existingOrganization.id,
-        },
-      });
+      if (!keepCurrentActiveOrganization) {
+        await auth.api.setActiveOrganization({
+          headers: requestHeaders,
+          body: {
+            organizationId: existingOrganization.id,
+          },
+        });
+      }
       return;
     }
 
@@ -294,10 +335,52 @@ async function createOrganizationWithSlugFallback(
       body: {
         name: companyName,
         slug: generateOrganizationSlugVariant(slug),
+        keepCurrentActiveOrganization,
         ...(logo ? { logo } : {}),
       },
     });
   }
+}
+
+function formatTrialEndsAt(value: Date): string {
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+    timeZone: "America/Sao_Paulo",
+  }).format(value);
+}
+
+async function assertUserCanCreateFreeOrganization(ownerUserId: string): Promise<void> {
+  const activeFreeTrial = await prisma.ownerSubscription.findFirst({
+    where: {
+      ownerUserId,
+      status: SubscriptionStatus.TRIALING,
+      planCode: BillingPlanCode.FREE,
+      trialEndsAt: {
+        gt: new Date(),
+      },
+    },
+    orderBy: {
+      trialEndsAt: "desc",
+    },
+    select: {
+      trialEndsAt: true,
+      organization: {
+        select: {
+          name: true,
+        },
+      },
+    },
+  });
+
+  if (!activeFreeTrial?.trialEndsAt) {
+    return;
+  }
+
+  const activeOrganizationName = activeFreeTrial.organization.name.trim() || "organizacao ativa";
+  throw new Error(
+    `Cada usuario pode manter apenas 1 organizacao gratuita por ${DEFAULT_TRIAL_DAYS} dias. Voce ja possui ${activeOrganizationName} em periodo gratuito ate ${formatTrialEndsAt(activeFreeTrial.trialEndsAt)}.`,
+  );
 }
 
 export async function completeOnboardingProfileStepAction(
@@ -382,6 +465,91 @@ export async function completeOnboardingOrganizationStepAction(
   } catch (error) {
     return errorOrganizationState(
       normalizeActionErrorMessage(error, "Falha ao configurar organizacao inicial."),
+    );
+  }
+}
+
+export async function createOrganizationWithPlanAction(
+  formData: FormData,
+): Promise<CreateOrganizationWithPlanActionResult> {
+  try {
+    const tenantContext = await getTenantContext();
+    if (!tenantContext.session?.user) {
+      return errorCreateOrganizationResult("Sessao invalida. Faca login novamente.");
+    }
+
+    const parsed = createOrganizationWithPlanSchema.safeParse({
+      companyName: String(formData.get("companyName") ?? "").trim(),
+      redirectPath: String(formData.get("redirectPath") ?? "/").trim() || "/",
+      planCode: String(formData.get("planCode") ?? "").trim(),
+      keepCurrentActiveOrganization: String(
+        formData.get("keepCurrentActiveOrganization") ?? "",
+      ).trim(),
+    });
+
+    if (!parsed.success) {
+      return errorCreateOrganizationResult(
+        parsed.error.issues[0]?.message ?? "Dados invalidos para criar organizacao.",
+      );
+    }
+
+    const userEmail = tenantContext.session.user.email?.trim() ?? "";
+    if (!userEmail) {
+      return errorCreateOrganizationResult(
+        "Nao foi possivel identificar seu e-mail. Faca login novamente.",
+      );
+    }
+
+    const userId = tenantContext.session.user.id?.trim() ?? "";
+    if (!userId) {
+      return errorCreateOrganizationResult(
+        "Nao foi possivel identificar seu usuario. Faca login novamente.",
+      );
+    }
+
+    if (parsed.data.planCode === BillingPlanCode.FREE) {
+      await assertUserCanCreateFreeOrganization(userId);
+    }
+
+    const requestHeaders = await headers();
+    const slug = buildOrganizationSlug(parsed.data.companyName, userEmail);
+
+    await createOrganizationWithSlugFallback(
+      requestHeaders,
+      parsed.data.companyName,
+      slug,
+      null,
+      parsed.data.keepCurrentActiveOrganization,
+    );
+
+    revalidateOnboardingPaths();
+    revalidatePath("/billing");
+    revalidatePath("/empresa/nova");
+
+    if (parsed.data.planCode !== BillingPlanCode.FREE && !parsed.data.keepCurrentActiveOrganization) {
+      const planName = getPlanDefinition(parsed.data.planCode).name;
+      const params = new URLSearchParams({
+        prefillPlan: parsed.data.planCode,
+      });
+
+      return successCreateOrganizationResult(
+        `Organizacao criada. Finalize agora a contratacao do plano ${planName}.`,
+        `/billing?${params.toString()}`,
+      );
+    }
+
+    if (parsed.data.planCode !== BillingPlanCode.FREE) {
+      const planName = getPlanDefinition(parsed.data.planCode).name;
+      return successCreateOrganizationResult(
+        `Organizacao criada. Para ativar o plano ${planName}, troque para ela e finalize no faturamento.`,
+        parsed.data.redirectPath,
+      );
+    }
+
+    return successCreateOrganizationResult("Organizacao vinculada com sucesso.", parsed.data.redirectPath);
+  } catch (error) {
+    return errorCreateOrganizationResult(
+      normalizeActionErrorMessage(error, "Falha ao criar nova organizacao."),
     );
   }
 }
