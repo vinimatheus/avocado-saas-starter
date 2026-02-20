@@ -71,9 +71,17 @@ function resolveOrganizationPlanCode(
   }
 
   if (
-    (subscription.status === "ACTIVE" || subscription.status === "PAST_DUE") &&
+    subscription.status === "ACTIVE" &&
+    (!subscription.currentPeriodEnd || subscription.currentPeriodEnd > now)
+  ) {
+    return subscription.planCode;
+  }
+
+  if (
+    subscription.status === "PAST_DUE" &&
     subscription.currentPeriodEnd &&
-    subscription.currentPeriodEnd > now
+    subscription.currentPeriodEnd > now &&
+    isPaidPlan(subscription.planCode)
   ) {
     return subscription.planCode;
   }

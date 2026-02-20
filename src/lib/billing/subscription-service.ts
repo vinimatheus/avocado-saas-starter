@@ -1286,8 +1286,7 @@ function resolveEffectivePlanCode(
 
   if (
     subscription.status === SubscriptionStatus.ACTIVE &&
-    subscription.currentPeriodEnd &&
-    subscription.currentPeriodEnd > now
+    (!subscription.currentPeriodEnd || subscription.currentPeriodEnd > now)
   ) {
     return subscription.planCode;
   }
