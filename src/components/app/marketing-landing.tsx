@@ -239,7 +239,7 @@ function Badge({ icon, text }: { icon: ReactNode; text: string }) {
 
 function DiagonalRail() {
   return (
-    <div className="relative h-full w-8 overflow-hidden sm:w-10 md:w-12">
+    <div className="relative hidden h-full w-10 overflow-hidden md:block md:w-12 lg:w-14">
       <div className="absolute -top-36 left-[-54px] flex w-[160px] flex-col">
         {Array.from({ length: 66 }).map((_, index) => (
           <div key={index} className="h-4 rotate-[-45deg] border border-border/55" />
@@ -336,7 +336,7 @@ function FeatureCard({
     <button
       type="button"
       onClick={onClick}
-      className={`relative min-h-[126px] flex-1 border px-5 py-4 text-left transition md:min-h-[136px] ${isActive
+      className={`relative min-h-[126px] border px-4 py-4 text-left transition sm:px-5 md:min-h-[136px] ${isActive
           ? "border-primary/30 bg-card shadow-[0_0_0_0.7px_hsl(var(--primary)/0.25)_inset]"
           : "border-border bg-background/70 hover:bg-card"
         }`}
@@ -395,12 +395,12 @@ export function MarketingLanding() {
       </div>
 
       <div className="relative mx-auto max-w-[1120px] px-4 pb-20 sm:px-6 lg:px-8">
-        <div className="pointer-events-none absolute bottom-0 left-4 top-0 w-px bg-border/80 shadow-[1px_0_0_0_hsl(var(--background))] sm:left-6 lg:left-8" />
-        <div className="pointer-events-none absolute bottom-0 right-4 top-0 w-px bg-border/80 shadow-[1px_0_0_0_hsl(var(--background))] sm:right-6 lg:right-8" />
+        <div className="pointer-events-none absolute bottom-0 left-4 top-0 hidden w-px bg-border/80 shadow-[1px_0_0_0_hsl(var(--background))] sm:block sm:left-6 lg:left-8" />
+        <div className="pointer-events-none absolute bottom-0 right-4 top-0 hidden w-px bg-border/80 shadow-[1px_0_0_0_hsl(var(--background))] sm:block sm:right-6 lg:right-8" />
 
-        <header className="bg-background/90 sticky top-3 z-30 mx-auto flex w-full max-w-4xl items-center justify-between gap-4 rounded-full border border-border px-3 py-2 shadow-[0_0_0_2px_hsl(var(--background))] backdrop-blur">
-          <div className="flex items-center gap-4">
-            <Link href="/" className="rounded-full px-2 py-1 transition hover:bg-primary/5">
+        <header className="bg-background/90 sticky top-3 z-30 mx-auto flex w-full max-w-4xl items-center justify-between gap-2 rounded-2xl border border-border px-2.5 py-2 shadow-[0_0_0_2px_hsl(var(--background))] backdrop-blur sm:gap-4 sm:rounded-full sm:px-3">
+          <div className="flex items-center gap-2 sm:gap-4">
+            <Link href="/" className="rounded-full px-1.5 py-1 transition hover:bg-primary/5 sm:px-2">
               <Logo size="sm" showGlow={false} />
             </Link>
             <nav className="text-muted-foreground hidden items-center gap-4 text-sm font-semibold sm:flex">
@@ -419,20 +419,21 @@ export function MarketingLanding() {
             </nav>
           </div>
 
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
-            <GitHubCreditLink />
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <ThemeToggle className="hidden sm:inline-flex" />
+            <GitHubCreditLink className="hidden sm:inline-flex" />
             <Link
               href="/sign-in"
-              className="border-border bg-card text-foreground rounded-full border px-4 py-2 text-xs font-semibold transition hover:bg-primary/5 sm:text-sm"
+              className="border-border bg-card text-foreground rounded-full border px-3 py-2 text-[11px] font-semibold transition hover:bg-primary/5 sm:px-4 sm:text-sm"
             >
               Entrar
             </Link>
             <Link
               href="/sign-up"
-              className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold transition hover:opacity-90 sm:text-sm"
+              className="bg-primary text-primary-foreground inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-[11px] font-semibold transition hover:opacity-90 sm:gap-2 sm:px-4 sm:text-sm"
             >
-              Criar conta
+              <span className="sm:hidden">Criar</span>
+              <span className="hidden sm:inline">Criar conta</span>
               <ArrowRightIcon className="size-3.5" />
             </Link>
           </div>
@@ -441,7 +442,7 @@ export function MarketingLanding() {
         <section className="relative border-b border-border pb-10 pt-16 sm:pt-24 lg:pt-32">
           <div className="mx-auto flex max-w-3xl flex-col items-center text-center animate-in fade-in slide-in-from-bottom-5 duration-700">
             <Badge icon={<BadgeCheckIcon className="size-3.5" />} text="Avocado SaaS Starter" />
-            <h1 className="mt-5 text-balance text-4xl font-black leading-[1.04] tracking-tight sm:text-5xl lg:text-7xl">
+            <h1 className="mt-5 text-balance text-3xl font-black leading-[1.06] tracking-tight sm:text-5xl lg:text-7xl">
               Next.js SaaS Starter pronto para sair do zero ao painel em horas
             </h1>
             <p className="text-muted-foreground mt-5 max-w-2xl text-balance text-sm font-medium leading-6 sm:text-lg sm:leading-8">
@@ -449,17 +450,17 @@ export function MarketingLanding() {
               Prisma e PostgreSQL para voce focar no produto e nao na infra.
             </p>
 
-            <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+            <div className="mt-8 flex w-full max-w-sm flex-col items-stretch gap-3 sm:max-w-none sm:flex-row sm:flex-wrap sm:items-center sm:justify-center">
               <Link
                 href="/sign-up"
-                className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold transition hover:opacity-90"
+                className="bg-primary text-primary-foreground inline-flex w-full items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold transition hover:opacity-90 sm:w-auto"
               >
                 Comecar gratis
                 <ArrowRightIcon className="size-4" />
               </Link>
               <Link
                 href="/sign-in"
-                className="border-border bg-card text-foreground inline-flex items-center gap-2 rounded-full border px-6 py-3 text-sm font-semibold transition hover:bg-primary/5"
+                className="border-border bg-card text-foreground inline-flex w-full items-center justify-center gap-2 rounded-full border px-6 py-3 text-sm font-semibold transition hover:bg-primary/5 sm:w-auto"
               >
                 Entrar na plataforma
                 <MailCheckIcon className="size-4" />
@@ -479,7 +480,7 @@ export function MarketingLanding() {
             <div className="bg-background/80 mt-6 border-y border-border">
               <div className="flex items-stretch">
                 <DiagonalRail />
-                <div className="grid flex-1 gap-0 md:grid-cols-3">
+                <div className="grid flex-1 gap-0 border-x border-border md:grid-cols-3">
                   {showcaseCards.map((card, index) => (
                     <FeatureCard
                       key={card.title}
@@ -520,7 +521,7 @@ export function MarketingLanding() {
                   return (
                     <div
                       key={item.label}
-                      className={`border-border text-foreground flex h-28 items-center justify-center gap-2 sm:h-32 ${index % 2 === 0 ? "border-r" : ""
+                      className={`border-border text-foreground flex h-28 flex-col items-center justify-center gap-2 px-3 text-center sm:h-32 sm:flex-row sm:text-left ${index % 2 === 0 ? "border-r" : ""
                         } ${index < stackBadges.length - 2 ? "border-b" : ""} sm:border-r sm:[&:nth-child(4n)]:border-r-0 sm:[&:nth-last-child(-n+4)]:border-b-0`}
                     >
                       <span className="bg-primary/12 text-primary inline-flex size-8 items-center justify-center rounded-full border border-primary/20">
@@ -567,9 +568,9 @@ export function MarketingLanding() {
                       <p className="text-muted-foreground mt-2 text-sm leading-7">{feature.description}</p>
 
                       <div className="from-background via-muted/35 to-background mt-6 rounded-2xl border border-border bg-gradient-to-br p-4 sm:p-6">
-                        <div className="grid grid-cols-3 gap-3">
+                        <div className="grid grid-cols-3 gap-2 sm:gap-3">
                           {feature.bars.map((value, barIndex) => (
-                            <div key={barIndex} className="bg-card rounded-lg border border-border p-3">
+                            <div key={barIndex} className="bg-card rounded-lg border border-border p-2 sm:p-3">
                               <div className="bg-muted h-20 rounded-md">
                                 <div
                                   className="from-primary/80 to-primary w-full rounded-md bg-gradient-to-t"
@@ -611,7 +612,7 @@ export function MarketingLanding() {
                     <Icon className="size-4" />
                   </div>
                   <h3 className="mt-4 text-lg font-bold">{item.title}</h3>
-                  <p className="text-muted-foreground mt-2 text-sm leading-7">{item.description}</p>
+                  <p className="text-muted-foreground mt-2 break-words text-sm leading-7">{item.description}</p>
                 </article>
               );
             })}
@@ -717,17 +718,17 @@ export function MarketingLanding() {
               multi-tenant e modulo de planos funcionando de ponta a ponta.
             </p>
 
-            <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+            <div className="mt-8 flex w-full max-w-sm flex-col items-stretch gap-3 sm:max-w-none sm:flex-row sm:flex-wrap sm:items-center sm:justify-center">
               <Link
                 href="/sign-up"
-                className="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold transition hover:opacity-90"
+                className="bg-primary text-primary-foreground inline-flex w-full items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold transition hover:opacity-90 sm:w-auto"
               >
                 Criar conta
                 <ArrowRightIcon className="size-4" />
               </Link>
               <Link
                 href="/sign-in"
-                className="border-border bg-card text-foreground inline-flex items-center gap-2 rounded-full border px-6 py-3 text-sm font-semibold transition hover:bg-primary/5"
+                className="border-border bg-card text-foreground inline-flex w-full items-center justify-center gap-2 rounded-full border px-6 py-3 text-sm font-semibold transition hover:bg-primary/5 sm:w-auto"
               >
                 Acessar demo
               </Link>
