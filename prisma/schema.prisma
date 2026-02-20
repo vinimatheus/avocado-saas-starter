@@ -29,6 +29,7 @@ model Organization {
   ownerSubscription     OwnerSubscription?
   billingCheckoutSessions BillingCheckoutSession[]
   monthlyUsages         OwnerMonthlyUsage[]
+  creationIntent        OrganizationCreationIntent?
   platformBlockedByAdmin PlatformAdmin?         @relation("OrganizationPlatformBlockedBy", fields: [platformBlockedByAdminId], references: [id], onDelete: SetNull)
   platformEvents        PlatformEventLog[]      @relation("PlatformEventOrganization")
 
@@ -46,6 +47,7 @@ model User {
   platformBlockedAt   DateTime?               @map("platform_blocked_at")
   platformBlockedReason String?               @map("platform_blocked_reason")
   platformBlockedByAdminId String?            @map("platform_blocked_by_admin_id")
+  trialConsumedAt     DateTime?               @map("trial_consumed_at")
   createdAt           DateTime                @default(now())
   updatedAt           DateTime                @updatedAt
   sessions            Session[]
@@ -59,6 +61,7 @@ model User {
   subscriptionCancellationFeedbacks SubscriptionCancellationFeedback[]
   featureOverrides    OwnerFeatureOverride[]
   monthlyUsages       OwnerMonthlyUsage[]
+  organizationCreationIntents OrganizationCreationIntent[]
   platformBlockedByAdmin PlatformAdmin?       @relation("UserPlatformBlockedBy", fields: [platformBlockedByAdminId], references: [id], onDelete: SetNull)
   platformAdmin       PlatformAdmin?          @relation("PlatformAdminUser")
   actorPlatformEvents PlatformEventLog[]      @relation("PlatformEventActorUser")
@@ -201,6 +204,22 @@ enum CheckoutStatus {
   EXPIRED
   CANCELED
   CHARGEBACK
+}
+
+enum OrganizationCreationIntentStatus {
+  PENDING
+  PAID
+  FAILED
+  EXPIRED
+  CANCELED
+  CHARGEBACK
+  CONSUMING
+  CONSUMED
+}
+
+enum OrganizationBillingCycle {
+  MONTHLY
+  ANNUAL
 }
 
 enum WebhookProcessingStatus {
@@ -375,6 +394,41 @@ model BillingInvoice {
   @@index([subscriptionId], map: "billing_invoice_subscription_id_idx")
   @@index([status], map: "billing_invoice_status_idx")
   @@map("billing_invoice")
+}
+
+model OrganizationCreationIntent {
+  id                String                          @id @default(cuid())
+  ownerUserId       String                          @map("owner_user_id")
+  organizationId    String?                         @unique @map("organization_id")
+  status            OrganizationCreationIntentStatus @default(PENDING)
+  companyName       String                          @map("company_name")
+  companySlug       String                          @map("company_slug")
+  companyLogo       String?                         @map("company_logo")
+  targetPlanCode    BillingPlanCode                @map("target_plan_code")
+  billingCycle      OrganizationBillingCycle        @default(MONTHLY) @map("billing_cycle")
+  amountCents       Int                             @map("amount_cents")
+  currency          String                          @default("BRL")
+  billingName       String                          @map("billing_name")
+  billingCellphone  String                          @map("billing_cellphone")
+  billingTaxId      String                          @map("billing_tax_id")
+  provider          String                          @default("abacatepay")
+  providerBillingId String?                         @unique @map("provider_billing_id")
+  providerExternalId String                         @unique @map("provider_external_id")
+  checkoutUrl       String?                         @map("checkout_url")
+  checkoutStatus    CheckoutStatus                  @default(PENDING) @map("checkout_status")
+  paidAt            DateTime?                       @map("paid_at")
+  expiresAt         DateTime?                       @map("expires_at")
+  consumedAt        DateTime?                       @map("consumed_at")
+  metadata          Json?
+  createdAt         DateTime                        @default(now()) @map("created_at")
+  updatedAt         DateTime                        @updatedAt @map("updated_at")
+  owner             User                            @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  organization      Organization?                   @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  @@index([ownerUserId], map: "organization_creation_intent_owner_user_id_idx")
+  @@index([status], map: "organization_creation_intent_status_idx")
+  @@index([ownerUserId, status], map: "organization_creation_intent_owner_status_idx")
+  @@map("organization_creation_intent")
 }
 
 model BillingWebhookEvent {

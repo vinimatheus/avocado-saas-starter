@@ -1,27 +1,29 @@
 "use client";
 
-import { useActionState, useEffect, useState, useTransition, type ChangeEvent } from "react";
-import { zodResolver } from "@hookform/resolvers/zod";
 import {
+  useActionState,
+  useMemo,
+  useState,
+  useTransition,
+  type ChangeEvent,
+  type FormEvent,
+} from "react";
+import {
+  ArrowLeftIcon,
   ArrowRightIcon,
   Building2Icon,
-  CameraIcon,
-  CheckCircle2Icon,
   CheckIcon,
+  CreditCardIcon,
   SparklesIcon,
   UploadIcon,
   UserRoundIcon,
 } from "lucide-react";
-import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
-import { z } from "zod";
 import { useRouter } from "next/navigation";
 
 import {
   createOrganizationWithPlanAction,
-  completeOnboardingOrganizationStepAction,
   completeOnboardingProfileStepAction,
-  type OnboardingOrganizationActionState,
   type OnboardingProfileActionState,
 } from "@/actions/onboarding-actions";
 import { FormFeedback } from "@/components/shared/form-feedback";
@@ -30,32 +32,9 @@ import { Logo } from "@/components/shared/logo";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { stripFieldRef } from "@/lib/forms/rhf";
-import { getFirstValidationErrorMessage } from "@/lib/forms/validation-toast";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/shared/utils";
-
-const organizationCreatePlanCodes = ["FREE", "STARTER_50", "PRO_100", "SCALE_400"] as const;
-type OrganizationCreatePlanCode = (typeof organizationCreatePlanCodes)[number];
-
-const companyOnboardingSchema = z.object({
-  companyName: z
-    .string()
-    .trim()
-    .min(2, "Nome da organizacao deve ter ao menos 2 caracteres.")
-    .max(120, "Nome da organizacao deve ter no maximo 120 caracteres."),
-  planCode: z.enum(organizationCreatePlanCodes),
-});
-
-type CompanyOnboardingValues = z.infer<typeof companyOnboardingSchema>;
 
 type CompanyOnboardingFormProps = {
   userName?: string | null;
@@ -66,15 +45,13 @@ type CompanyOnboardingFormProps = {
   redirectPath?: string;
 };
 
+type OrganizationCreatePlanCode = "FREE" | "STARTER_50" | "PRO_100" | "SCALE_400";
+type BillingCycle = "MONTHLY" | "ANNUAL";
+
 const MAX_IMAGE_UPLOAD_BYTES = 5 * 1024 * 1024;
 const initialOnboardingProfileActionState: OnboardingProfileActionState = {
   status: "idle",
   message: "",
-};
-const initialOnboardingOrganizationActionState: OnboardingOrganizationActionState = {
-  status: "idle",
-  message: "",
-  redirectTo: null,
 };
 
 const ORGANIZATION_CREATE_PLAN_OPTIONS: Array<{
@@ -89,30 +66,110 @@ const ORGANIZATION_CREATE_PLAN_OPTIONS: Array<{
     name: "Gratis",
     priceLabel: "R$0",
     description: "Trial por 7 dias para iniciar rapido.",
-    helper: "Limite de 1 organizacao free ativa por usuario.",
+    helper: "Trial disponivel apenas para a primeira organizacao.",
   },
   {
     code: "STARTER_50",
     name: "Starter",
     priceLabel: "R$50/mes",
     description: "Ate 50 usuarios por organizacao.",
-    helper: "Ideal para times iniciando operacao recorrente.",
+    helper: "A organizacao sera criada somente apos pagamento aprovado.",
   },
   {
     code: "PRO_100",
     name: "Pro",
     priceLabel: "R$100/mes",
     description: "Ate 100 usuarios com recursos avancados.",
-    helper: "Mais capacidade para crescimento de equipe.",
+    helper: "A organizacao sera criada somente apos pagamento aprovado.",
   },
   {
     code: "SCALE_400",
     name: "Scale",
     priceLabel: "R$400/mes",
     description: "Usuarios ilimitados e suporte prioritario.",
-    helper: "Pensado para operacoes em larga escala.",
+    helper: "A organizacao sera criada somente apos pagamento aprovado.",
   },
 ];
+
+function onlyDigits(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
+function formatPhoneMask(value: string): string {
+  const digits = onlyDigits(value).slice(0, 11);
+  const ddd = digits.slice(0, 2);
+  const middle = digits.length > 10 ? digits.slice(2, 7) : digits.slice(2, 6);
+  const final = digits.length > 10 ? digits.slice(7, 11) : digits.slice(6, 10);
+
+  if (!ddd) {
+    return "";
+  }
+
+  let output = `(${ddd}`;
+  if (ddd.length === 2) {
+    output += ")";
+  }
+
+  if (middle) {
+    output += ` ${middle}`;
+  }
+
+  if (final) {
+    output += `-${final}`;
+  }
+
+  return output;
+}
+
+function formatTaxIdMask(value: string): string {
+  const digits = onlyDigits(value).slice(0, 14);
+
+  if (digits.length <= 11) {
+    const a = digits.slice(0, 3);
+    const b = digits.slice(3, 6);
+    const c = digits.slice(6, 9);
+    const d = digits.slice(9, 11);
+
+    let output = a;
+    if (b) {
+      output += `.${b}`;
+    }
+    if (c) {
+      output += `.${c}`;
+    }
+    if (d) {
+      output += `-${d}`;
+    }
+
+    return output;
+  }
+
+  const a = digits.slice(0, 2);
+  const b = digits.slice(2, 5);
+  const c = digits.slice(5, 8);
+  const d = digits.slice(8, 12);
+  const e = digits.slice(12, 14);
+
+  let output = a;
+  if (b) {
+    output += `.${b}`;
+  }
+  if (c) {
+    output += `.${c}`;
+  }
+  if (d) {
+    output += `/${d}`;
+  }
+  if (e) {
+    output += `-${e}`;
+  }
+
+  return output;
+}
+
+function isPaidOrganizationPlan(planCode: OrganizationCreatePlanCode): boolean {
+  return planCode !== "FREE";
+}
 
 function initialsFromName(name: string | null | undefined): string {
   const parts = (name ?? "")
@@ -130,6 +187,151 @@ function normalizeImageUrl(value: string | null | undefined): string | null {
   return normalized || null;
 }
 
+function validatePaidBillingFields(input: {
+  billingName: string;
+  billingCellphone: string;
+  billingTaxId: string;
+}): string | null {
+  if (input.billingName.trim().length < 2) {
+    return "Informe o nome de faturamento.";
+  }
+
+  const phoneDigits = onlyDigits(input.billingCellphone);
+  if (phoneDigits.length !== 10 && phoneDigits.length !== 11) {
+    return "Informe um telefone valido.";
+  }
+
+  const taxIdDigits = onlyDigits(input.billingTaxId);
+  if (taxIdDigits.length !== 11 && taxIdDigits.length !== 14) {
+    return "Informe um CPF ou CNPJ valido.";
+  }
+
+  return null;
+}
+
+function PlanSelector({
+  value,
+  onChange,
+}: {
+  value: OrganizationCreatePlanCode;
+  onChange: (value: OrganizationCreatePlanCode) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      {ORGANIZATION_CREATE_PLAN_OPTIONS.map((plan) => {
+        const isSelected = value === plan.code;
+
+        return (
+          <label
+            key={plan.code}
+            className={cn(
+              "flex cursor-pointer items-start justify-between gap-3 rounded-xl border px-3 py-2 transition-colors",
+              isSelected
+                ? "border-primary/60 bg-primary/10"
+                : "border-border/70 bg-background/70 hover:bg-muted/40",
+            )}
+          >
+            <input
+              type="radio"
+              name="planCode"
+              value={plan.code}
+              checked={isSelected}
+              onChange={() => onChange(plan.code)}
+              className="sr-only"
+            />
+
+            <span className="space-y-0.5">
+              <span className="flex items-center gap-2 text-sm font-semibold">
+                {plan.name}
+                <span className="text-muted-foreground text-xs font-medium">{plan.priceLabel}</span>
+              </span>
+              <span className="text-muted-foreground block text-xs">{plan.description}</span>
+              <span className="text-muted-foreground/90 block text-[0.68rem]">{plan.helper}</span>
+            </span>
+
+            {isSelected ? <CheckIcon className="text-primary mt-0.5 size-4" /> : null}
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
+function BillingFields({
+  billingName,
+  billingCellphone,
+  billingTaxId,
+  onBillingNameChange,
+  onBillingCellphoneChange,
+  onBillingTaxIdChange,
+}: {
+  billingName: string;
+  billingCellphone: string;
+  billingTaxId: string;
+  onBillingNameChange: (value: string) => void;
+  onBillingCellphoneChange: (value: string) => void;
+  onBillingTaxIdChange: (value: string) => void;
+}) {
+  return (
+    <div className="space-y-3 rounded-xl border border-border/70 bg-background/70 p-3">
+      <p className="text-foreground text-xs font-semibold tracking-[0.08em] uppercase">
+        Dados de pagamento
+      </p>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="billingName" className="text-[0.68rem] font-semibold tracking-[0.08em] uppercase">
+          Nome de faturamento
+        </Label>
+        <Input
+          id="billingName"
+          name="billingName"
+          value={billingName}
+          onChange={(event) => onBillingNameChange(event.target.value)}
+          placeholder="Nome completo ou razao social"
+          required
+          className="h-10 rounded-xl border-border/80 bg-background/80 text-sm"
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label
+          htmlFor="billingCellphone"
+          className="text-[0.68rem] font-semibold tracking-[0.08em] uppercase"
+        >
+          Telefone
+        </Label>
+        <Input
+          id="billingCellphone"
+          name="billingCellphone"
+          value={billingCellphone}
+          onChange={(event) => onBillingCellphoneChange(formatPhoneMask(event.target.value))}
+          placeholder="(11) 99999-9999"
+          inputMode="numeric"
+          autoComplete="tel"
+          required
+          className="h-10 rounded-xl border-border/80 bg-background/80 text-sm"
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="billingTaxId" className="text-[0.68rem] font-semibold tracking-[0.08em] uppercase">
+          CPF/CNPJ
+        </Label>
+        <Input
+          id="billingTaxId"
+          name="billingTaxId"
+          value={billingTaxId}
+          onChange={(event) => onBillingTaxIdChange(formatTaxIdMask(event.target.value))}
+          placeholder="000.000.000-00"
+          inputMode="numeric"
+          required
+          className="h-10 rounded-xl border-border/80 bg-background/80 text-sm"
+        />
+      </div>
+    </div>
+  );
+}
+
 function NewAccountOnboardingForm({
   userName = null,
   userImage = null,
@@ -142,45 +344,60 @@ function NewAccountOnboardingForm({
   redirectPath?: string;
 }) {
   const router = useRouter();
+  const normalizedUserImage = normalizeImageUrl(userImage);
+  const [isPending, startTransition] = useTransition();
+
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [nameInput, setNameInput] = useState((userName ?? "").trim());
   const [companyNameInput, setCompanyNameInput] = useState(initialCompanyName);
+  const [organizationImageFile, setOrganizationImageFile] = useState<File | null>(null);
+
   const [profileImageName, setProfileImageName] = useState("");
   const [profileImageError, setProfileImageError] = useState("");
   const [organizationImageName, setOrganizationImageName] = useState("");
   const [organizationImageError, setOrganizationImageError] = useState("");
 
-  const normalizedUserImage = normalizeImageUrl(userImage);
+  const [planCode, setPlanCode] = useState<OrganizationCreatePlanCode>("FREE");
+  const [billingCycle, setBillingCycle] = useState<BillingCycle>("MONTHLY");
+  const [billingName, setBillingName] = useState(nameInput || "");
+  const [billingCellphone, setBillingCellphone] = useState("");
+  const [billingTaxId, setBillingTaxId] = useState("");
+  const [serverMessage, setServerMessage] = useState("");
+
+  const selectedPlanIsPaid = isPaidOrganizationPlan(planCode);
 
   const [profileState, profileStepAction] = useActionState(
     completeOnboardingProfileStepAction,
     initialOnboardingProfileActionState,
   );
-  const [organizationState, organizationStepAction] = useActionState(
-    completeOnboardingOrganizationStepAction,
-    initialOnboardingOrganizationActionState,
-  );
-  const currentStep: 1 | 2 = profileState.status === "success" ? 2 : 1;
-  const isProfileStep = currentStep === 1;
-  const progressLabel = isProfileStep ? "50%" : "100%";
+  const currentStep: 1 | 2 | 3 =
+    step === 1 && profileState.status === "success" ? 2 : step;
 
-  useEffect(() => {
-    if (organizationState.status !== "success" || !organizationState.redirectTo) {
-      return;
+  const progressLabel = useMemo(() => {
+    if (currentStep === 1) {
+      return "33%";
     }
 
-    router.replace(organizationState.redirectTo);
-    router.refresh();
-  }, [organizationState.redirectTo, organizationState.status, router]);
+    if (currentStep === 2) {
+      return "66%";
+    }
+
+    return "100%";
+  }, [currentStep]);
 
   function handleImageSelection(
     event: ChangeEvent<HTMLInputElement>,
     setFileName: (value: string) => void,
     setError: (value: string) => void,
+    setFile?: (file: File | null) => void,
   ) {
     const file = event.target.files?.[0];
     if (!file) {
       setFileName("");
       setError("");
+      if (setFile) {
+        setFile(null);
+      }
       return;
     }
 
@@ -189,12 +406,107 @@ function NewAccountOnboardingForm({
       event.target.value = "";
       setFileName("");
       setError(message);
+      if (setFile) {
+        setFile(null);
+      }
       toast.error(message);
       return;
     }
 
     setFileName(file.name.trim());
     setError("");
+    if (setFile) {
+      setFile(file);
+    }
+  }
+
+  function handleOrganizationStepSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (companyNameInput.trim().length < 2) {
+      const message = "Nome da organizacao deve ter ao menos 2 caracteres.";
+      setServerMessage(message);
+      toast.error(message);
+      return;
+    }
+
+    if (organizationImageError) {
+      setServerMessage(organizationImageError);
+      toast.error(organizationImageError);
+      return;
+    }
+
+    if (!billingName.trim()) {
+      setBillingName(nameInput.trim());
+    }
+
+    setServerMessage("");
+    setStep(3);
+  }
+
+  function submitOrganizationWithPlan() {
+    if (companyNameInput.trim().length < 2) {
+      const message = "Nome da organizacao deve ter ao menos 2 caracteres.";
+      setServerMessage(message);
+      toast.error(message);
+      return;
+    }
+
+    if (organizationImageError) {
+      setServerMessage(organizationImageError);
+      toast.error(organizationImageError);
+      return;
+    }
+
+    if (selectedPlanIsPaid) {
+      const billingError = validatePaidBillingFields({
+        billingName,
+        billingCellphone,
+        billingTaxId,
+      });
+      if (billingError) {
+        setServerMessage(billingError);
+        toast.error(billingError);
+        return;
+      }
+    }
+
+    setServerMessage("");
+    startTransition(async () => {
+      const payload = new FormData();
+      payload.set("companyName", companyNameInput.trim());
+      payload.set("planCode", planCode);
+      payload.set("billingCycle", billingCycle);
+      payload.set("redirectPath", redirectPath);
+      payload.set("keepCurrentActiveOrganization", "false");
+
+      if (organizationImageFile) {
+        payload.set("organizationImage", organizationImageFile);
+      }
+
+      if (selectedPlanIsPaid) {
+        payload.set("billingName", billingName.trim());
+        payload.set("billingCellphone", billingCellphone);
+        payload.set("billingTaxId", billingTaxId);
+      }
+
+      const result = await createOrganizationWithPlanAction(payload);
+      if (result.status === "error") {
+        setServerMessage(result.message);
+        toast.error(result.message);
+        return;
+      }
+
+      toast.success(result.message);
+
+      if (result.redirectKind === "external" && result.redirectTo) {
+        window.location.assign(result.redirectTo);
+        return;
+      }
+
+      router.replace(result.redirectTo ?? redirectPath);
+      router.refresh();
+    });
   }
 
   return (
@@ -212,17 +524,25 @@ function NewAccountOnboardingForm({
 
         <div className="space-y-2">
           <CardTitle className="text-foreground flex items-center gap-2 text-[1.72rem] font-black tracking-tight">
-            {isProfileStep ? (
+            {currentStep === 1 ? (
               <UserRoundIcon className="text-primary size-[1.1rem]" />
-            ) : (
+            ) : currentStep === 2 ? (
               <Building2Icon className="text-primary size-[1.1rem]" />
+            ) : (
+              <CreditCardIcon className="text-primary size-[1.1rem]" />
             )}
-            {isProfileStep ? "Seu perfil primeiro" : "Organizacao da conta"}
+            {currentStep === 1
+              ? "Seu perfil primeiro"
+              : currentStep === 2
+                ? "Dados da organizacao"
+                : "Plano e pagamento"}
           </CardTitle>
           <CardDescription className="text-muted-foreground text-sm leading-relaxed">
-            {isProfileStep
-              ? "Preencha seu nome e, se quiser, atualize seu avatar. Em seguida voce configura a empresa."
-              : "Defina o nome da organizacao e personalize o avatar da empresa para finalizar o onboarding."}
+            {currentStep === 1
+              ? "Preencha seu nome e, se quiser, atualize seu avatar."
+              : currentStep === 2
+                ? "Defina o nome da organizacao e o avatar da empresa."
+                : "Escolha o plano. Organizacoes pagas so sao criadas apos pagamento aprovado."}
           </CardDescription>
         </div>
 
@@ -233,29 +553,38 @@ function NewAccountOnboardingForm({
           </div>
           <div className="bg-muted mt-2 h-2 overflow-hidden rounded-full">
             <div
-              className={`h-full rounded-full bg-gradient-to-r from-primary to-accent transition-all duration-500 ${
-                isProfileStep ? "w-1/2" : "w-full"
-              }`}
+              className={cn(
+                "h-full rounded-full bg-gradient-to-r from-primary to-accent transition-all duration-500",
+                currentStep === 1 ? "w-1/3" : currentStep === 2 ? "w-2/3" : "w-full",
+              )}
             />
           </div>
 
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
             <div
-              className={`rounded-xl border px-3 py-2 ${
-                isProfileStep ? "border-primary/60 bg-primary/10" : "border-emerald-500/30 bg-emerald-500/10"
-              }`}
+              className={cn(
+                "rounded-xl border px-3 py-2",
+                currentStep === 1
+                  ? "border-primary/60 bg-primary/10"
+                  : "border-emerald-500/30 bg-emerald-500/10",
+              )}
             >
               <p className="text-foreground flex items-center gap-2 text-sm font-semibold">
                 <UserRoundIcon className="size-4" />
-                1. Perfil pessoal
+                1. Perfil
               </p>
-              <p className="text-muted-foreground mt-1 text-xs">Nome e avatar do usuario.</p>
+              <p className="text-muted-foreground mt-1 text-xs">Nome e avatar.</p>
             </div>
 
             <div
-              className={`rounded-xl border px-3 py-2 ${
-                isProfileStep ? "border-border/70 bg-muted/35" : "border-primary/60 bg-primary/10"
-              }`}
+              className={cn(
+                "rounded-xl border px-3 py-2",
+                currentStep === 2
+                  ? "border-primary/60 bg-primary/10"
+                  : currentStep > 2
+                    ? "border-emerald-500/30 bg-emerald-500/10"
+                    : "border-border/70 bg-muted/35",
+              )}
             >
               <p className="text-foreground flex items-center gap-2 text-sm font-semibold">
                 <Building2Icon className="size-4" />
@@ -263,12 +592,27 @@ function NewAccountOnboardingForm({
               </p>
               <p className="text-muted-foreground mt-1 text-xs">Nome e avatar da empresa.</p>
             </div>
+
+            <div
+              className={cn(
+                "rounded-xl border px-3 py-2",
+                currentStep === 3
+                  ? "border-primary/60 bg-primary/10"
+                  : "border-border/70 bg-muted/35",
+              )}
+            >
+              <p className="text-foreground flex items-center gap-2 text-sm font-semibold">
+                <CreditCardIcon className="size-4" />
+                3. Plano
+              </p>
+              <p className="text-muted-foreground mt-1 text-xs">Plano e pagamento.</p>
+            </div>
           </div>
         </div>
       </CardHeader>
 
       <CardContent className="px-6 pb-6">
-        {isProfileStep ? (
+        {currentStep === 1 ? (
           <form action={profileStepAction} className="space-y-5">
             <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
               <div className="space-y-4">
@@ -345,11 +689,6 @@ function NewAccountOnboardingForm({
                     <p className="text-muted-foreground text-xs">Este nome aparece para sua equipe.</p>
                   </div>
                 </div>
-                <div className="mt-4 rounded-lg border border-border/70 bg-background/70 p-3">
-                  <p className="text-muted-foreground text-xs leading-relaxed">
-                    O avatar e opcional. Se preferir, finalize agora e atualize depois no perfil.
-                  </p>
-                </div>
               </aside>
             </div>
 
@@ -369,10 +708,10 @@ function NewAccountOnboardingForm({
               <ArrowRightIcon className="size-4" />
             </FormSubmitButton>
           </form>
-        ) : (
-          <form action={organizationStepAction} className="space-y-5">
-            <input type="hidden" name="redirectPath" value={redirectPath} readOnly />
+        ) : null}
 
+        {currentStep === 2 ? (
+          <form onSubmit={handleOrganizationStepSubmit} className="space-y-5">
             <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
               <div className="space-y-4">
                 <div className="space-y-2">
@@ -386,11 +725,10 @@ function NewAccountOnboardingForm({
                     <Building2Icon className="text-muted-foreground pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2" />
                     <Input
                       id="onboarding-company-name"
-                      name="companyName"
                       type="text"
                       placeholder="Acme SaaS"
                       autoComplete="organization"
-                      defaultValue={companyNameInput}
+                      value={companyNameInput}
                       onChange={(event) => setCompanyNameInput(event.target.value)}
                       minLength={2}
                       maxLength={120}
@@ -410,7 +748,6 @@ function NewAccountOnboardingForm({
                   <div className="rounded-xl border border-dashed border-border/75 bg-background/75 p-3">
                     <Input
                       id="onboarding-organization-image"
-                      name="organizationImage"
                       type="file"
                       accept="image/*"
                       onChange={(event) =>
@@ -418,6 +755,7 @@ function NewAccountOnboardingForm({
                           event,
                           setOrganizationImageName,
                           setOrganizationImageError,
+                          setOrganizationImageFile,
                         )
                       }
                       className="h-10 rounded-lg border-border/70 bg-background/80 text-sm"
@@ -439,44 +777,146 @@ function NewAccountOnboardingForm({
               </div>
 
               <aside className="rounded-2xl border border-border/75 bg-muted/25 p-4">
-                <p className="text-foreground text-sm font-semibold">Identidade da empresa</p>
+                <p className="text-foreground text-sm font-semibold">Resumo da organizacao</p>
                 <div className="mt-3 rounded-lg border border-border/70 bg-background/70 p-3">
                   <p className="text-foreground text-sm font-semibold">
                     {companyNameInput.trim() || "Sua organizacao"}
                   </p>
                   <p className="text-muted-foreground mt-1 text-xs leading-relaxed">
-                    Esse nome sera exibido no painel e para membros convidados.
-                  </p>
-                </div>
-                <div className="mt-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3">
-                  <p className="text-foreground flex items-center gap-2 text-xs font-semibold">
-                    <CheckCircle2Icon className="size-3.5" />
-                    Etapa final
-                  </p>
-                  <p className="text-muted-foreground mt-1 text-xs">
-                    Ao concluir, sua area principal sera liberada automaticamente.
+                    Este nome sera exibido no painel e para membros convidados.
                   </p>
                 </div>
               </aside>
             </div>
 
-            <FormFeedback state={organizationState} showInline={false} />
-            {organizationState.status === "error" && organizationState.message ? (
+            {serverMessage ? (
               <p className="text-destructive rounded-xl border border-destructive/35 bg-destructive/10 px-3 py-2 text-sm font-medium">
-                {organizationState.message}
+                {serverMessage}
               </p>
             ) : null}
 
-            <FormSubmitButton
+            <Button
+              type="submit"
               className="h-11 w-full rounded-xl text-sm font-semibold shadow-[0_14px_30px_-20px_rgba(76,175,80,0.85)]"
-              pendingLabel="Concluindo onboarding..."
               disabled={Boolean(organizationImageError)}
             >
-              <CameraIcon className="size-4" />
-              Concluir onboarding
-            </FormSubmitButton>
+              Continuar para plano
+              <ArrowRightIcon className="size-4" />
+            </Button>
           </form>
-        )}
+        ) : null}
+
+        {currentStep === 3 ? (
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              submitOrganizationWithPlan();
+            }}
+            className="space-y-5"
+          >
+            <div className="space-y-2">
+              <Label className="text-[0.72rem] font-semibold tracking-[0.08em] uppercase">
+                Plano inicial
+              </Label>
+              <PlanSelector value={planCode} onChange={setPlanCode} />
+            </div>
+
+            {selectedPlanIsPaid ? (
+              <div className="space-y-3 rounded-xl border border-border/70 bg-background/60 p-3">
+                <div className="space-y-1">
+                  <Label className="text-[0.68rem] font-semibold tracking-[0.08em] uppercase">
+                    Ciclo de cobranca
+                  </Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label
+                      className={cn(
+                        "cursor-pointer rounded-lg border px-3 py-2 text-sm",
+                        billingCycle === "MONTHLY"
+                          ? "border-primary/60 bg-primary/10"
+                          : "border-border/70 bg-background/80",
+                      )}
+                    >
+                      <input
+                        type="radio"
+                        name="billingCycle"
+                        value="MONTHLY"
+                        checked={billingCycle === "MONTHLY"}
+                        onChange={() => setBillingCycle("MONTHLY")}
+                        className="sr-only"
+                      />
+                      Mensal
+                    </label>
+                    <label
+                      className={cn(
+                        "cursor-pointer rounded-lg border px-3 py-2 text-sm",
+                        billingCycle === "ANNUAL"
+                          ? "border-primary/60 bg-primary/10"
+                          : "border-border/70 bg-background/80",
+                      )}
+                    >
+                      <input
+                        type="radio"
+                        name="billingCycle"
+                        value="ANNUAL"
+                        checked={billingCycle === "ANNUAL"}
+                        onChange={() => setBillingCycle("ANNUAL")}
+                        className="sr-only"
+                      />
+                      Anual
+                    </label>
+                  </div>
+                </div>
+
+                <BillingFields
+                  billingName={billingName}
+                  billingCellphone={billingCellphone}
+                  billingTaxId={billingTaxId}
+                  onBillingNameChange={setBillingName}
+                  onBillingCellphoneChange={setBillingCellphone}
+                  onBillingTaxIdChange={setBillingTaxId}
+                />
+
+                <p className="rounded-lg border border-primary/25 bg-primary/10 px-3 py-2 text-xs">
+                  A organizacao sera criada somente depois que o pagamento for aprovado.
+                </p>
+              </div>
+            ) : (
+              <p className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs">
+                Trial de 7 dias disponivel apenas para a primeira organizacao do usuario.
+              </p>
+            )}
+
+            {serverMessage ? (
+              <p className="text-destructive rounded-xl border border-destructive/35 bg-destructive/10 px-3 py-2 text-sm font-medium">
+                {serverMessage}
+              </p>
+            ) : null}
+
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 rounded-xl"
+                onClick={() => setStep(2)}
+                disabled={isPending}
+              >
+                <ArrowLeftIcon className="size-4" />
+                Voltar
+              </Button>
+              <Button
+                type="submit"
+                className="h-11 flex-1 rounded-xl text-sm font-semibold shadow-[0_14px_30px_-20px_rgba(76,175,80,0.85)]"
+                disabled={isPending}
+              >
+                {isPending
+                  ? "Processando..."
+                  : selectedPlanIsPaid
+                    ? "Ir para pagamento"
+                    : "Criar organizacao com trial"}
+              </Button>
+            </div>
+          </form>
+        ) : null}
       </CardContent>
     </Card>
   );
@@ -490,53 +930,115 @@ function OrganizationCreateForm({
 }: CompanyOnboardingFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [serverMessage, setServerMessage] = useState<string>("");
 
-  const form = useForm<CompanyOnboardingValues>({
-    resolver: zodResolver(companyOnboardingSchema),
-    defaultValues: {
-      companyName: initialCompanyName,
-      planCode: "FREE",
-    },
-  });
-  const selectedPlanCode = useWatch({
-    control: form.control,
-    name: "planCode",
-    defaultValue: "FREE",
-  });
-  const selectedPlanIsPaid = selectedPlanCode !== "FREE";
+  const [companyName, setCompanyName] = useState(initialCompanyName);
+  const [organizationImageFile, setOrganizationImageFile] = useState<File | null>(null);
+  const [organizationImageName, setOrganizationImageName] = useState("");
+  const [organizationImageError, setOrganizationImageError] = useState("");
 
-  const onSubmit = form.handleSubmit(
-    (values) => {
-      setServerMessage("");
-      startTransition(async () => {
-        const payload = new FormData();
-        payload.set("companyName", values.companyName);
-        payload.set("planCode", values.planCode);
-        payload.set("redirectPath", redirectPath);
-        payload.set("keepCurrentActiveOrganization", String(keepCurrentActiveOrganization));
+  const [planCode, setPlanCode] = useState<OrganizationCreatePlanCode>("FREE");
+  const [billingCycle, setBillingCycle] = useState<BillingCycle>("MONTHLY");
+  const [billingName, setBillingName] = useState(userName?.trim() || "");
+  const [billingCellphone, setBillingCellphone] = useState("");
+  const [billingTaxId, setBillingTaxId] = useState("");
+  const [serverMessage, setServerMessage] = useState("");
 
-        const result = await createOrganizationWithPlanAction(payload);
-        if (result.status === "error") {
-          setServerMessage(result.message);
-          toast.error(result.message);
-          return;
-        }
+  const selectedPlanIsPaid = isPaidOrganizationPlan(planCode);
 
-        toast.success(result.message);
-        router.replace(result.redirectTo ?? redirectPath);
-        router.refresh();
-      });
-    },
-    (errors) => {
-      const message = getFirstValidationErrorMessage(errors) ?? "Revise os campos informados.";
+  function handleOrganizationImageSelection(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      setOrganizationImageFile(null);
+      setOrganizationImageName("");
+      setOrganizationImageError("");
+      return;
+    }
+
+    if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+      const message = "Arquivo muito pesado. Envie uma imagem de ate 5 MB.";
+      event.target.value = "";
+      setOrganizationImageFile(null);
+      setOrganizationImageName("");
+      setOrganizationImageError(message);
       setServerMessage(message);
       toast.error(message);
-    },
-  );
+      return;
+    }
+
+    setOrganizationImageFile(file);
+    setOrganizationImageName(file.name.trim());
+    setOrganizationImageError("");
+  }
+
+  function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (companyName.trim().length < 2) {
+      const message = "Nome da organizacao deve ter ao menos 2 caracteres.";
+      setServerMessage(message);
+      toast.error(message);
+      return;
+    }
+
+    if (organizationImageError) {
+      setServerMessage(organizationImageError);
+      toast.error(organizationImageError);
+      return;
+    }
+
+    if (selectedPlanIsPaid) {
+      const billingError = validatePaidBillingFields({
+        billingName,
+        billingCellphone,
+        billingTaxId,
+      });
+      if (billingError) {
+        setServerMessage(billingError);
+        toast.error(billingError);
+        return;
+      }
+    }
+
+    setServerMessage("");
+    startTransition(async () => {
+      const payload = new FormData();
+      payload.set("companyName", companyName.trim());
+      payload.set("planCode", planCode);
+      payload.set("billingCycle", billingCycle);
+      payload.set("redirectPath", redirectPath);
+      payload.set("keepCurrentActiveOrganization", String(keepCurrentActiveOrganization));
+
+      if (organizationImageFile) {
+        payload.set("organizationImage", organizationImageFile);
+      }
+
+      if (selectedPlanIsPaid) {
+        payload.set("billingName", billingName.trim());
+        payload.set("billingCellphone", billingCellphone);
+        payload.set("billingTaxId", billingTaxId);
+      }
+
+      const result = await createOrganizationWithPlanAction(payload);
+      if (result.status === "error") {
+        setServerMessage(result.message);
+        toast.error(result.message);
+        return;
+      }
+
+      toast.success(result.message);
+
+      if (result.redirectKind === "external" && result.redirectTo) {
+        window.location.assign(result.redirectTo);
+        return;
+      }
+
+      router.replace(result.redirectTo ?? redirectPath);
+      router.refresh();
+    });
+  }
 
   return (
-    <Card className="mx-auto w-full max-w-md overflow-hidden rounded-[1.8rem] border border-border/75 bg-card/95 shadow-[0_45px_110px_-70px_rgba(17,34,20,0.92)] backdrop-blur-xl">
+    <Card className="mx-auto w-full max-w-3xl overflow-hidden rounded-[1.8rem] border border-border/75 bg-card/95 shadow-[0_45px_110px_-70px_rgba(17,34,20,0.92)] backdrop-blur-xl">
       <div aria-hidden className="h-1 w-full bg-gradient-to-r from-primary via-accent to-primary/70" />
 
       <CardHeader className="space-y-4 px-6 pt-6">
@@ -555,119 +1057,150 @@ function OrganizationCreateForm({
           </CardTitle>
           <CardDescription className="text-muted-foreground text-sm leading-relaxed">
             {userName
-              ? `${userName}, informe os dados da nova organizacao.`
-              : "Informe os dados da nova organizacao."}
+              ? `${userName}, informe os dados da nova organizacao e conclua o plano.`
+              : "Informe os dados da nova organizacao e conclua o plano."}
           </CardDescription>
         </div>
       </CardHeader>
 
       <CardContent className="space-y-4 px-6 pb-6">
-        <Form {...form}>
-          <form onSubmit={onSubmit} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="companyName"
-              render={({ field }) => {
-                const fieldProps = stripFieldRef(field);
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="companyName" className="text-[0.72rem] font-semibold tracking-[0.08em] uppercase">
+              Organizacao
+            </Label>
+            <div className="relative">
+              <Building2Icon className="text-muted-foreground pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2" />
+              <Input
+                id="companyName"
+                name="companyName"
+                type="text"
+                placeholder="Acme SaaS"
+                autoComplete="organization"
+                value={companyName}
+                onChange={(event) => setCompanyName(event.target.value)}
+                className="h-10 rounded-xl border-border/80 bg-background/80 pl-10 text-sm"
+                required
+              />
+            </div>
+          </div>
 
-                return (
-                  <FormItem>
-                    <FormLabel className="text-[0.72rem] font-semibold tracking-[0.08em] uppercase">
-                      Organizacao
-                    </FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Building2Icon className="text-muted-foreground pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2" />
-                        <Input
-                          {...fieldProps}
-                          type="text"
-                          placeholder="Acme SaaS"
-                          autoComplete="organization"
-                          className="h-10 rounded-xl border-border/80 bg-background/80 pl-10 text-sm"
-                        />
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                );
-              }}
-            />
-
-            <FormField
-              control={form.control}
-              name="planCode"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-[0.72rem] font-semibold tracking-[0.08em] uppercase">
-                    Plano inicial
-                  </FormLabel>
-                  <FormControl>
-                    <div className="space-y-2">
-                      {ORGANIZATION_CREATE_PLAN_OPTIONS.map((plan) => {
-                        const isSelected = field.value === plan.code;
-
-                        return (
-                          <label
-                            key={plan.code}
-                            className={cn(
-                              "flex cursor-pointer items-start justify-between gap-3 rounded-xl border px-3 py-2 transition-colors",
-                              isSelected
-                                ? "border-primary/60 bg-primary/10"
-                                : "border-border/70 bg-background/70 hover:bg-muted/40",
-                            )}
-                          >
-                            <input
-                              type="radio"
-                              name={field.name}
-                              value={plan.code}
-                              checked={isSelected}
-                              onChange={() => field.onChange(plan.code)}
-                              className="sr-only"
-                            />
-
-                            <span className="space-y-0.5">
-                              <span className="flex items-center gap-2 text-sm font-semibold">
-                                {plan.name}
-                                <span className="text-muted-foreground text-xs font-medium">
-                                  {plan.priceLabel}
-                                </span>
-                              </span>
-                              <span className="text-muted-foreground block text-xs">
-                                {plan.description}
-                              </span>
-                              <span className="text-muted-foreground/90 block text-[0.68rem]">
-                                {plan.helper}
-                              </span>
-                            </span>
-
-                            {isSelected ? <CheckIcon className="text-primary mt-0.5 size-4" /> : null}
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {serverMessage ? (
-              <p className="text-destructive text-sm font-medium">{serverMessage}</p>
-            ) : null}
-
-            <Button
-              type="submit"
-              className="h-11 w-full rounded-xl text-sm font-semibold shadow-[0_14px_30px_-20px_rgba(76,175,80,0.85)]"
-              disabled={isPending}
+          <div className="space-y-2">
+            <Label
+              htmlFor="organizationImage"
+              className="text-[0.72rem] font-semibold tracking-[0.08em] uppercase"
             >
-              {isPending
-                ? "Criando organizacao..."
-                : selectedPlanIsPaid
-                  ? "Criar e seguir para pagamento"
-                  : "Criar organizacao"}
-            </Button>
-          </form>
-        </Form>
+              Avatar da empresa (opcional)
+            </Label>
+            <div className="rounded-xl border border-dashed border-border/75 bg-background/75 p-3">
+              <Input
+                id="organizationImage"
+                type="file"
+                accept="image/*"
+                onChange={handleOrganizationImageSelection}
+                className="h-10 rounded-lg border-border/70 bg-background/80 text-sm"
+              />
+              <p className="text-muted-foreground mt-2 text-xs">PNG, JPEG, GIF ou WEBP com ate 5 MB.</p>
+              {organizationImageError ? (
+                <p className="text-destructive mt-1 text-xs font-medium">{organizationImageError}</p>
+              ) : null}
+              {organizationImageName ? (
+                <p className="text-foreground mt-1 flex items-center gap-1.5 text-xs font-medium">
+                  <UploadIcon className="size-3.5" />
+                  {organizationImageName}
+                </p>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-[0.72rem] font-semibold tracking-[0.08em] uppercase">Plano inicial</Label>
+            <PlanSelector value={planCode} onChange={setPlanCode} />
+          </div>
+
+          {selectedPlanIsPaid ? (
+            <div className="space-y-3 rounded-xl border border-border/70 bg-background/60 p-3">
+              <div className="space-y-1">
+                <Label className="text-[0.68rem] font-semibold tracking-[0.08em] uppercase">
+                  Ciclo de cobranca
+                </Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <label
+                    className={cn(
+                      "cursor-pointer rounded-lg border px-3 py-2 text-sm",
+                      billingCycle === "MONTHLY"
+                        ? "border-primary/60 bg-primary/10"
+                        : "border-border/70 bg-background/80",
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      name="billingCycle"
+                      value="MONTHLY"
+                      checked={billingCycle === "MONTHLY"}
+                      onChange={() => setBillingCycle("MONTHLY")}
+                      className="sr-only"
+                    />
+                    Mensal
+                  </label>
+                  <label
+                    className={cn(
+                      "cursor-pointer rounded-lg border px-3 py-2 text-sm",
+                      billingCycle === "ANNUAL"
+                        ? "border-primary/60 bg-primary/10"
+                        : "border-border/70 bg-background/80",
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      name="billingCycle"
+                      value="ANNUAL"
+                      checked={billingCycle === "ANNUAL"}
+                      onChange={() => setBillingCycle("ANNUAL")}
+                      className="sr-only"
+                    />
+                    Anual
+                  </label>
+                </div>
+              </div>
+
+              <BillingFields
+                billingName={billingName}
+                billingCellphone={billingCellphone}
+                billingTaxId={billingTaxId}
+                onBillingNameChange={setBillingName}
+                onBillingCellphoneChange={setBillingCellphone}
+                onBillingTaxIdChange={setBillingTaxId}
+              />
+
+              <p className="rounded-lg border border-primary/25 bg-primary/10 px-3 py-2 text-xs">
+                Para criar outra organizacao, conclua o pagamento. A organizacao so nasce apos aprovacao.
+              </p>
+            </div>
+          ) : (
+            <p className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs">
+              Trial de 7 dias disponivel apenas para a primeira organizacao por usuario.
+            </p>
+          )}
+
+          {serverMessage ? <p className="text-destructive text-sm font-medium">{serverMessage}</p> : null}
+
+          <Button
+            type="submit"
+            className="h-11 w-full rounded-xl text-sm font-semibold shadow-[0_14px_30px_-20px_rgba(76,175,80,0.85)]"
+            disabled={isPending}
+          >
+            {isPending
+              ? "Processando..."
+              : selectedPlanIsPaid
+                ? "Ir para pagamento"
+                : "Criar organizacao com trial"}
+          </Button>
+
+          <p className="text-muted-foreground text-xs">
+            Organizacoes pagas so serao ativadas apos autorizacao do pagamento.
+          </p>
+        </form>
       </CardContent>
     </Card>
   );

@@ -3,6 +3,8 @@ import { randomUUID, createHash } from "node:crypto";
 import {
   BillingPlanCode,
   CheckoutStatus,
+  OrganizationBillingCycle,
+  OrganizationCreationIntentStatus,
   OwnerSubscription,
   PlatformEventSeverity,
   Prisma,
@@ -46,6 +48,8 @@ const PAST_DUE_REMINDER_DAYS = [7, 14, 21] as const;
 const DUNNING_EMAIL_DAYS = [1, 3, 7, 14] as const;
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_NEW_ORGANIZATION_TRIAL_PLAN_CODE = BillingPlanCode.STARTER_50;
+const ORGANIZATION_CREATION_INTENT_PENDING_TIMEOUT_MINUTES = 30;
+const ORGANIZATION_CREATION_METADATA_KEY = "paidCreationIntentId";
 const PLATFORM_ORGANIZATION_BLOCK_MESSAGE =
   "Esta organizacao foi bloqueada pela administracao da plataforma.";
 
@@ -91,6 +95,53 @@ export type OwnerFeatureStatus = {
   enabled: boolean;
   source: "override" | "plan" | "rollout" | "disabled";
 };
+
+export type OrganizationCreationIntentSnapshot = {
+  id: string;
+  ownerUserId: string;
+  organizationId: string | null;
+  status: OrganizationCreationIntentStatus;
+  companyName: string;
+  companySlug: string;
+  companyLogo: string | null;
+  targetPlanCode: BillingPlanCode;
+  billingCycle: OrganizationBillingCycle;
+  amountCents: number;
+  currency: string;
+  billingName: string;
+  billingCellphone: string;
+  billingTaxId: string;
+  providerBillingId: string | null;
+  providerExternalId: string;
+  checkoutUrl: string | null;
+  checkoutStatus: CheckoutStatus;
+  paidAt: Date | null;
+  expiresAt: Date | null;
+  consumedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type OrganizationCreationIntentCheckoutResult = {
+  intentId: string;
+  checkoutUrl: string;
+};
+
+export type OrganizationCreationIntentFinalizeResult =
+  | {
+      status: "ready";
+      intent: OrganizationCreationIntentSnapshot;
+    }
+  | {
+      status: "pending";
+      intent: OrganizationCreationIntentSnapshot;
+      message: string;
+    }
+  | {
+      status: "blocked";
+      intent: OrganizationCreationIntentSnapshot;
+      message: string;
+    };
 
 function resolveOrganizationBlockMessageFromSubscription(
   subscription: Pick<
@@ -142,6 +193,31 @@ function parsePositiveIntEnv(value: string | undefined, fallback: number): numbe
   return parsed;
 }
 
+export function getOrganizationCreationIntentMetadataKey(): string {
+  return ORGANIZATION_CREATION_METADATA_KEY;
+}
+
+export function extractOrganizationCreationIntentIdFromMetadata(
+  metadata: unknown,
+): string | null {
+  if (typeof metadata === "string") {
+    try {
+      const parsed = JSON.parse(metadata) as Record<string, unknown>;
+      const rawValue = parsed[ORGANIZATION_CREATION_METADATA_KEY];
+      return typeof rawValue === "string" && rawValue.trim() ? rawValue.trim() : null;
+    } catch {
+      return null;
+    }
+  }
+
+  if (typeof metadata === "object" && metadata !== null && !Array.isArray(metadata)) {
+    const rawValue = (metadata as Record<string, unknown>)[ORGANIZATION_CREATION_METADATA_KEY];
+    return typeof rawValue === "string" && rawValue.trim() ? rawValue.trim() : null;
+  }
+
+  return null;
+}
+
 function getCheckoutPendingTimeoutMs(): number {
   const configuredMinutes = parsePositiveIntEnv(
     process.env.CHECKOUT_PENDING_TIMEOUT_MINUTES,
@@ -150,8 +226,19 @@ function getCheckoutPendingTimeoutMs(): number {
   return Math.min(configuredMinutes, MAX_CHECKOUT_PENDING_TIMEOUT_MINUTES) * 60 * 1000;
 }
 
+function getOrganizationCreationIntentPendingTimeoutMs(): number {
+  return parsePositiveIntEnv(
+    process.env.ORGANIZATION_CREATION_INTENT_PENDING_TIMEOUT_MINUTES,
+    ORGANIZATION_CREATION_INTENT_PENDING_TIMEOUT_MINUTES,
+  ) * 60 * 1000;
+}
+
 function isStalePendingCheckout(createdAt: Date): boolean {
   return Date.now() - createdAt.getTime() >= getCheckoutPendingTimeoutMs();
+}
+
+function isStalePendingOrganizationCreationIntent(createdAt: Date): boolean {
+  return Date.now() - createdAt.getTime() >= getOrganizationCreationIntentPendingTimeoutMs();
 }
 
 async function failStaleCheckout(input: {
@@ -203,6 +290,63 @@ function resolveCheckoutBillingCycle(metadata: Prisma.JsonValue | null | undefin
 
   const cycle = (metadata as Record<string, unknown>).billingCycle;
   return isPlanBillingCycle(cycle) ? cycle : "MONTHLY";
+}
+
+function toOrganizationBillingCycle(value: PlanBillingCycle): OrganizationBillingCycle {
+  return value === "ANNUAL" ? OrganizationBillingCycle.ANNUAL : OrganizationBillingCycle.MONTHLY;
+}
+
+function toPlanBillingCycle(value: OrganizationBillingCycle): PlanBillingCycle {
+  return value === OrganizationBillingCycle.ANNUAL ? "ANNUAL" : "MONTHLY";
+}
+
+function mapBillingStatusToIntentStatus(status: CheckoutStatus): OrganizationCreationIntentStatus {
+  if (status === CheckoutStatus.PAID) {
+    return OrganizationCreationIntentStatus.PAID;
+  }
+
+  if (status === CheckoutStatus.EXPIRED) {
+    return OrganizationCreationIntentStatus.EXPIRED;
+  }
+
+  if (status === CheckoutStatus.CANCELED) {
+    return OrganizationCreationIntentStatus.CANCELED;
+  }
+
+  if (status === CheckoutStatus.CHARGEBACK) {
+    return OrganizationCreationIntentStatus.CHARGEBACK;
+  }
+
+  if (status === CheckoutStatus.FAILED) {
+    return OrganizationCreationIntentStatus.FAILED;
+  }
+
+  return OrganizationCreationIntentStatus.PENDING;
+}
+
+function mapWebhookOutcomeToIntentStatus(
+  payload: AbacateWebhookPayload,
+  outcome: CheckoutStatus,
+): OrganizationCreationIntentStatus {
+  if (
+    outcome === CheckoutStatus.FAILED &&
+    payload.data?.billing?.status === "CANCELLED"
+  ) {
+    return OrganizationCreationIntentStatus.CANCELED;
+  }
+
+  return mapBillingStatusToIntentStatus(outcome);
+}
+
+function normalizeIntentStatus(
+  status: OrganizationCreationIntentStatus,
+  organizationId: string | null,
+): OrganizationCreationIntentStatus {
+  if (organizationId) {
+    return OrganizationCreationIntentStatus.CONSUMED;
+  }
+
+  return status;
 }
 
 function startOfUtcMonth(referenceDate: Date = new Date()): Date {
@@ -436,6 +580,379 @@ async function getOwnerBasicProfile(ownerUserId: string): Promise<{ name: string
   };
 }
 
+function toOrganizationCreationIntentSnapshot(
+  intent: {
+    id: string;
+    ownerUserId: string;
+    organizationId: string | null;
+    status: OrganizationCreationIntentStatus;
+    companyName: string;
+    companySlug: string;
+    companyLogo: string | null;
+    targetPlanCode: BillingPlanCode;
+    billingCycle: OrganizationBillingCycle;
+    amountCents: number;
+    currency: string;
+    billingName: string;
+    billingCellphone: string;
+    billingTaxId: string;
+    providerBillingId: string | null;
+    providerExternalId: string;
+    checkoutUrl: string | null;
+    checkoutStatus: CheckoutStatus;
+    paidAt: Date | null;
+    expiresAt: Date | null;
+    consumedAt: Date | null;
+    createdAt: Date;
+    updatedAt: Date;
+  },
+): OrganizationCreationIntentSnapshot {
+  return {
+    ...intent,
+    status: normalizeIntentStatus(intent.status, intent.organizationId),
+  };
+}
+
+function findAbacateBillingForOrganizationCreationIntent(
+  intent: Pick<OrganizationCreationIntentSnapshot, "providerBillingId" | "providerExternalId">,
+  billings: AbacateBilling[],
+): AbacateBilling | null {
+  if (intent.providerBillingId) {
+    const byBillingId = billings.find((billing) => billing.id === intent.providerBillingId);
+    if (byBillingId) {
+      return byBillingId;
+    }
+  }
+
+  return (
+    billings.find((billing) =>
+      billing.products.some((product) => product.externalId === intent.providerExternalId),
+    ) ?? null
+  );
+}
+
+function resolveOrganizationCreationIntentBlockMessage(
+  intent: OrganizationCreationIntentSnapshot,
+): string | null {
+  if (intent.status === OrganizationCreationIntentStatus.PENDING) {
+    return "Pagamento ainda em processamento. Aguarde a confirmacao para concluir a criacao da organizacao.";
+  }
+
+  if (intent.status === OrganizationCreationIntentStatus.FAILED) {
+    return "Pagamento nao confirmado. Inicie uma nova tentativa para criar a organizacao.";
+  }
+
+  if (intent.status === OrganizationCreationIntentStatus.EXPIRED) {
+    return "Pagamento expirado. Inicie uma nova tentativa para criar a organizacao.";
+  }
+
+  if (intent.status === OrganizationCreationIntentStatus.CANCELED) {
+    return "Pagamento cancelado. Inicie uma nova tentativa para criar a organizacao.";
+  }
+
+  if (intent.status === OrganizationCreationIntentStatus.CHARGEBACK) {
+    return "Pagamento estornado. Inicie uma nova tentativa para criar a organizacao.";
+  }
+
+  return null;
+}
+
+async function syncOrganizationCreationIntentFromBillingSnapshot(
+  intent: OrganizationCreationIntentSnapshot,
+): Promise<OrganizationCreationIntentSnapshot> {
+  if (intent.status === OrganizationCreationIntentStatus.CONSUMED || intent.organizationId) {
+    return intent;
+  }
+
+  const billings = await listAbacateBillings();
+  const billing = findAbacateBillingForOrganizationCreationIntent(intent, billings);
+  if (!billing) {
+    if (
+      intent.status === OrganizationCreationIntentStatus.PENDING &&
+      isStalePendingOrganizationCreationIntent(intent.createdAt)
+    ) {
+      const staleUpdated = await prisma.organizationCreationIntent.update({
+        where: {
+          id: intent.id,
+        },
+        data: {
+          status: OrganizationCreationIntentStatus.FAILED,
+          checkoutStatus: CheckoutStatus.FAILED,
+        },
+      });
+      return toOrganizationCreationIntentSnapshot(staleUpdated);
+    }
+
+    return intent;
+  }
+
+  const checkoutStatus = mapBillingStatus(billing.status);
+  const mappedStatus = mapBillingStatusToIntentStatus(checkoutStatus);
+  const checkoutUrl = sanitizeTrustedAbacateUrl(billing.url);
+  const updatedIntent = await prisma.organizationCreationIntent.update({
+    where: {
+      id: intent.id,
+    },
+    data: {
+      providerBillingId: billing.id,
+      checkoutUrl,
+      checkoutStatus,
+      status: mappedStatus,
+      paidAt: mappedStatus === OrganizationCreationIntentStatus.PAID ? new Date() : null,
+    },
+  });
+
+  return toOrganizationCreationIntentSnapshot(updatedIntent);
+}
+
+export async function getOrganizationCreationIntentForOwner(
+  ownerUserId: string,
+  intentId: string,
+): Promise<OrganizationCreationIntentSnapshot | null> {
+  const normalizedOwnerUserId = ownerUserId.trim();
+  const normalizedIntentId = intentId.trim();
+
+  if (!normalizedOwnerUserId || !normalizedIntentId) {
+    return null;
+  }
+
+  const intent = await prisma.organizationCreationIntent.findFirst({
+    where: {
+      id: normalizedIntentId,
+      ownerUserId: normalizedOwnerUserId,
+    },
+  });
+
+  return intent ? toOrganizationCreationIntentSnapshot(intent) : null;
+}
+
+export async function createOrganizationCreationIntentCheckout(input: {
+  ownerUserId: string;
+  companyName: string;
+  companySlug: string;
+  companyLogo?: string | null;
+  targetPlanCode: BillingPlanCode;
+  billingCycle?: PlanBillingCycle;
+  billingName: string;
+  billingCellphone: string;
+  billingTaxId: string;
+}): Promise<OrganizationCreationIntentCheckoutResult> {
+  if (!isPaidPlan(input.targetPlanCode)) {
+    throw new Error("Selecione um plano pago para criar uma nova organizacao.");
+  }
+
+  if (!isAbacatePayConfigured()) {
+    throw new Error("ABACATEPAY_API_KEY não configurada para gerar checkout.");
+  }
+
+  const normalizedOwnerUserId = input.ownerUserId.trim();
+  if (!normalizedOwnerUserId) {
+    throw new Error("Usuario invalido para criar checkout.");
+  }
+
+  const ownerProfile = await getOwnerBasicProfile(normalizedOwnerUserId);
+  if (!ownerProfile.email) {
+    throw new Error("Usuario sem e-mail valido para gerar checkout.");
+  }
+
+  const billingCycle = input.billingCycle ?? "MONTHLY";
+  const targetPlan = getPlanDefinition(input.targetPlanCode);
+  const amountCents = getPlanChargeCents(targetPlan.monthlyPriceCents, billingCycle);
+  const organizationBillingCycle = toOrganizationBillingCycle(billingCycle);
+  const externalId = `org_create_${randomUUID().replaceAll("-", "")}`;
+  const intent = await prisma.organizationCreationIntent.create({
+    data: {
+      ownerUserId: normalizedOwnerUserId,
+      status: OrganizationCreationIntentStatus.PENDING,
+      companyName: input.companyName.trim(),
+      companySlug: input.companySlug.trim(),
+      companyLogo: input.companyLogo?.trim() || null,
+      targetPlanCode: input.targetPlanCode,
+      billingCycle: organizationBillingCycle,
+      amountCents,
+      currency: "BRL",
+      billingName: input.billingName.trim(),
+      billingCellphone: input.billingCellphone.trim(),
+      billingTaxId: input.billingTaxId.trim(),
+      providerExternalId: externalId,
+      checkoutStatus: CheckoutStatus.PENDING,
+      metadata: {
+        flow: "organization_creation",
+      },
+    },
+  });
+
+  const appBaseUrl = getAppBaseUrl();
+  const cycleLabel = billingCycle === "ANNUAL" ? "Anual" : "Mensal";
+  const cycleDescription =
+    billingCycle === "ANNUAL"
+      ? `Assinatura anual do ${targetPlan.name} para nova organizacao`
+      : `Assinatura mensal do ${targetPlan.name} para nova organizacao`;
+
+  try {
+    const billing = await createAbacateBilling({
+      frequency: billingCycle === "ANNUAL" ? "ONE_TIME" : "MULTIPLE_PAYMENTS",
+      methods: ["PIX", "CARD"],
+      products: [
+        {
+          externalId,
+          name: `${targetPlan.name} - ${cycleLabel}`,
+          description: cycleDescription,
+          quantity: 1,
+          price: amountCents,
+        },
+      ],
+      returnUrl: `${appBaseUrl}/checkout/organization?intent=${intent.id}`,
+      completionUrl: `${appBaseUrl}/checkout/organization?intent=${intent.id}`,
+      customer: {
+        name: input.billingName.trim(),
+        cellphone: input.billingCellphone.trim(),
+        email: ownerProfile.email,
+        taxId: input.billingTaxId.trim(),
+      },
+      externalId,
+      metadata: {
+        flow: "organization_creation",
+        intentId: intent.id,
+        ownerUserId: normalizedOwnerUserId,
+        targetPlanCode: input.targetPlanCode,
+        billingCycle,
+      },
+    });
+
+    if (!isTrustedAbacateCheckoutUrl(billing.url)) {
+      throw new Error("URL de checkout retornada pelo provedor não é confiável.");
+    }
+
+    const checkoutStatus = mapBillingStatus(billing.status);
+    const intentStatus = mapBillingStatusToIntentStatus(checkoutStatus);
+    await prisma.organizationCreationIntent.update({
+      where: {
+        id: intent.id,
+      },
+      data: {
+        providerBillingId: billing.id,
+        checkoutUrl: billing.url,
+        checkoutStatus,
+        status: intentStatus,
+        paidAt: intentStatus === OrganizationCreationIntentStatus.PAID ? new Date() : null,
+      },
+    });
+
+    return {
+      intentId: intent.id,
+      checkoutUrl: billing.url,
+    };
+  } catch (error) {
+    await prisma.organizationCreationIntent.update({
+      where: {
+        id: intent.id,
+      },
+      data: {
+        status: OrganizationCreationIntentStatus.FAILED,
+        checkoutStatus: CheckoutStatus.FAILED,
+      },
+    });
+
+    throw error;
+  }
+}
+
+export async function syncOrganizationCreationIntentStatus(input: {
+  ownerUserId: string;
+  intentId: string;
+}): Promise<OrganizationCreationIntentSnapshot | null> {
+  const intent = await getOrganizationCreationIntentForOwner(input.ownerUserId, input.intentId);
+  if (!intent) {
+    return null;
+  }
+
+  return syncOrganizationCreationIntentFromBillingSnapshot(intent);
+}
+
+export async function resolveOrganizationCreationIntentForFinalize(input: {
+  ownerUserId: string;
+  intentId: string;
+}): Promise<OrganizationCreationIntentFinalizeResult | null> {
+  const intent = await syncOrganizationCreationIntentStatus(input);
+  if (!intent) {
+    return null;
+  }
+
+  if (
+    intent.status === OrganizationCreationIntentStatus.PAID ||
+    intent.status === OrganizationCreationIntentStatus.CONSUMING ||
+    intent.status === OrganizationCreationIntentStatus.CONSUMED
+  ) {
+    return {
+      status: "ready",
+      intent,
+    };
+  }
+
+  const blockMessage = resolveOrganizationCreationIntentBlockMessage(intent);
+  if (intent.status === OrganizationCreationIntentStatus.PENDING) {
+    return {
+      status: "pending",
+      intent,
+      message: blockMessage ?? "Pagamento ainda em processamento.",
+    };
+  }
+
+  return {
+    status: "blocked",
+    intent,
+    message: blockMessage ?? "Pagamento nao aprovado para criar a organizacao.",
+  };
+}
+
+export async function markOrganizationCreationIntentAsConsuming(input: {
+  ownerUserId: string;
+  intentId: string;
+}): Promise<boolean> {
+  const updated = await prisma.organizationCreationIntent.updateMany({
+    where: {
+      id: input.intentId,
+      ownerUserId: input.ownerUserId,
+      organizationId: null,
+      status: OrganizationCreationIntentStatus.PAID,
+    },
+    data: {
+      status: OrganizationCreationIntentStatus.CONSUMING,
+    },
+  });
+
+  return updated.count > 0;
+}
+
+export async function markOrganizationCreationIntentAsConsumed(input: {
+  ownerUserId: string;
+  intentId: string;
+  organizationId: string;
+}): Promise<void> {
+  await prisma.organizationCreationIntent.updateMany({
+    where: {
+      id: input.intentId,
+      ownerUserId: input.ownerUserId,
+      organizationId: null,
+      status: {
+        in: [
+          OrganizationCreationIntentStatus.PAID,
+          OrganizationCreationIntentStatus.CONSUMING,
+          OrganizationCreationIntentStatus.CONSUMED,
+        ],
+      },
+    },
+    data: {
+      organizationId: input.organizationId,
+      status: OrganizationCreationIntentStatus.CONSUMED,
+      consumedAt: new Date(),
+      checkoutStatus: CheckoutStatus.PAID,
+      paidAt: new Date(),
+    },
+  });
+}
+
 async function setSubscriptionAsExpiredIfNeeded(
   subscription: OwnerSubscription,
 ): Promise<OwnerSubscription> {
@@ -556,10 +1073,43 @@ export async function resolveOrganizationPrimaryOwnerUserId(
   return fallbackMembership?.userId ?? null;
 }
 
+async function resolvePaidOrganizationCreationIntentForOwner(
+  ownerUserId: string,
+  creationIntentId: string | null | undefined,
+): Promise<OrganizationCreationIntentSnapshot | null> {
+  const normalizedIntentId = creationIntentId?.trim() ?? "";
+  if (!normalizedIntentId) {
+    return null;
+  }
+
+  const intent = await prisma.organizationCreationIntent.findFirst({
+    where: {
+      id: normalizedIntentId,
+      ownerUserId,
+    },
+  });
+
+  if (!intent) {
+    return null;
+  }
+
+  const snapshot = toOrganizationCreationIntentSnapshot(intent);
+  if (
+    snapshot.status !== OrganizationCreationIntentStatus.PAID &&
+    snapshot.status !== OrganizationCreationIntentStatus.CONSUMING &&
+    snapshot.status !== OrganizationCreationIntentStatus.CONSUMED
+  ) {
+    return null;
+  }
+
+  return snapshot;
+}
+
 export async function ensureOwnerSubscription(
   organizationId: string,
   options?: {
     ownerUserIdHint?: string | null;
+    creationIntentId?: string | null;
   },
 ): Promise<OwnerSubscription> {
   const resolvedOwnerUserId = await resolveOrganizationPrimaryOwnerUserId(organizationId);
@@ -588,54 +1138,21 @@ export async function ensureOwnerSubscription(
   }
 
   const basicProfile = await getOwnerBasicProfile(ownerUserId);
-  const trialWindow = nowInPeriod(DEFAULT_TRIAL_DAYS);
-
-  const upsertPayload = {
+  const paidCreationIntent = await resolvePaidOrganizationCreationIntentForOwner(
+    ownerUserId,
+    options?.creationIntentId,
+  );
+  const trialConsumedSnapshot = await prisma.user.findUnique({
     where: {
-      organizationId,
+      id: ownerUserId,
     },
-    create: {
-      organizationId,
-      ownerUserId,
-      status: SubscriptionStatus.TRIALING,
-      planCode: BillingPlanCode.FREE,
-      trialPlanCode: DEFAULT_NEW_ORGANIZATION_TRIAL_PLAN_CODE,
-      trialStartedAt: trialWindow.start,
-      trialEndsAt: trialWindow.end,
-      trialUsedAt: trialWindow.start,
-      billingName: basicProfile.name,
+    select: {
+      trialConsumedAt: true,
     },
-    update: {
-      ownerUserId,
-      ...(basicProfile.name
-        ? {
-          billingName: basicProfile.name,
-        }
-        : {}),
-    },
-  } satisfies Prisma.OwnerSubscriptionUpsertArgs;
-
-  try {
-    return await prisma.ownerSubscription.upsert(upsertPayload);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "";
-    const normalized = message.toLowerCase();
-    const shouldFallback =
-      normalized.includes("42p10") ||
-      (normalized.includes("on conflict") &&
-        normalized.includes("unique or exclusion constraint"));
-
-    if (!shouldFallback) {
-      throw error;
-    }
-
-    // Database drift fallback: some production databases might be missing the UNIQUE constraint for
-    // `owner_subscription.organization_id`, which makes Postgres reject `ON CONFLICT`. We can still
-    // ensure a subscription by reading + updating/creating.
-    console.warn(
-      "OwnerSubscription upsert fallback: missing UNIQUE constraint on organization_id (42P10).",
-    );
-  }
+  });
+  const canStartTrial = !paidCreationIntent && !trialConsumedSnapshot?.trialConsumedAt;
+  const now = new Date();
+  const trialWindow = nowInPeriod(DEFAULT_TRIAL_DAYS);
 
   return prisma.$transaction(async (tx) => {
     const existing = await tx.ownerSubscription.findFirst({
@@ -648,16 +1165,104 @@ export async function ensureOwnerSubscription(
     });
 
     if (existing) {
+      const updateData: Prisma.OwnerSubscriptionUpdateInput = {};
+
+      if (basicProfile.name && !existing.billingName) {
+        updateData.billingName = basicProfile.name;
+      }
+
+      const shouldApplyPaidCreationIntent = paidCreationIntent
+        ? existing.status !== SubscriptionStatus.ACTIVE ||
+          !isPaidPlan(existing.planCode) ||
+          existing.planCode !== paidCreationIntent.targetPlanCode ||
+          !existing.currentPeriodEnd ||
+          existing.currentPeriodEnd <= now
+        : false;
+
+      if (paidCreationIntent && shouldApplyPaidCreationIntent) {
+        const currentPeriodStart = now;
+        const currentPeriodEnd = addDays(
+          currentPeriodStart,
+          getBillingPeriodDays(toPlanBillingCycle(paidCreationIntent.billingCycle)),
+        );
+        updateData.status = SubscriptionStatus.ACTIVE;
+        updateData.planCode = paidCreationIntent.targetPlanCode;
+        updateData.pendingPlanCode = null;
+        updateData.trialPlanCode = null;
+        updateData.trialStartedAt = null;
+        updateData.trialEndsAt = null;
+        updateData.currentPeriodStart = currentPeriodStart;
+        updateData.currentPeriodEnd = currentPeriodEnd;
+        updateData.cancelAtPeriodEnd = false;
+        updateData.canceledAt = null;
+        updateData.billingName = paidCreationIntent.billingName;
+        updateData.billingCellphone = paidCreationIntent.billingCellphone;
+        updateData.billingTaxId = paidCreationIntent.billingTaxId;
+      }
+
       return tx.ownerSubscription.update({
         where: {
           id: existing.id,
         },
-        data: upsertPayload.update,
+        data: updateData,
+      });
+    }
+
+    if (paidCreationIntent) {
+      const currentPeriodStart = now;
+      const currentPeriodEnd = addDays(
+        currentPeriodStart,
+        getBillingPeriodDays(toPlanBillingCycle(paidCreationIntent.billingCycle)),
+      );
+      return tx.ownerSubscription.create({
+        data: {
+          organizationId,
+          ownerUserId,
+          status: SubscriptionStatus.ACTIVE,
+          planCode: paidCreationIntent.targetPlanCode,
+          pendingPlanCode: null,
+          trialPlanCode: null,
+          trialStartedAt: null,
+          trialEndsAt: null,
+          trialUsedAt: trialConsumedSnapshot?.trialConsumedAt ?? null,
+          currentPeriodStart,
+          currentPeriodEnd,
+          cancelAtPeriodEnd: false,
+          canceledAt: null,
+          billingName: paidCreationIntent.billingName,
+          billingCellphone: paidCreationIntent.billingCellphone,
+          billingTaxId: paidCreationIntent.billingTaxId,
+        },
+      });
+    }
+
+    if (canStartTrial) {
+      await tx.user.update({
+        where: {
+          id: ownerUserId,
+        },
+        data: {
+          trialConsumedAt: trialWindow.start,
+        },
       });
     }
 
     return tx.ownerSubscription.create({
-      data: upsertPayload.create,
+      data: {
+        organizationId,
+        ownerUserId,
+        status: canStartTrial ? SubscriptionStatus.TRIALING : SubscriptionStatus.FREE,
+        planCode: BillingPlanCode.FREE,
+        trialPlanCode: canStartTrial ? DEFAULT_NEW_ORGANIZATION_TRIAL_PLAN_CODE : null,
+        trialStartedAt: canStartTrial ? trialWindow.start : null,
+        trialEndsAt: canStartTrial ? trialWindow.end : null,
+        trialUsedAt: canStartTrial ? trialWindow.start : trialConsumedSnapshot?.trialConsumedAt ?? null,
+        currentPeriodStart: null,
+        currentPeriodEnd: null,
+        cancelAtPeriodEnd: false,
+        canceledAt: null,
+        billingName: basicProfile.name,
+      },
     });
   });
 }
@@ -816,13 +1421,43 @@ export async function assertOrganizationNotBlockedAfterExpiredTrial(
   throw new Error(blockMessage);
 }
 
-export async function assertOwnerCanCreateOrganization(ownerUserId: string): Promise<void> {
+export async function assertOwnerCanCreateOrganization(
+  ownerUserId: string,
+  options?: {
+    creationIntentId?: string | null;
+  },
+): Promise<void> {
   const normalizedOwnerUserId = ownerUserId.trim();
   if (!normalizedOwnerUserId) {
     throw new Error("Usuario invalido para criar organizacao.");
   }
 
-  const [ownedOrganizationsCount, subscriptions] = await Promise.all([
+  const creationIntentId = options?.creationIntentId?.trim() ?? "";
+  if (creationIntentId) {
+    const intent = await getOrganizationCreationIntentForOwner(
+      normalizedOwnerUserId,
+      creationIntentId,
+    );
+    if (!intent) {
+      throw new Error("Checkout invalido para criar a organizacao.");
+    }
+
+    if (intent.organizationId || intent.status === OrganizationCreationIntentStatus.CONSUMED) {
+      throw new Error("Este checkout ja foi utilizado para criar uma organizacao.");
+    }
+
+    if (
+      intent.status !== OrganizationCreationIntentStatus.PAID &&
+      intent.status !== OrganizationCreationIntentStatus.CONSUMING
+    ) {
+      const blockMessage = resolveOrganizationCreationIntentBlockMessage(intent);
+      throw new Error(blockMessage ?? "Pagamento nao aprovado para criar a organizacao.");
+    }
+
+    return;
+  }
+
+  const [ownedOrganizationsCount, user] = await Promise.all([
     prisma.member.count({
       where: {
         userId: normalizedOwnerUserId,
@@ -831,45 +1466,23 @@ export async function assertOwnerCanCreateOrganization(ownerUserId: string): Pro
         },
       },
     }),
-    prisma.ownerSubscription.findMany({
+    prisma.user.findUnique({
       where: {
-        ownerUserId: normalizedOwnerUserId,
+        id: normalizedOwnerUserId,
       },
       select: {
-        status: true,
-        planCode: true,
-        trialPlanCode: true,
-        trialEndsAt: true,
-        currentPeriodEnd: true,
+        trialConsumedAt: true,
       },
     }),
   ]);
 
-  const candidatePlanCodes =
-    subscriptions.length > 0
-      ? subscriptions.map((subscription) => resolveEffectivePlanCode(subscription))
-      : [BillingPlanCode.FREE];
-
-  let maxAllowedOrganizations: number | null = 0;
-  for (const planCode of candidatePlanCodes) {
-    const currentLimit = getPlanDefinition(planCode).limits.maxOrganizations;
-    if (currentLimit === null) {
-      maxAllowedOrganizations = null;
-      break;
-    }
-
-    maxAllowedOrganizations = Math.max(maxAllowedOrganizations, currentLimit);
-  }
-
-  if (maxAllowedOrganizations === null) {
+  if (ownedOrganizationsCount === 0 && !user?.trialConsumedAt) {
     return;
   }
 
-  if (ownedOrganizationsCount + 1 > maxAllowedOrganizations) {
-    throw new Error(
-      buildLimitErrorMessage("organizacoes", ownedOrganizationsCount, maxAllowedOrganizations),
-    );
-  }
+  throw new Error(
+    "Trial disponivel apenas para a primeira organizacao. Para criar outra organizacao, conclua o pagamento.",
+  );
 }
 
 export async function assertOrganizationCanCreateInvitation(
@@ -1104,6 +1717,14 @@ export async function startOwnerTrial(
 
   const subscription = await ensureOwnerSubscription(organizationId);
   const now = new Date();
+  const owner = await prisma.user.findUnique({
+    where: {
+      id: subscription.ownerUserId,
+    },
+    select: {
+      trialConsumedAt: true,
+    },
+  });
 
   if (
     subscription.status === SubscriptionStatus.TRIALING &&
@@ -1113,9 +1734,18 @@ export async function startOwnerTrial(
     throw new Error("Já existe um trial ativo para esta conta.");
   }
 
-  if (subscription.trialUsedAt) {
+  if (subscription.trialUsedAt || owner?.trialConsumedAt) {
     throw new Error("Trial já utilizado anteriormente nesta conta.");
   }
+
+  await prisma.user.update({
+    where: {
+      id: subscription.ownerUserId,
+    },
+    data: {
+      trialConsumedAt: now,
+    },
+  });
 
   return prisma.ownerSubscription.update({
     where: {
@@ -2244,6 +2874,79 @@ async function resolveCheckoutFromWebhook(payload: AbacateWebhookPayload) {
   });
 }
 
+async function resolveOrganizationCreationIntentFromWebhook(payload: AbacateWebhookPayload) {
+  const billingId = payload.data?.billing?.id;
+  const externalIdFromTransaction = payload.data?.transaction?.externalId;
+  const externalIdFromProducts = payload.data?.billing?.products?.find((item) => item.externalId)
+    ?.externalId;
+
+  if (billingId) {
+    const byBillingId = await prisma.organizationCreationIntent.findFirst({
+      where: {
+        providerBillingId: billingId,
+      },
+    });
+
+    if (byBillingId) {
+      return toOrganizationCreationIntentSnapshot(byBillingId);
+    }
+  }
+
+  const externalId = externalIdFromTransaction || externalIdFromProducts;
+  if (!externalId) {
+    return null;
+  }
+
+  const byExternalId = await prisma.organizationCreationIntent.findFirst({
+    where: {
+      providerExternalId: externalId,
+    },
+  });
+
+  return byExternalId ? toOrganizationCreationIntentSnapshot(byExternalId) : null;
+}
+
+async function applyOrganizationCreationIntentWebhookOutcome(
+  intent: OrganizationCreationIntentSnapshot,
+  payload: AbacateWebhookPayload,
+  outcome: CheckoutStatus,
+): Promise<void> {
+  const intentSnapshot = await prisma.organizationCreationIntent.findUnique({
+    where: {
+      id: intent.id,
+    },
+  });
+
+  if (!intentSnapshot) {
+    return;
+  }
+
+  const normalizedIntent = toOrganizationCreationIntentSnapshot(intentSnapshot);
+  if (normalizedIntent.organizationId || normalizedIntent.status === OrganizationCreationIntentStatus.CONSUMED) {
+    return;
+  }
+
+  const now = new Date();
+  const billingId = payload.data?.billing?.id ?? normalizedIntent.providerBillingId ?? null;
+  const billingUrl =
+    sanitizeTrustedAbacateUrl(payload.data?.billing?.url ?? null) ??
+    sanitizeTrustedAbacateUrl(normalizedIntent.checkoutUrl);
+  const nextStatus = mapWebhookOutcomeToIntentStatus(payload, outcome);
+
+  await prisma.organizationCreationIntent.update({
+    where: {
+      id: normalizedIntent.id,
+    },
+    data: {
+      providerBillingId: billingId,
+      checkoutUrl: billingUrl,
+      checkoutStatus: outcome,
+      status: nextStatus,
+      paidAt: outcome === CheckoutStatus.PAID ? normalizedIntent.paidAt ?? now : null,
+    },
+  });
+}
+
 type PaymentApprovedNotificationCandidate = {
   type: "payment-approved";
   dedupeKey: string;
@@ -2880,13 +3583,16 @@ export async function processAbacateWebhook(payloadInput: unknown): Promise<{
   }
 
   try {
-    const checkout = await resolveCheckoutFromWebhook(payload);
+    const [checkout, organizationCreationIntent] = await Promise.all([
+      resolveCheckoutFromWebhook(payload),
+      resolveOrganizationCreationIntentFromWebhook(payload),
+    ]);
 
-    if (!checkout) {
+    if (!checkout && !organizationCreationIntent) {
       await markWebhookEvent(
         payload.id,
         WebhookProcessingStatus.IGNORED,
-        "Checkout não encontrado para o evento recebido.",
+        "Checkout/intencao de criacao nao encontrado para o evento recebido.",
       );
       await logPlatformEvent({
         source: "billing",
@@ -2897,7 +3603,7 @@ export async function processAbacateWebhook(payloadInput: unknown): Promise<{
         metadata: {
           provider: "abacatepay",
           event: payload.event,
-          reason: "checkout_not_found",
+          reason: "target_not_found",
         },
       });
 
@@ -2907,20 +3613,32 @@ export async function processAbacateWebhook(payloadInput: unknown): Promise<{
       };
     }
 
-    await applyWebhookOutcome(checkout, payload, outcome, "webhook");
+    if (checkout) {
+      await applyWebhookOutcome(checkout, payload, outcome, "webhook");
+    }
+
+    if (organizationCreationIntent) {
+      await applyOrganizationCreationIntentWebhookOutcome(
+        organizationCreationIntent,
+        payload,
+        outcome,
+      );
+    }
+
     await markWebhookEvent(payload.id, WebhookProcessingStatus.PROCESSED, null);
     await logPlatformEvent({
       source: "billing",
       action: "webhook.processed",
       severity: PlatformEventSeverity.INFO,
-      organizationId: checkout.organizationId,
+      organizationId: checkout?.organizationId ?? organizationCreationIntent?.organizationId ?? null,
       targetType: "billing_webhook_event",
       targetId: payload.id,
       metadata: {
         provider: "abacatepay",
         event: payload.event,
         outcome,
-        checkoutId: checkout.id,
+        checkoutId: checkout?.id ?? null,
+        organizationCreationIntentId: organizationCreationIntent?.id ?? null,
       },
     });
 

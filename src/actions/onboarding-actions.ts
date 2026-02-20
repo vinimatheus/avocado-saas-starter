@@ -3,15 +3,19 @@
 import { createHash } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
-import { BillingPlanCode, SubscriptionStatus } from "@prisma/client";
+import { BillingPlanCode } from "@prisma/client";
 import { z } from "zod";
 
 import { auth } from "@/lib/auth/server";
 import { localizeAuthErrorMessage } from "@/lib/auth/error-messages";
 import { profileUpdateSchema } from "@/lib/auth/schemas";
-import { DEFAULT_TRIAL_DAYS, getPlanDefinition } from "@/lib/billing/plans";
-import { prisma } from "@/lib/db/prisma";
+import { getPlanDefinition, isPaidPlan } from "@/lib/billing/plans";
+import {
+  assertOwnerCanCreateOrganization,
+  createOrganizationCreationIntentCheckout,
+} from "@/lib/billing/subscription-service";
 import { buildOrganizationSlug } from "@/lib/organization/helpers";
+import { createOrganizationWithSlugFallback } from "@/lib/organization/create-organization";
 import { getTenantContext } from "@/lib/organization/tenant-context";
 import { detectImageMimeTypeBySignature } from "@/lib/uploads/image-signature";
 
@@ -19,8 +23,6 @@ const PROFILE_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 const ORGANIZATION_LOGO_MAX_BYTES = 5 * 1024 * 1024;
 const DEFAULT_PROFILE_IMAGE_FOLDER = "saas-starter/profile";
 const DEFAULT_ORGANIZATION_LOGO_FOLDER = "avocado-saas-starter/organization";
-const ORGANIZATION_SLUG_MAX_LENGTH = 70;
-
 const onboardingOrganizationSchema = z.object({
   companyName: z
     .string()
@@ -38,6 +40,10 @@ const onboardingOrganizationSchema = z.object({
 
 const createOrganizationWithPlanSchema = onboardingOrganizationSchema.extend({
   planCode: z.nativeEnum(BillingPlanCode),
+  billingCycle: z.enum(["MONTHLY", "ANNUAL"]).catch("MONTHLY"),
+  billingName: z.string().optional().catch(""),
+  billingCellphone: z.string().optional().catch(""),
+  billingTaxId: z.string().optional().catch(""),
   keepCurrentActiveOrganization: z
     .string()
     .trim()
@@ -60,6 +66,8 @@ export type CreateOrganizationWithPlanActionResult = {
   status: "success" | "error";
   message: string;
   redirectTo: string | null;
+  redirectKind: "internal" | "external";
+  intentId: string | null;
 };
 
 function successProfileState(message: string): OnboardingProfileActionState {
@@ -98,11 +106,15 @@ function errorOrganizationState(message: string): OnboardingOrganizationActionSt
 function successCreateOrganizationResult(
   message: string,
   redirectTo: string,
+  redirectKind: "internal" | "external",
+  intentId: string | null = null,
 ): CreateOrganizationWithPlanActionResult {
   return {
     status: "success",
     message,
     redirectTo,
+    redirectKind,
+    intentId,
   };
 }
 
@@ -111,6 +123,8 @@ function errorCreateOrganizationResult(message: string): CreateOrganizationWithP
     status: "error",
     message,
     redirectTo: null,
+    redirectKind: "internal",
+    intentId: null,
   };
 }
 
@@ -130,6 +144,129 @@ function parseActionError(error: unknown, fallbackMessage: string): string {
 
   return fallbackMessage;
 }
+
+function onlyDigits(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
+function allDigitsEqual(value: string): boolean {
+  return /^(\d)\1+$/.test(value);
+}
+
+function isValidBrazilPhone(value: string): boolean {
+  if (value.length !== 10 && value.length !== 11) {
+    return false;
+  }
+
+  if (allDigitsEqual(value)) {
+    return false;
+  }
+
+  const ddd = Number(value.slice(0, 2));
+  if (!Number.isFinite(ddd) || ddd < 11 || ddd > 99) {
+    return false;
+  }
+
+  const firstLocalDigit = Number(value[2]);
+  if (!Number.isFinite(firstLocalDigit)) {
+    return false;
+  }
+
+  if (value.length === 11) {
+    return firstLocalDigit === 9;
+  }
+
+  return firstLocalDigit >= 2 && firstLocalDigit <= 5;
+}
+
+function isValidCpf(value: string): boolean {
+  if (value.length !== 11 || allDigitsEqual(value)) {
+    return false;
+  }
+
+  const digits = value.split("").map(Number);
+  let firstCheck = 0;
+  for (let index = 0; index < 9; index += 1) {
+    firstCheck += digits[index] * (10 - index);
+  }
+
+  firstCheck = (firstCheck * 10) % 11;
+  if (firstCheck === 10) {
+    firstCheck = 0;
+  }
+
+  if (firstCheck !== digits[9]) {
+    return false;
+  }
+
+  let secondCheck = 0;
+  for (let index = 0; index < 10; index += 1) {
+    secondCheck += digits[index] * (11 - index);
+  }
+
+  secondCheck = (secondCheck * 10) % 11;
+  if (secondCheck === 10) {
+    secondCheck = 0;
+  }
+
+  return secondCheck === digits[10];
+}
+
+function isValidCnpj(value: string): boolean {
+  if (value.length !== 14 || allDigitsEqual(value)) {
+    return false;
+  }
+
+  const digits = value.split("").map(Number);
+  const firstWeights = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  const secondWeights = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+
+  let firstSum = 0;
+  for (let index = 0; index < firstWeights.length; index += 1) {
+    firstSum += digits[index] * firstWeights[index];
+  }
+  const firstRemainder = firstSum % 11;
+  const firstCheckDigit = firstRemainder < 2 ? 0 : 11 - firstRemainder;
+
+  if (firstCheckDigit !== digits[12]) {
+    return false;
+  }
+
+  let secondSum = 0;
+  for (let index = 0; index < secondWeights.length; index += 1) {
+    secondSum += digits[index] * secondWeights[index];
+  }
+  const secondRemainder = secondSum % 11;
+  const secondCheckDigit = secondRemainder < 2 ? 0 : 11 - secondRemainder;
+
+  return secondCheckDigit === digits[13];
+}
+
+function isValidCpfOrCnpj(value: string): boolean {
+  if (value.length === 11) {
+    return isValidCpf(value);
+  }
+
+  if (value.length === 14) {
+    return isValidCnpj(value);
+  }
+
+  return false;
+}
+
+const onboardingBillingProfileSchema = z.object({
+  billingName: z.string().trim().min(2, "Informe o nome de faturamento."),
+  billingCellphone: z
+    .string()
+    .trim()
+    .transform(onlyDigits)
+    .refine(isValidBrazilPhone, "Informe um telefone valido."),
+  billingTaxId: z
+    .string()
+    .trim()
+    .transform(onlyDigits)
+    .refine(isValidCpfOrCnpj, "Informe um CPF ou CNPJ valido."),
+});
 
 function getCloudinaryConfig(folderEnvKey: "CLOUDINARY_PROFILE_FOLDER" | "CLOUDINARY_ORGANIZATION_FOLDER", fallbackFolder: string) {
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME?.trim() || "";
@@ -223,15 +360,6 @@ function revalidateOnboardingPaths(): void {
   revalidatePath("/onboarding/company");
 }
 
-function generateOrganizationSlugVariant(baseSlug: string): string {
-  const suffix = Math.random().toString(36).slice(2, 8);
-  const base = baseSlug
-    .slice(0, Math.max(1, ORGANIZATION_SLUG_MAX_LENGTH - suffix.length - 1))
-    .replace(/-+$/g, "");
-
-  return `${base || "organizacao"}-${suffix}`.slice(0, ORGANIZATION_SLUG_MAX_LENGTH);
-}
-
 function normalizeActionErrorMessage(error: unknown, fallbackMessage: string): string {
   return localizeAuthErrorMessage(parseActionError(error, fallbackMessage));
 }
@@ -279,107 +407,6 @@ async function validateAndUploadOrganizationLogo(image: File | null): Promise<st
     image,
     "CLOUDINARY_ORGANIZATION_FOLDER",
     DEFAULT_ORGANIZATION_LOGO_FOLDER,
-  );
-}
-
-async function createOrganizationWithSlugFallback(
-  requestHeaders: Headers,
-  companyName: string,
-  slug: string,
-  logo: string | null,
-  keepCurrentActiveOrganization: boolean = false,
-): Promise<void> {
-  try {
-    await auth.api.createOrganization({
-      headers: requestHeaders,
-      body: {
-        name: companyName,
-        slug,
-        keepCurrentActiveOrganization,
-        ...(logo ? { logo } : {}),
-      },
-    });
-    return;
-  } catch (error) {
-    const normalizedErrorMessage = parseActionError(error, "").trim().toLowerCase();
-    const isSlugConflict =
-      normalizedErrorMessage.includes("organization already exists") ||
-      normalizedErrorMessage.includes("organization slug already taken") ||
-      normalizedErrorMessage.includes("slug is taken");
-
-    if (!isSlugConflict) {
-      throw error;
-    }
-
-    const organizations = await auth.api
-      .listOrganizations({
-        headers: requestHeaders,
-      })
-      .catch(() => []);
-
-    const existingOrganization = organizations.find((organization) => organization.slug === slug);
-    if (existingOrganization) {
-      if (!keepCurrentActiveOrganization) {
-        await auth.api.setActiveOrganization({
-          headers: requestHeaders,
-          body: {
-            organizationId: existingOrganization.id,
-          },
-        });
-      }
-      return;
-    }
-
-    await auth.api.createOrganization({
-      headers: requestHeaders,
-      body: {
-        name: companyName,
-        slug: generateOrganizationSlugVariant(slug),
-        keepCurrentActiveOrganization,
-        ...(logo ? { logo } : {}),
-      },
-    });
-  }
-}
-
-function formatTrialEndsAt(value: Date): string {
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short",
-    timeZone: "America/Sao_Paulo",
-  }).format(value);
-}
-
-async function assertUserCanCreateFreeOrganization(ownerUserId: string): Promise<void> {
-  const activeFreeTrial = await prisma.ownerSubscription.findFirst({
-    where: {
-      ownerUserId,
-      status: SubscriptionStatus.TRIALING,
-      planCode: BillingPlanCode.FREE,
-      trialEndsAt: {
-        gt: new Date(),
-      },
-    },
-    orderBy: {
-      trialEndsAt: "desc",
-    },
-    select: {
-      trialEndsAt: true,
-      organization: {
-        select: {
-          name: true,
-        },
-      },
-    },
-  });
-
-  if (!activeFreeTrial?.trialEndsAt) {
-    return;
-  }
-
-  const activeOrganizationName = activeFreeTrial.organization.name.trim() || "organizacao ativa";
-  throw new Error(
-    `Cada usuario pode manter apenas 1 organizacao gratuita por ${DEFAULT_TRIAL_DAYS} dias. Voce ja possui ${activeOrganizationName} em periodo gratuito ate ${formatTrialEndsAt(activeFreeTrial.trialEndsAt)}.`,
   );
 }
 
@@ -453,12 +480,12 @@ export async function completeOnboardingOrganizationStepAction(
     const uploadedOrganizationLogoUrl = await validateAndUploadOrganizationLogo(image);
     const slug = buildOrganizationSlug(parsed.data.companyName, userEmail);
 
-    await createOrganizationWithSlugFallback(
-      await headers(),
-      parsed.data.companyName,
+    await createOrganizationWithSlugFallback({
+      requestHeaders: await headers(),
+      companyName: parsed.data.companyName,
       slug,
-      uploadedOrganizationLogoUrl,
-    );
+      logo: uploadedOrganizationLogoUrl,
+    });
 
     revalidateOnboardingPaths();
     return successOrganizationState("Organizacao configurada com sucesso.", parsed.data.redirectPath);
@@ -482,6 +509,10 @@ export async function createOrganizationWithPlanAction(
       companyName: String(formData.get("companyName") ?? "").trim(),
       redirectPath: String(formData.get("redirectPath") ?? "/").trim() || "/",
       planCode: String(formData.get("planCode") ?? "").trim(),
+      billingCycle: String(formData.get("billingCycle") ?? "MONTHLY").trim(),
+      billingName: String(formData.get("billingName") ?? ""),
+      billingCellphone: String(formData.get("billingCellphone") ?? ""),
+      billingTaxId: String(formData.get("billingTaxId") ?? ""),
       keepCurrentActiveOrganization: String(
         formData.get("keepCurrentActiveOrganization") ?? "",
       ).trim(),
@@ -507,46 +538,74 @@ export async function createOrganizationWithPlanAction(
       );
     }
 
-    if (parsed.data.planCode === BillingPlanCode.FREE) {
-      await assertUserCanCreateFreeOrganization(userId);
-    }
-
     const requestHeaders = await headers();
     const slug = buildOrganizationSlug(parsed.data.companyName, userEmail);
+    const image = toOptionalFile(formData.get("organizationImage"));
+    const uploadedOrganizationLogoUrl = await validateAndUploadOrganizationLogo(image);
 
-    await createOrganizationWithSlugFallback(
-      requestHeaders,
-      parsed.data.companyName,
-      slug,
-      null,
-      parsed.data.keepCurrentActiveOrganization,
-    );
-
-    revalidateOnboardingPaths();
-    revalidatePath("/billing");
-    revalidatePath("/empresa/nova");
-
-    if (parsed.data.planCode !== BillingPlanCode.FREE && !parsed.data.keepCurrentActiveOrganization) {
-      const planName = getPlanDefinition(parsed.data.planCode).name;
-      const params = new URLSearchParams({
-        prefillPlan: parsed.data.planCode,
+    if (!isPaidPlan(parsed.data.planCode)) {
+      await assertOwnerCanCreateOrganization(userId);
+      await createOrganizationWithSlugFallback({
+        requestHeaders,
+        companyName: parsed.data.companyName,
+        slug,
+        logo: uploadedOrganizationLogoUrl,
+        keepCurrentActiveOrganization: parsed.data.keepCurrentActiveOrganization,
       });
 
-      return successCreateOrganizationResult(
-        `Organizacao criada. Finalize agora a contratacao do plano ${planName}.`,
-        `/billing?${params.toString()}`,
-      );
-    }
+      revalidateOnboardingPaths();
+      revalidatePath("/billing");
+      revalidatePath("/empresa/nova");
 
-    if (parsed.data.planCode !== BillingPlanCode.FREE) {
-      const planName = getPlanDefinition(parsed.data.planCode).name;
       return successCreateOrganizationResult(
-        `Organizacao criada. Para ativar o plano ${planName}, troque para ela e finalize no faturamento.`,
+        "Organizacao vinculada com sucesso. Trial de 7 dias ativado para sua primeira organizacao.",
         parsed.data.redirectPath,
+        "internal",
       );
     }
 
-    return successCreateOrganizationResult("Organizacao vinculada com sucesso.", parsed.data.redirectPath);
+    const parsedBilling = onboardingBillingProfileSchema.safeParse({
+      billingName: parsed.data.billingName,
+      billingCellphone: parsed.data.billingCellphone,
+      billingTaxId: parsed.data.billingTaxId,
+    });
+
+    if (!parsedBilling.success) {
+      return errorCreateOrganizationResult(
+        parsedBilling.error.issues[0]?.message ?? "Dados de faturamento invalidos.",
+      );
+    }
+
+    const checkout = await createOrganizationCreationIntentCheckout({
+      ownerUserId: userId,
+      companyName: parsed.data.companyName,
+      companySlug: slug,
+      companyLogo: uploadedOrganizationLogoUrl,
+      targetPlanCode: parsed.data.planCode,
+      billingCycle: parsed.data.billingCycle,
+      billingName: parsedBilling.data.billingName,
+      billingCellphone: parsedBilling.data.billingCellphone,
+      billingTaxId: parsedBilling.data.billingTaxId,
+    });
+
+    revalidatePath("/empresa/nova");
+
+    const planName = getPlanDefinition(parsed.data.planCode).name;
+    if (!parsed.data.keepCurrentActiveOrganization) {
+      return successCreateOrganizationResult(
+        `Pagamento iniciado para o plano ${planName}. A organizacao sera criada somente apos aprovacao.`,
+        checkout.checkoutUrl,
+        "external",
+        checkout.intentId,
+      );
+    }
+
+    return successCreateOrganizationResult(
+      `Pagamento iniciado para o plano ${planName}. A organizacao sera criada somente apos aprovacao.`,
+      checkout.checkoutUrl,
+      "external",
+      checkout.intentId,
+    );
   } catch (error) {
     return errorCreateOrganizationResult(
       normalizeActionErrorMessage(error, "Falha ao criar nova organizacao."),

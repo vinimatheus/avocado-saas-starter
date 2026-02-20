@@ -12,8 +12,10 @@ import {
   assertOrganizationCanAcceptInvitation,
   assertOrganizationCanCreateInvitation,
   assertOwnerCanCreateOrganization,
+  extractOrganizationCreationIntentIdFromMetadata,
   ensureOwnerSubscription,
   getOwnerEntitlements,
+  markOrganizationCreationIntentAsConsumed,
 } from "@/lib/billing/subscription-service";
 import { getPlanDefinition } from "@/lib/billing/plans";
 import { prisma } from "@/lib/db/prisma";
@@ -2010,9 +2012,14 @@ export const auth = betterAuth({
       creatorRole: "owner",
       cancelPendingInvitationsOnReInvite: true,
       organizationHooks: {
-        beforeCreateOrganization: async ({ user }) => {
+        beforeCreateOrganization: async ({ organization, user }) => {
+          const creationIntentId = extractOrganizationCreationIntentIdFromMetadata(
+            organization.metadata,
+          );
           try {
-            await assertOwnerCanCreateOrganization(user.id);
+            await assertOwnerCanCreateOrganization(user.id, {
+              creationIntentId,
+            });
           } catch (error) {
             throw new APIError("FORBIDDEN", {
               message: toErrorMessage(error, "Limite de organizacoes atingido para este owner."),
@@ -2020,9 +2027,20 @@ export const auth = betterAuth({
           }
         },
         afterCreateOrganization: async ({ organization, user }) => {
+          const creationIntentId = extractOrganizationCreationIntentIdFromMetadata(
+            (organization as { metadata?: unknown }).metadata,
+          );
           await ensureOwnerSubscription(organization.id, {
             ownerUserIdHint: user.id,
+            creationIntentId,
           });
+          if (creationIntentId) {
+            await markOrganizationCreationIntentAsConsumed({
+              ownerUserId: user.id,
+              intentId: creationIntentId,
+              organizationId: organization.id,
+            });
+          }
         },
         beforeCreateInvitation: async ({ invitation }) => {
           try {
@@ -2091,11 +2109,24 @@ export const auth = betterAuth({
         },
         beforeAddMember: async ({ member }) => {
           try {
+            const organizationMetadata = await prisma.organization.findUnique({
+              where: {
+                id: member.organizationId,
+              },
+              select: {
+                metadata: true,
+              },
+            });
+            const creationIntentId = extractOrganizationCreationIntentIdFromMetadata(
+              organizationMetadata?.metadata,
+            );
+
             // Better Auth chama `beforeAddMember` durante a criacao da organizacao,
             // antes do primeiro registro de member existir. Garanta a assinatura
             // com um hint para evitar "Organizacao sem proprietario...".
             await ensureOwnerSubscription(member.organizationId, {
               ownerUserIdHint: member.userId,
+              creationIntentId,
             });
 
             await assertOrganizationCanAddMember(member.organizationId, member.userId);

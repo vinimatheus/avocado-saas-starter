@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 import { SparklesIcon } from "lucide-react";
+import { redirect } from "next/navigation";
 
 import { AppPageContainer } from "@/components/app/app-page-container";
 import { ThemeAppearanceSection } from "@/components/app/theme-appearance-section";
 import { Card, CardContent } from "@/components/ui/card";
+import { getOrganizationBlockMessage } from "@/lib/billing/subscription-service";
+import { getTenantContext } from "@/lib/organization/tenant-context";
 
 export const metadata: Metadata = {
   title: "Configuracoes",
@@ -13,7 +16,24 @@ export const metadata: Metadata = {
   },
 };
 
-export default function ConfiguracoesPage() {
+export default async function ConfiguracoesPage() {
+  const tenantContext = await getTenantContext();
+
+  if (!tenantContext.session?.user) {
+    redirect("/sign-in");
+  }
+
+  if (!tenantContext.organizationId) {
+    redirect("/onboarding/company");
+  }
+
+  const blockMessage = await getOrganizationBlockMessage(tenantContext.organizationId);
+  if (blockMessage) {
+    const searchParams = new URLSearchParams();
+    searchParams.set("error", blockMessage);
+    redirect(`/billing?${searchParams.toString()}`);
+  }
+
   return (
     <AppPageContainer className="gap-4">
       <Card className="relative overflow-hidden border-primary/30 bg-gradient-to-br from-background via-background to-primary/10">
